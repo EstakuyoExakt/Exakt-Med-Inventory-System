@@ -1,2 +1,42 @@
 @import "tailwindcss";
 
+@layer components {
+  .input {
+    @apply w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5
+           text-sm text-gray-900 placeholder-gray-400
+           shadow-sm outline-none
+           transition duration-200 ease-in-out
+           focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30
+           disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2
+           rounded-lg px-4 py-2.5 text-sm font-medium
+           transition duration-200 ease-in-out
+           cursor-pointer select-none outline-none
+           disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2
+           rounded-lg px-4 py-2.5 text-sm font-medium
+           transition duration-200 ease-in-out
+           cursor-pointer select-none outline-none
+           disabled:cursor-not-allowed disabled:opacity-50
+           bg-blue-600 text-white
+           hover:bg-blue-700 active:bg-blue-800
+           focus:ring-2 focus:ring-blue-500/40;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2
+           rounded-lg px-4 py-2.5 text-sm font-medium
+           transition duration-200 ease-in-out
+           cursor-pointer select-none outline-none
+           disabled:cursor-not-allowed disabled:opacity-50
+           border border-gray-300 bg-white text-gray-700
+           hover:bg-gray-50 active:bg-gray-100
+           focus:ring-2 focus:ring-gray-300/60;
+  }
+}
