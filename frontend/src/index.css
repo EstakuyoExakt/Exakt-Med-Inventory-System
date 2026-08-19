@@ -61,4 +61,36 @@
            hover:bg-rose-200 hover:text-rose-700
            focus-visible:ring-2 focus-visible:ring-rose-500/40;
   }
+
+  /* Animations */
+  .animate-slide-up {
+    animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-slide-up-1,
+  .animate-slide-up-delay-1 {
+    animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+  }
+
+  .animate-slide-up-2,
+  .animate-slide-up-delay-2 {
+    animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+  }
+
+  .animate-slide-up-3,
+  .animate-slide-up-delay-3 {
+    animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
+  }
 }
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

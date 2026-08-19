@@ -1,0 +1,80 @@
+export const batches = [
+  {
+    batchId: "BAT-1001",
+    medicine: "Paracetamol (Biogesic)",
+    expiryDate: "2027-05-15",
+    quantity: 250,
+  },
+  {
+    batchId: "BAT-1002",
+    medicine: "Amoxicillin (Amoxil)",
+    expiryDate: "2026-09-10",
+    quantity: 8,
+  },
+  {
+    batchId: "BAT-1003",
+    medicine: "Ibuprofen (Advil)",
+    expiryDate: "2026-06-20",
+    quantity: 45,
+  },
+  {
+    batchId: "BAT-1004",
+    medicine: "Cetirizine (Virlix)",
+    expiryDate: "2027-11-30",
+    quantity: 120,
+  },
+  {
+    batchId: "BAT-1005",
+    medicine: "Metformin (Glucophage)",
+    expiryDate: "2026-09-01",
+    quantity: 0,
+  },
+  {
+    batchId: "BAT-1006",
+    medicine: "Losartan (Cozaar)",
+    expiryDate: "2028-01-15",
+    quantity: 300,
+  },
+  {
+    batchId: "BAT-1007",
+    medicine: "Omeprazole (Prilosec)",
+    expiryDate: "2026-05-10",
+    quantity: 0,
+  },
+  {
+    batchId: "BAT-1008",
+    medicine: "Salbutamol (Ventolin)",
+    expiryDate: "2027-08-25",
+    quantity: 6,
+  },
+  {
+    batchId: "BAT-1009",
+    medicine: "Ascorbic Acid (Ceelin)",
+    expiryDate: "2026-10-05",
+    quantity: 75,
+  },
+  {
+    batchId: "BAT-1010",
+    medicine: "Azithromycin (Zithromax)",
+    expiryDate: "2026-04-18",
+    quantity: 15,
+  },
+  {
+    batchId: "BAT-1011",
+    medicine: "Mupirocin (Bactroban)",
+    expiryDate: "2027-12-12",
+    quantity: 50,
+  },
+  {
+    batchId: "BAT-1012",
+    medicine: "Atorvastatin (Lipitor)",
+    expiryDate: "2028-03-30",
+    quantity: 180,
+  },
+  {
+    batchId: "BAT-1013",
+    medicine: "Paracetamol (Biogesic)",
+    expiryDate: "2026-09-28",
+    quantity: 4,
+  },
+];

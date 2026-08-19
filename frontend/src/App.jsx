@@ -20,7 +20,7 @@ function App() {
     <>
       {!isLoginPage && <Sidebar />}
       <div
-        className={`h-screen flex justify-center items-center bg-gray-100 ${!isLoginPage ? "pl-64" : ""}`}
+        className={`h-screen flex justify-center items-center bg-gray-100 ${!isLoginPage ? "ml-64" : ""}`}
       >
         <Routes>
           <Route path="/" element={<Login />} />
