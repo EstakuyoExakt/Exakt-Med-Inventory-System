@@ -62,20 +62,20 @@ function Dashboard() {
     return map;
   }, []);
 
-  // Near Expired Medicines (expiring within 90 days)
-  const nearExpiredMedicines = useMemo(() => {
-    return medicines.filter((med) => {
-      const exp = new Date(med.expiryDate);
+  // Near Expired Batches (expiring within 90 days)
+  const nearExpiredBatches = useMemo(() => {
+    return batches.filter((batch) => {
+      const exp = new Date(batch.expiryDate);
       const diffTime = exp - currentDate;
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       return diffDays >= 0 && diffDays <= 90;
     });
   }, [currentDate]);
 
-  // Expired Medicines (past expiry date)
-  const expiredMedicines = useMemo(() => {
-    return medicines.filter((med) => {
-      const exp = new Date(med.expiryDate);
+  // Expired Batches (past expiry date)
+  const expiredBatches = useMemo(() => {
+    return batches.filter((batch) => {
+      const exp = new Date(batch.expiryDate);
       return exp < currentDate;
     });
   }, [currentDate]);
@@ -85,24 +85,21 @@ function Dashboard() {
     () => [
       {
         name: "Good",
-        value:
-          totalMedicines -
-          nearExpiredMedicines.length -
-          expiredMedicines.length,
+        value: totalBatches - nearExpiredBatches.length - expiredBatches.length,
         color: "#10b981", // Emerald 500
       },
       {
         name: "Near Expired",
-        value: nearExpiredMedicines.length,
+        value: nearExpiredBatches.length,
         color: "#f59e0b", // Amber 500
       },
       {
         name: "Expired",
-        value: expiredMedicines.length,
+        value: expiredBatches.length,
         color: "#ef4444", // Rose 500
       },
     ],
-    [totalMedicines, nearExpiredMedicines.length, expiredMedicines.length],
+    [totalBatches, nearExpiredBatches.length, expiredBatches.length],
   );
 
   // Low Stock Medicines (quantity > 0 and <= 15)
@@ -133,7 +130,7 @@ function Dashboard() {
   );
 
   return (
-    <div className="grid gap-5 p-10 w-full max-w-7xl mx-auto overflow-y-auto max-h-screen">
+    <div className="grid gap-5 p-10 w-full max-w-7xl mx-auto overflow-y-auto max-h-full">
       {/* Top Row: Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 animate-slide-up">
         <Card
@@ -185,7 +182,7 @@ function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-slide-up-1">
         {/* Expiry Charts */}
         <Card
-          title="Medicine Expiry Overview"
+          title="Batch Expiry Overview"
           action={
             <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
               <Clock className="w-4 h-4" />

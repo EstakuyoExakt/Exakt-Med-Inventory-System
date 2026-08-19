@@ -52,7 +52,7 @@
   }
 
   .sidebar-btn-active {
-    @apply bg-blue-50 text-blue-600 font-semibold shadow-xs
+    @apply bg-blue-100 text-blue-600 font-semibold shadow-xs
            hover:bg-blue-100 hover:text-blue-700;
   }
 
@@ -93,4 +93,3 @@
     transform: translateY(0);
   }
 }
-

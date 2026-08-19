@@ -7,7 +7,7 @@ function Card({ title, subTitle, children, className = "", action }) {
         <div className="flex items-start justify-between gap-4">
           <div>
             {title && (
-              <h3 className="text-base font-semibold text-slate-900 leading-snug">
+              <h3 className="text-xl font-semibold text-slate-900 leading-snug">
                 {title}
               </h3>
             )}
