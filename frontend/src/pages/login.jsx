@@ -24,6 +24,7 @@ function Login() {
       );
 
       if (matchedUser) {
+        localStorage.setItem("currentUser", JSON.stringify(matchedUser));
         navigate("/dashboard");
       } else {
         setErrorMessage("Invalid username or password. Please try again.");

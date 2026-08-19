@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Pill,
@@ -6,17 +6,32 @@ import {
   ClipboardList,
   LogOut,
   Cross,
+  Box,
+  Users,
 } from "lucide-react";
 
 function Sidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
+  const isAdmin = currentUser?.role === "admin";
 
-  const navItems = [
+  const adminNavItems = [
+    { name: "User Management", path: "/user-management", icon: Users },
+  ];
+
+  const mainNavItems = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { name: "Medicine Master", path: "/medicine-master", icon: Pill },
     { name: "Inventory", path: "/inventory", icon: Boxes },
+    { name: "Batch Management", path: "/batch-management", icon: Box },
     { name: "Audit Logs", path: "/audit-logs", icon: ClipboardList },
   ];
+
+  const handleLogout = () => {
+    localStorage.removeItem("currentUser");
+    navigate("/");
+  };
 
   return (
     <div className="w-64 h-screen bg-white border-r border-gray-200 flex flex-col justify-between p-4 shadow-xl select-none absolute left-0">
@@ -37,39 +52,73 @@ function Sidebar() {
         </div>
 
         {/* Navigation Links */}
-        <nav>
-          <p className="px-2 pb-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-            Menu
-          </p>
-          <ul className="space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.path;
+        <nav className="space-y-4">
+          {isAdmin && (
+            <div>
+              <p className="px-2 pb-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                Admin
+              </p>
+              <ul className="space-y-1">
+                {adminNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname === item.path;
 
-              return (
-                <li key={item.path}>
-                  <Link
-                    to={item.path}
-                    className={`sidebar-btn ${isActive ? "sidebar-btn-active" : ""}`}
-                  >
-                    <Icon
-                      className={`w-4 h-4 ${isActive ? "text-blue-600" : "text-slate-400 group-hover:text-slate-600"}`}
-                    />
-                    <span>{item.name}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                  return (
+                    <li key={item.path}>
+                      <Link
+                        to={item.path}
+                        className={`sidebar-btn ${isActive ? "sidebar-btn-active" : ""}`}
+                      >
+                        <Icon
+                          className={`w-4 h-4 ${isActive ? "text-blue-600" : "text-slate-400 group-hover:text-slate-600"}`}
+                        />
+                        <span>{item.name}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          <div>
+            <p className="px-2 pb-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              Menu
+            </p>
+            <ul className="space-y-1">
+              {mainNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+
+                return (
+                  <li key={item.path}>
+                    <Link
+                      to={item.path}
+                      className={`sidebar-btn ${isActive ? "sidebar-btn-active" : ""}`}
+                    >
+                      <Icon
+                        className={`w-4 h-4 ${isActive ? "text-blue-600" : "text-slate-400 group-hover:text-slate-600"}`}
+                      />
+                      <span>{item.name}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         </nav>
       </div>
 
       {/* Logout Action */}
       <div className="pt-4 border-t border-slate-100">
-        <Link to="/" className="sidebar-btn sidebar-btn-danger">
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="sidebar-btn sidebar-btn-danger"
+        >
           <LogOut className="w-4 h-4" />
           <span>Logout</span>
-        </Link>
+        </button>
       </div>
     </div>
   );

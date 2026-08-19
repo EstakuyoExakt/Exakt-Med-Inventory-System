@@ -58,8 +58,7 @@
 
   .sidebar-btn-danger {
     @apply text-rose-600
-           hover:bg-rose-50 hover:text-rose-700
+           hover:bg-rose-200 hover:text-rose-700
            focus-visible:ring-2 focus-visible:ring-rose-500/40;
   }
 }
-

@@ -1,11 +1,12 @@
 export const users = [
   {
-    username: "ExaktUser",
+    username: "ExaktAdmin",
     password: "exaktpassword",
+    role: "admin",
   },
   {
     username: "StockManager",
     password: "exaktpassword",
+    role: "manager",
   },
 ];
-
