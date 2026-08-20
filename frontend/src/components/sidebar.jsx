@@ -6,7 +6,7 @@ import {
   ClipboardList,
   LogOut,
   Cross,
-  Box,
+  DollarSign,
   Users,
 } from "lucide-react";
 
@@ -24,7 +24,7 @@ function Sidebar() {
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { name: "Medicine Master", path: "/medicine-master", icon: Pill },
     { name: "Inventory", path: "/inventory", icon: Boxes },
-    { name: "Batch Management", path: "/batch-management", icon: Box },
+    { name: "Accounting", path: "/accounting", icon: DollarSign },
     { name: "Audit Logs", path: "/audit-logs", icon: ClipboardList },
   ];
 

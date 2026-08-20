@@ -5,7 +5,7 @@ import Login from "./pages/login";
 import Dashboard from "./pages/dashboard";
 import MedicineMaster from "./pages/medicineMaster";
 import Inventory from "./pages/inventory";
-import BatchManagement from "./pages/batchManagement";
+import Accounting from "./pages/accounting";
 import AuditLogs from "./pages/auditLogs";
 import UserManagement from "./pages/admin/userManagement";
 
@@ -27,7 +27,7 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/medicine-master" element={<MedicineMaster />} />
           <Route path="/inventory" element={<Inventory />} />
-          <Route path="/batch-management" element={<BatchManagement />} />
+          <Route path="/accounting" element={<Accounting />} />
           <Route path="/audit-logs" element={<AuditLogs />} />
           <Route path="/user-management" element={<UserManagement />} />
         </Routes>
