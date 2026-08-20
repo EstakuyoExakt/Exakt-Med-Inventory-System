@@ -6,6 +6,8 @@ export const medicines = [
     brandName: "Biogesic",
     dosageType: "Tablet",
     strength: "500mg",
+    status: "Over Stock",
+    reorderLevel: 50,
   },
   {
     id: 2,
@@ -14,6 +16,8 @@ export const medicines = [
     brandName: "Amoxil",
     dosageType: "Capsule",
     strength: "500mg",
+    status: "Low Stock",
+    reorderLevel: 30,
   },
   {
     id: 3,
@@ -22,6 +26,8 @@ export const medicines = [
     brandName: "Advil",
     dosageType: "Tablet",
     strength: "200mg",
+    status: "Over Stock",
+    reorderLevel: 25,
   },
   {
     id: 4,
@@ -30,6 +36,8 @@ export const medicines = [
     brandName: "Virlix",
     dosageType: "Syrup",
     strength: "5mg/5mL",
+    status: "Over Stock",
+    reorderLevel: 20,
   },
   {
     id: 5,
@@ -38,6 +46,8 @@ export const medicines = [
     brandName: "Glucophage",
     dosageType: "Tablet",
     strength: "500mg",
+    status: "Out of Stock",
+    reorderLevel: 40,
   },
   {
     id: 6,
@@ -46,6 +56,8 @@ export const medicines = [
     brandName: "Cozaar",
     dosageType: "Tablet",
     strength: "50mg",
+    status: "Over Stock",
+    reorderLevel: 50,
   },
   {
     id: 7,
@@ -54,6 +66,8 @@ export const medicines = [
     brandName: "Prilosec",
     dosageType: "Capsule",
     strength: "20mg",
+    status: "Out of Stock",
+    reorderLevel: 30,
   },
   {
     id: 8,
@@ -62,6 +76,8 @@ export const medicines = [
     brandName: "Ventolin",
     dosageType: "Inhaler",
     strength: "100mcg/dose",
+    status: "Low Stock",
+    reorderLevel: 15,
   },
   {
     id: 9,
@@ -70,6 +86,8 @@ export const medicines = [
     brandName: "Ceelin",
     dosageType: "Drops",
     strength: "100mg/mL",
+    status: "Over Stock",
+    reorderLevel: 25,
   },
   {
     id: 10,
@@ -78,6 +96,8 @@ export const medicines = [
     brandName: "Zithromax",
     dosageType: "Suspension",
     strength: "200mg/5mL",
+    status: "Low Stock",
+    reorderLevel: 20,
   },
   {
     id: 11,
@@ -86,6 +106,8 @@ export const medicines = [
     brandName: "Bactroban",
     dosageType: "Ointment",
     strength: "2%",
+    status: "Low Stock",
+    reorderLevel: 15,
   },
   {
     id: 12,
@@ -94,5 +116,7 @@ export const medicines = [
     brandName: "Lipitor",
     dosageType: "Tablet",
     strength: "20mg",
+    status: "Over Stock",
+    reorderLevel: 35,
   },
 ];
