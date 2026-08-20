@@ -6,6 +6,7 @@ export const batches = [
     expiryDate: "2027-05-15",
     quantity: 250,
     stock: "Normal",
+    status: "Good",
   },
   {
     id: 2,
@@ -14,6 +15,7 @@ export const batches = [
     expiryDate: "2026-09-10",
     quantity: 8,
     stock: "Low Stock",
+    status: "Near Expiry",
   },
   {
     id: 3,
@@ -22,6 +24,7 @@ export const batches = [
     expiryDate: "2026-06-20",
     quantity: 45,
     stock: "Normal",
+    status: "Expired",
   },
   {
     id: 4,
@@ -30,14 +33,16 @@ export const batches = [
     expiryDate: "2027-11-30",
     quantity: 120,
     stock: "Normal",
+    status: "Good",
   },
   {
     id: 5,
     batchId: "BAT-1005",
     medicine: "Metformin (Glucophage)",
     expiryDate: "2026-09-01",
-    quantity: 0,
+    quantity: 20,
     stock: "Out of Stock",
+    status: "Near Expiry",
   },
   {
     id: 6,
@@ -46,6 +51,7 @@ export const batches = [
     expiryDate: "2028-01-15",
     quantity: 300,
     stock: "Normal",
+    status: "Good",
   },
   {
     id: 7,
@@ -54,6 +60,7 @@ export const batches = [
     expiryDate: "2026-05-10",
     quantity: 0,
     stock: "Out of Stock",
+    status: "Expired",
   },
   {
     id: 8,
@@ -62,6 +69,7 @@ export const batches = [
     expiryDate: "2027-08-25",
     quantity: 6,
     stock: "Low Stock",
+    status: "Good",
   },
   {
     id: 9,
@@ -70,6 +78,7 @@ export const batches = [
     expiryDate: "2026-10-05",
     quantity: 75,
     stock: "Normal",
+    status: "Near Expiry",
   },
   {
     id: 10,
@@ -78,6 +87,7 @@ export const batches = [
     expiryDate: "2026-04-18",
     quantity: 15,
     stock: "Low Stock",
+    status: "Expired",
   },
   {
     id: 11,
@@ -86,6 +96,7 @@ export const batches = [
     expiryDate: "2027-12-12",
     quantity: 50,
     stock: "Normal",
+    status: "Good",
   },
   {
     id: 12,
@@ -94,6 +105,7 @@ export const batches = [
     expiryDate: "2028-03-30",
     quantity: 180,
     stock: "Normal",
+    status: "Good",
   },
   {
     id: 13,
@@ -102,5 +114,6 @@ export const batches = [
     expiryDate: "2026-09-28",
     quantity: 4,
     stock: "Low Stock",
+    status: "Near Expiry",
   },
 ];
