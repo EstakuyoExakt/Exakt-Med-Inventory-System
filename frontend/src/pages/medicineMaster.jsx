@@ -5,6 +5,7 @@ import { medicines as initialMedicines } from "../data/medicine";
 // Components
 import Card from "../components/card";
 import Modal from "../components/modal";
+import Snackbar from "../components/snackbar";
 
 function MedicineMaster() {
   const [medicines, setMedicines] = useState(initialMedicines);
@@ -13,11 +14,14 @@ function MedicineMaster() {
   const [selectedMed, setSelectedMed] = useState(null);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [snackbar, setSnackbar] = useState("");
 
   const emptyForm = {
     medCode: "",
     genericName: "",
     brandName: "",
+    dosageType: "",
+    strength: "",
     reorderLevel: "",
     status: "Out of Stock",
   };
@@ -55,6 +59,7 @@ function MedicineMaster() {
     };
     setMedicines((prev) => [...prev, newMed]);
     handleCloseModal();
+    setSnackbar("Medicine added successfully!");
   };
 
   // Edit
@@ -64,6 +69,8 @@ function MedicineMaster() {
       medCode: med.medCode,
       genericName: med.genericName,
       brandName: med.brandName,
+      dosageType: med.dosageType ?? "",
+      strength: med.strength ?? "",
       reorderLevel: med.reorderLevel ?? "",
       status: med.status || "Over Stock",
     });
@@ -84,6 +91,7 @@ function MedicineMaster() {
       ),
     );
     handleCloseModal();
+    setSnackbar("Medicine updated successfully!");
   };
 
   // Delete
@@ -95,6 +103,7 @@ function MedicineMaster() {
   const handleConfirmDelete = () => {
     setMedicines((prev) => prev.filter((m) => m.id !== selectedMed.id));
     handleCloseModal();
+    setSnackbar("Medicine deleted successfully!");
   };
 
   const statuses = ["Low Stock", "Over Stock", "Out of Stock"];
@@ -176,15 +185,43 @@ function MedicineMaster() {
           className="input"
         />
       </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">
+            Dosage Type
+          </label>
+          <input
+            name="dosageType"
+            value={formData.dosageType}
+            onChange={handleFormChange}
+            placeholder="e.g. Tablet, Capsule"
+            required
+            className="input"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Strength</label>
+          <input
+            name="strength"
+            value={formData.strength}
+            onChange={handleFormChange}
+            placeholder="e.g. 500mg"
+            required
+            className="input"
+          />
+        </div>
+      </div>
     </>
   );
 
   return (
-    <div className="grid gap-5 p-10 w-full max-w-7xl mx-auto max-h-full">
-      {/* Medicine List table */}
-      <Card
-        className="animate-slide-up"
-        title={"Medicine List"}
+    <>
+      <div className="grid gap-5 p-10 w-full max-w-7xl mx-auto max-h-full">
+        {/* Medicine List table */}
+        <Card
+          className="animate-slide-up"
+          title={"Medicine List"}
         action={
           <button className="btn-primary" onClick={handleOpenCreate}>
             <Plus className="w-4 h-4" />
@@ -328,6 +365,7 @@ function MedicineMaster() {
           )}
         </div>
       </Card>
+      </div>
 
       {/* Add Medicine Modal */}
       <Modal
@@ -499,7 +537,14 @@ function MedicineMaster() {
           </div>
         )}
       </Modal>
-    </div>
+
+      {snackbar && (
+        <Snackbar
+          description={snackbar}
+          onClose={() => setSnackbar("")}
+        />
+      )}
+    </>
   );
 }
 
