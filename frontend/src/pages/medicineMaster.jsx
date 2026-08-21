@@ -1,5 +1,13 @@
-import { useState } from "react";
-import { PencilIcon, TrashIcon, Plus, Search, Eye } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  PencilIcon,
+  TrashIcon,
+  Plus,
+  Search,
+  Eye,
+  ArrowDown,
+  PackageOpen,
+} from "lucide-react";
 import { medicines as initialMedicines } from "../data/medicine";
 
 // Components
@@ -107,6 +115,16 @@ function MedicineMaster() {
   };
 
   const statuses = ["Low Stock", "Over Stock", "Out of Stock"];
+
+  const lowStockCount = useMemo(
+    () => medicines.filter((m) => m.status === "Low Stock").length,
+    [medicines],
+  );
+
+  const outOfStockCount = useMemo(
+    () => medicines.filter((m) => m.status === "Out of Stock").length,
+    [medicines],
+  );
 
   const filteredMedicines = medicines.filter((med) => {
     const q = search.toLowerCase();
@@ -217,10 +235,44 @@ function MedicineMaster() {
 
   return (
     <>
-      <div className="p-10 w-full max-w-7xl mx-auto max-h-full">
+      <div className="p-10 w-full max-w-7xl mx-auto overflow-y-auto max-h-full flex flex-col gap-5">
+        {/* Total Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 animate-slide-up">
+          <Card
+            title={"Low Stock"}
+            action={
+              <div className="p-2.5 rounded-lg bg-yellow-50 text-yellow-600">
+                <ArrowDown className="w-5 h-5" />
+              </div>
+            }
+          >
+            <span className="text-3xl font-bold text-amber-600">
+              {lowStockCount}
+            </span>
+            <p className="text-xs text-slate-500 mt-1">
+              Medicines below threshold
+            </p>
+          </Card>
+          <Card
+            title={"Out of Stock"}
+            action={
+              <div className="p-2.5 rounded-lg bg-orange-50 text-orange-600">
+                <PackageOpen className="w-5 h-5" />
+              </div>
+            }
+          >
+            <span className="text-3xl font-bold text-rose-600">
+              {outOfStockCount}
+            </span>
+            <p className="text-xs text-slate-500 mt-1">
+              Medicines with zero stock
+            </p>
+          </Card>
+        </div>
+
         {/* Medicine List table */}
         <Card
-          className="animate-slide-up min-h-145 flex flex-col justify-between"
+          className="animate-slide-up-3 min-h-145 flex flex-col justify-between"
           title={"Medicine List"}
           action={
             <button className="btn-primary" onClick={handleOpenCreate}>

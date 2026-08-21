@@ -2,10 +2,8 @@ import { useMemo, useState } from "react";
 import {
   Pill,
   Boxes,
-  ArrowDown,
   CircleAlert,
   TriangleAlert,
-  PackageOpen,
   Search,
   Plus,
   SlidersHorizontal,
@@ -36,43 +34,7 @@ function Inventory() {
   // Total Stock
   const totalStock = batchesList.reduce((sum, b) => sum + (b.quantity || 0), 0);
 
-  // Map total quantity per medicine
-  const medicineStockMap = useMemo(() => {
-    const map = {};
-    medicines.forEach((med) => {
-      const medBatches = batchesList.filter(
-        (b) =>
-          b.medicine.toLowerCase().includes(med.genericName.toLowerCase()) ||
-          b.medicine.toLowerCase().includes(med.brandName.toLowerCase()),
-      );
-      const totalQty = medBatches.reduce(
-        (acc, curr) => acc + (curr.quantity || 0),
-        0,
-      );
-      map[med.medCode] = totalQty;
-    });
-    return map;
-  }, [batchesList]);
 
-  // Low Stock (qty > 0 and <= 15)
-  const lowStockCount = useMemo(
-    () =>
-      medicines.filter((med) => {
-        const qty = medicineStockMap[med.medCode] ?? 0;
-        return qty > 0 && qty <= 15;
-      }).length,
-    [medicineStockMap],
-  );
-
-  // Out of Stock (qty === 0)
-  const outOfStockCount = useMemo(
-    () =>
-      medicines.filter((med) => {
-        const qty = medicineStockMap[med.medCode] ?? 0;
-        return qty === 0;
-      }).length,
-    [medicineStockMap],
-  );
 
   // Near Expiry (within 90 days)
   const nearExpiryCount = useMemo(
@@ -97,10 +59,15 @@ function Inventory() {
   const [modalState, setModalState] = useState(""); // "" | "receive" | "adjustment" | "transfer" | "view"
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [search, setSearch] = useState("");
+  const [filterMedicine, setFilterMedicine] = useState("");
   const [filterExpiry, setFilterExpiry] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
   const [snackbar, setSnackbar] = useState("");
+
+  const medicineOptions = useMemo(() => {
+    return medicines.map((m) => `${m.genericName} (${m.brandName})`);
+  }, []);
 
   // Receive Form State
   const initialReceiveForm = {
@@ -278,11 +245,16 @@ function Inventory() {
         (batch.supplier && batch.supplier.toLowerCase().includes(q)) ||
         (batch.status && batch.status.toLowerCase().includes(q)) ||
         String(batch.quantity).includes(q);
+
+      const matchesMedicine =
+        filterMedicine === "" || batch.medicine === filterMedicine;
+
       const matchesExpiry =
         filterExpiry === "" || batch.status === filterExpiry;
-      return matchesSearch && matchesExpiry;
+
+      return matchesSearch && matchesMedicine && matchesExpiry;
     });
-  }, [batchesList, search, filterExpiry]);
+  }, [batchesList, search, filterMedicine, filterExpiry]);
 
   const totalPages = Math.ceil(filteredBatches.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -295,101 +267,67 @@ function Inventory() {
   return (
     <div className="w-full p-10 max-w-7xl mx-auto overflow-y-auto max-h-full">
       {/* Total Cards */}
-      <div className="flex flex-col gap-5">
-        <div className="grid grid-cols-3 gap-5 animate-slide-up">
-          <Card
-            title={"Total Medicines"}
-            action={
-              <div className="p-2.5 rounded-lg bg-blue-50 text-blue-600">
-                <Pill className="w-5 h-5" />
-              </div>
-            }
-          >
-            <span className="text-3xl font-bold text-slate-900">
-              {totalMedicines}
-            </span>
-            <p className="text-xs text-slate-500 mt-1">
-              Registered in catalogue
-            </p>
-          </Card>
-          <Card
-            title={"Total Stock"}
-            action={
-              <div className="p-2.5 rounded-lg bg-green-50 text-green-600">
-                <Boxes className="w-5 h-5" />
-              </div>
-            }
-          >
-            <span className="text-3xl font-bold text-slate-900">
-              {totalStock.toLocaleString()}
-            </span>
-            <p className="text-xs text-slate-500 mt-1">
-              Units across all batches
-            </p>
-          </Card>
-          <Card
-            title={"Low Stock"}
-            action={
-              <div className="p-2.5 rounded-lg bg-yellow-50 text-yellow-600">
-                <ArrowDown className="w-5 h-5" />
-              </div>
-            }
-          >
-            <span className="text-3xl font-bold text-amber-600">
-              {lowStockCount}
-            </span>
-            <p className="text-xs text-slate-500 mt-1">
-              Medicines below threshold
-            </p>
-          </Card>
-        </div>
-        <div className="grid grid-cols-3 gap-5 animate-slide-up-1">
-          <Card
-            title={"Out of Stock"}
-            action={
-              <div className="p-2.5 rounded-lg bg-orange-50 text-orange-600">
-                <PackageOpen className="w-5 h-5" />
-              </div>
-            }
-          >
-            <span className="text-3xl font-bold text-rose-600">
-              {outOfStockCount}
-            </span>
-            <p className="text-xs text-slate-500 mt-1">
-              Medicines with zero stock
-            </p>
-          </Card>
-          <Card
-            title={"Near Expiry"}
-            action={
-              <div className="p-2.5 rounded-lg bg-yellow-50 text-yellow-600">
-                <CircleAlert className="w-5 h-5" />
-              </div>
-            }
-          >
-            <span className="text-3xl font-bold text-amber-600">
-              {nearExpiryCount}
-            </span>
-            <p className="text-xs text-slate-500 mt-1">
-              Batches expiring within 90 days
-            </p>
-          </Card>
-          <Card
-            title={"Expired"}
-            action={
-              <div className="p-2.5 rounded-lg bg-red-50 text-red-600">
-                <TriangleAlert className="w-5 h-5" />
-              </div>
-            }
-          >
-            <span className="text-3xl font-bold text-rose-600">
-              {expiredCount}
-            </span>
-            <p className="text-xs text-slate-500 mt-1">
-              Batches past expiry date
-            </p>
-          </Card>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 animate-slide-up">
+        <Card
+          title={"Total Medicines"}
+          action={
+            <div className="p-2.5 rounded-lg bg-blue-50 text-blue-600">
+              <Pill className="w-5 h-5" />
+            </div>
+          }
+        >
+          <span className="text-3xl font-bold text-slate-900">
+            {totalMedicines}
+          </span>
+          <p className="text-xs text-slate-500 mt-1">
+            Registered in catalogue
+          </p>
+        </Card>
+        <Card
+          title={"Total Stock"}
+          action={
+            <div className="p-2.5 rounded-lg bg-green-50 text-green-600">
+              <Boxes className="w-5 h-5" />
+            </div>
+          }
+        >
+          <span className="text-3xl font-bold text-slate-900">
+            {totalStock.toLocaleString()}
+          </span>
+          <p className="text-xs text-slate-500 mt-1">
+            Units across all batches
+          </p>
+        </Card>
+        <Card
+          title={"Near Expiry"}
+          action={
+            <div className="p-2.5 rounded-lg bg-yellow-50 text-yellow-600">
+              <CircleAlert className="w-5 h-5" />
+            </div>
+          }
+        >
+          <span className="text-3xl font-bold text-amber-600">
+            {nearExpiryCount}
+          </span>
+          <p className="text-xs text-slate-500 mt-1">
+            Batches expiring within 90 days
+          </p>
+        </Card>
+        <Card
+          title={"Expired"}
+          action={
+            <div className="p-2.5 rounded-lg bg-red-50 text-red-600">
+              <TriangleAlert className="w-5 h-5" />
+            </div>
+          }
+        >
+          <span className="text-3xl font-bold text-rose-600">
+            {expiredCount}
+          </span>
+          <p className="text-xs text-slate-500 mt-1">
+            Batches past expiry date
+          </p>
+        </Card>
       </div>
 
       {/* Inventory List Card */}
@@ -424,12 +362,27 @@ function Inventory() {
                   />
                 </div>
                 <select
+                  value={filterMedicine}
+                  onChange={(e) => {
+                    setFilterMedicine(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="input w-full sm:w-52"
+                >
+                  <option value="">All Medicines</option>
+                  {medicineOptions.map((medName) => (
+                    <option key={medName} value={medName}>
+                      {medName}
+                    </option>
+                  ))}
+                </select>
+                <select
                   value={filterExpiry}
                   onChange={(e) => {
                     setFilterExpiry(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="input w-full sm:w-48"
+                  className="input w-full sm:w-44"
                 >
                   <option value="">All Expiry Status</option>
                   <option value="Good">Good</option>
