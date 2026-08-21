@@ -63,7 +63,7 @@ export const suppliers = [
     contactNumber: "+63 922 666 7788",
     address: "Chino Roces Avenue, Makati City, Metro Manila",
     paymentTerms: "Net 60",
-    status: "Active",
+    status: "Inactive",
   },
   {
     id: 7,
@@ -85,6 +85,6 @@ export const suppliers = [
     contactNumber: "+63 924 888 9900",
     address: "Cyberpark, Quezon City, Metro Manila",
     paymentTerms: "Net 30",
-    status: "Active",
+    status: "Inactive",
   },
 ];
