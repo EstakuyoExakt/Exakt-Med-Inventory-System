@@ -466,7 +466,7 @@ function UserManagement() {
             <button
               type="button"
               onClick={handleDeleteConfirm}
-              className="btn inline-flex items-center justify-center gap-2 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 focus:ring-2 focus:ring-red-500/40 rounded-lg px-4 py-2.5 text-sm font-medium transition duration-200 ease-in-out cursor-pointer"
+              className="btn-danger"
             >
               <TrashIcon className="w-4 h-4" />
               Delete
