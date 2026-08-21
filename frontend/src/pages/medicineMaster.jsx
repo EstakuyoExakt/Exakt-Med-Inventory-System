@@ -8,6 +8,8 @@ import {
   Eye,
   ArrowDown,
   PackageOpen,
+  AlertTriangle,
+  XCircle,
 } from "lucide-react";
 import { medicines as initialMedicines } from "../data/medicine";
 import { batches } from "../data/batch";
@@ -23,58 +25,45 @@ import Snackbar from "../components/snackbar";
 function MedicineFormFields({ formData, handleFormChange }) {
   return (
     <>
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-gray-700">Med Code</label>
+        <input
+          name="medCode"
+          value={formData.medCode}
+          onChange={handleFormChange}
+          placeholder="e.g. MED-001"
+          required
+          className="input"
+        />
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">Med Code</label>
+          <label className="text-sm font-medium text-gray-700">
+            Generic Name
+          </label>
           <input
-            name="medCode"
-            value={formData.medCode}
+            name="genericName"
+            value={formData.genericName}
             onChange={handleFormChange}
-            placeholder="e.g. MED-001"
+            placeholder="e.g. Paracetamol"
             required
             className="input"
           />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-gray-700">
-            Reorder Level
+            Brand Name
           </label>
           <input
-            type="number"
-            name="reorderLevel"
-            value={formData.reorderLevel}
+            name="brandName"
+            value={formData.brandName}
             onChange={handleFormChange}
-            placeholder="e.g. 50"
+            placeholder="e.g. Biogesic"
             required
             className="input"
           />
         </div>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-gray-700">
-          Generic Name
-        </label>
-        <input
-          name="genericName"
-          value={formData.genericName}
-          onChange={handleFormChange}
-          placeholder="e.g. Paracetamol"
-          required
-          className="input"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-gray-700">Brand Name</label>
-        <input
-          name="brandName"
-          value={formData.brandName}
-          onChange={handleFormChange}
-          placeholder="e.g. Biogesic"
-          required
-          className="input"
-        />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -98,6 +87,35 @@ function MedicineFormFields({ formData, handleFormChange }) {
             value={formData.strength}
             onChange={handleFormChange}
             placeholder="e.g. 500mg"
+            required
+            className="input"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">
+            Reorder Level
+          </label>
+          <input
+            type="number"
+            name="reorderLevel"
+            value={formData.reorderLevel}
+            onChange={handleFormChange}
+            placeholder="e.g. 50"
+            required
+            className="input"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Max Stock</label>
+          <input
+            type="number"
+            name="maxStock"
+            value={formData.maxStock}
+            onChange={handleFormChange}
+            placeholder="e.g. 250"
             required
             className="input"
           />
@@ -148,6 +166,7 @@ function MedicineMaster() {
     strength: "",
     quantity: 0,
     reorderLevel: "",
+    maxStock: "",
     status: "Out of Stock",
   };
   const [formData, setFormData] = useState(emptyForm);
@@ -185,6 +204,7 @@ function MedicineMaster() {
       ...formData,
       quantity: Number(formData.quantity) || 0,
       reorderLevel: Number(formData.reorderLevel) || 0,
+      maxStock: Number(formData.maxStock) || 0,
     };
     setMedicines((prev) => [...prev, newMed]);
     handleCloseModal();
@@ -202,6 +222,7 @@ function MedicineMaster() {
       strength: med.strength ?? "",
       quantity: med.quantity ?? 0,
       reorderLevel: med.reorderLevel ?? "",
+      maxStock: med.maxStock ?? "",
       status: med.status || "Over Stock",
     });
     setModalState("edit");
@@ -236,7 +257,7 @@ function MedicineMaster() {
     setSnackbar("Medicine deleted successfully!");
   };
 
-  const statuses = ["Low Stock", "Over Stock", "Out of Stock"];
+  const statuses = ["Normal", "Low Stock", "Over Stock", "Out of Stock"];
 
   const totalMedicines = medicines.length;
 
@@ -274,7 +295,7 @@ function MedicineMaster() {
   return (
     <>
       <div className="p-10 w-full max-w-7xl mx-auto overflow-y-auto max-h-full flex flex-col gap-5">
-        {/* Total Cards */}
+        {/* Metric Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 animate-slide-up">
           <Card
             title={"Total Medicines"}
@@ -288,14 +309,14 @@ function MedicineMaster() {
               {totalMedicines}
             </span>
             <p className="text-xs text-slate-500 mt-1">
-              Registered in catalogue
+              Registered medicine items
             </p>
           </Card>
           <Card
             title={"Low Stock"}
             action={
-              <div className="p-2.5 rounded-lg bg-yellow-50 text-yellow-600">
-                <ArrowDown className="w-5 h-5" />
+              <div className="p-2.5 rounded-lg bg-amber-50 text-amber-600">
+                <AlertTriangle className="w-5 h-5" />
               </div>
             }
           >
@@ -303,22 +324,22 @@ function MedicineMaster() {
               {lowStockCount}
             </span>
             <p className="text-xs text-slate-500 mt-1">
-              Medicines below threshold
+              Medicines below reorder level
             </p>
           </Card>
           <Card
             title={"Out of Stock"}
             action={
-              <div className="p-2.5 rounded-lg bg-orange-50 text-orange-600">
-                <PackageOpen className="w-5 h-5" />
+              <div className="p-2.5 rounded-lg bg-red-50 text-red-600">
+                <XCircle className="w-5 h-5" />
               </div>
             }
           >
-            <span className="text-3xl font-bold text-rose-600">
+            <span className="text-3xl font-bold text-red-600">
               {outOfStockCount}
             </span>
             <p className="text-xs text-slate-500 mt-1">
-              Medicines with zero stock
+              Medicines with 0 available units
             </p>
           </Card>
         </div>
@@ -397,7 +418,9 @@ function MedicineMaster() {
                         ? "bg-amber-100 text-amber-700"
                         : med.status === "Out of Stock"
                           ? "bg-rose-100 text-rose-700"
-                          : "bg-emerald-100 text-emerald-700"
+                          : med.status === "Over Stock"
+                            ? "bg-purple-100 text-purple-700"
+                            : "bg-emerald-100 text-emerald-700"
                     }`}
                   >
                     {med.status}
@@ -574,6 +597,14 @@ function MedicineMaster() {
                   </p>
                   <p className="text-sm font-medium text-gray-900 mt-0.5">
                     {selectedMed.reorderLevel} units
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500">Max Stock</p>
+                  <p className="text-sm font-medium text-gray-900 mt-0.5">
+                    {selectedMed.maxStock
+                      ? `${selectedMed.maxStock} units`
+                      : "N/A"}
                   </p>
                 </div>
               </div>

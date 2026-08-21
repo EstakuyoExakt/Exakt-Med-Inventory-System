@@ -9,6 +9,7 @@ export const medicines = [
     quantity: 254,
     status: "Over Stock",
     reorderLevel: 50,
+    maxStock: 250,
   },
   {
     id: 2,
@@ -20,6 +21,7 @@ export const medicines = [
     quantity: 8,
     status: "Low Stock",
     reorderLevel: 30,
+    maxStock: 150,
   },
   {
     id: 3,
@@ -29,8 +31,9 @@ export const medicines = [
     dosageType: "Tablet",
     strength: "200mg",
     quantity: 45,
-    status: "Over Stock",
+    status: "Normal",
     reorderLevel: 25,
+    maxStock: 100,
   },
   {
     id: 4,
@@ -40,8 +43,9 @@ export const medicines = [
     dosageType: "Syrup",
     strength: "5mg/5mL",
     quantity: 120,
-    status: "Over Stock",
+    status: "Normal",
     reorderLevel: 20,
+    maxStock: 150,
   },
   {
     id: 5,
@@ -53,6 +57,7 @@ export const medicines = [
     quantity: 0,
     status: "Out of Stock",
     reorderLevel: 40,
+    maxStock: 200,
   },
   {
     id: 6,
@@ -61,9 +66,10 @@ export const medicines = [
     brandName: "Cozaar",
     dosageType: "Tablet",
     strength: "50mg",
-    quantity: 300,
+    quantity: 320,
     status: "Over Stock",
     reorderLevel: 50,
+    maxStock: 300,
   },
   {
     id: 7,
@@ -75,6 +81,7 @@ export const medicines = [
     quantity: 0,
     status: "Out of Stock",
     reorderLevel: 30,
+    maxStock: 150,
   },
   {
     id: 8,
@@ -86,6 +93,7 @@ export const medicines = [
     quantity: 6,
     status: "Low Stock",
     reorderLevel: 15,
+    maxStock: 50,
   },
   {
     id: 9,
@@ -95,8 +103,9 @@ export const medicines = [
     dosageType: "Drops",
     strength: "100mg/mL",
     quantity: 75,
-    status: "Over Stock",
+    status: "Normal",
     reorderLevel: 25,
+    maxStock: 120,
   },
   {
     id: 10,
@@ -108,6 +117,7 @@ export const medicines = [
     quantity: 15,
     status: "Low Stock",
     reorderLevel: 20,
+    maxStock: 100,
   },
   {
     id: 11,
@@ -117,8 +127,9 @@ export const medicines = [
     dosageType: "Ointment",
     strength: "2%",
     quantity: 50,
-    status: "Low Stock",
+    status: "Normal",
     reorderLevel: 15,
+    maxStock: 80,
   },
   {
     id: 12,
@@ -128,7 +139,8 @@ export const medicines = [
     dosageType: "Tablet",
     strength: "20mg",
     quantity: 180,
-    status: "Over Stock",
+    status: "Normal",
     reorderLevel: 35,
+    maxStock: 200,
   },
 ];
