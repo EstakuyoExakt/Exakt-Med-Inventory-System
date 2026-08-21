@@ -29,13 +29,13 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/medicine-master" element={<MedicineMaster />} />
           <Route path="/inventory" element={<Inventory />} />
-          <Route path="/accounting" element={<Accounting />} />
           <Route path="/audit-logs" element={<AuditLogs />} />
 
           {/* Admin Pages */}
           <Route path="/user-management" element={<UserManagement />} />
           <Route path="/facility-management" element={<FacilityManagement />} />
           <Route path="/supplier-management" element={<SupplierManagement />} />
+          <Route path="/accounting" element={<Accounting />} />
         </Routes>
       </div>
     </>
