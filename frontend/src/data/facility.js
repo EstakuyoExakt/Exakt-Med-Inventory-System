@@ -57,14 +57,14 @@ export const facilities = [
     location: "Main Hospital Building, 2nd Floor",
     contactPerson: "Dr. David Tan",
     contactNumber: "+63 922 678 9012",
-    status: "Active",
+    status: "Inactive",
   },
   {
     id: 7,
     facilityCode: "FAC-007",
     name: "Community Health Center - North Branch",
     type: "Satellite Clinic",
-    location: "North District Plaza, Barangay San Jose",
+    location: "North District Plaza",
     contactPerson: "Nurse Maria Teresa Gomez",
     contactNumber: "+63 923 789 0123",
     status: "Active",
@@ -77,7 +77,7 @@ export const facilities = [
     location: "Cancer Center, 2nd Floor",
     contactPerson: "Pharm. Jonathan Villanueva",
     contactNumber: "+63 924 890 1234",
-    status: "Active",
+    status: "Inactive",
   },
 ];
 

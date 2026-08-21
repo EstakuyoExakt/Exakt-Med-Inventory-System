@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  Pill,
   PencilIcon,
   TrashIcon,
   Plus,
@@ -149,6 +150,8 @@ function MedicineMaster() {
 
   const statuses = ["Low Stock", "Over Stock", "Out of Stock"];
 
+  const totalMedicines = medicines.length;
+
   const lowStockCount = useMemo(
     () => medicines.filter((m) => m.status === "Low Stock").length,
     [medicines],
@@ -270,7 +273,22 @@ function MedicineMaster() {
     <>
       <div className="p-10 w-full max-w-7xl mx-auto overflow-y-auto max-h-full flex flex-col gap-5">
         {/* Total Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 animate-slide-up">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 animate-slide-up">
+          <Card
+            title={"Total Medicines"}
+            action={
+              <div className="p-2.5 rounded-lg bg-blue-50 text-blue-600">
+                <Pill className="w-5 h-5" />
+              </div>
+            }
+          >
+            <span className="text-3xl font-bold text-slate-900">
+              {totalMedicines}
+            </span>
+            <p className="text-xs text-slate-500 mt-1">
+              Registered in catalogue
+            </p>
+          </Card>
           <Card
             title={"Low Stock"}
             action={
@@ -484,10 +502,7 @@ function MedicineMaster() {
             <button onClick={handleCloseModal} className="btn-secondary">
               Cancel
             </button>
-            <button
-              onClick={handleConfirmDelete}
-              className="btn-danger"
-            >
+            <button onClick={handleConfirmDelete} className="btn-danger">
               <TrashIcon className="w-4 h-4" />
               Delete
             </button>

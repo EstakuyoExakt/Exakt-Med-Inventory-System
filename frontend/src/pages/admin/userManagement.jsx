@@ -238,7 +238,7 @@ function UserManagement() {
 
   return (
     <div className="w-full p-10 max-w-7xl mx-auto overflow-y-auto max-h-full flex flex-col gap-5">
-      {/* 3 Summary Cards */}
+      {/* Total Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 animate-slide-up">
         <Card
           title={"Total Users"}
