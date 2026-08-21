@@ -30,13 +30,13 @@ function Sidebar() {
       path: "/supplier-management",
       icon: Truck,
     },
+    { name: "Accounting", path: "/accounting", icon: DollarSign },
   ];
 
   const mainNavItems = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { name: "Medicine Master", path: "/medicine-master", icon: Pill },
     { name: "Inventory", path: "/inventory", icon: Boxes },
-    { name: "Accounting", path: "/accounting", icon: DollarSign },
     { name: "Audit Logs", path: "/audit-logs", icon: ClipboardList },
   ];
 
