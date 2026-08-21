@@ -13,6 +13,8 @@ import { batches } from "../data/batch";
 
 // Components
 import Card from "../components/card";
+import ListCard from "../components/listCard";
+import Table from "../components/table";
 import Modal from "../components/modal";
 import Snackbar from "../components/snackbar";
 
@@ -302,8 +304,7 @@ function MedicineMaster() {
         </div>
 
         {/* Medicine List table */}
-        <Card
-          className="animate-slide-up-1 min-h-145 flex flex-col justify-between"
+        <ListCard
           title={"Medicine List"}
           action={
             <button className="btn-primary" onClick={handleOpenCreate}>
@@ -311,148 +312,109 @@ function MedicineMaster() {
               Add Medicine
             </button>
           }
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={filteredMedicines.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
         >
-          <div className="mt-5 flex-1 flex flex-col justify-between">
-            <div>
-              {/* Search & Filter Row */}
-              <div className="flex flex-col sm:flex-row gap-3 mb-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    placeholder="Search by code, name, status, or reorder level..."
-                    className="input pl-9"
-                  />
-                </div>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => {
-                    setFilterStatus(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="input w-full sm:w-48"
-                >
-                  <option value="">All Status</option>
-                  {statuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <table className="w-full text-left border-collapse relative">
-                <thead className="sticky top-0 z-10 bg-white">
-                  <tr className="border-b bg-gray-50 text-gray-600 text-sm">
-                    <th className="p-3 font-medium">Med Code</th>
-                    <th className="p-3 font-medium">Generic Name</th>
-                    <th className="p-3 font-medium">Brand Name</th>
-                    <th className="p-3 font-medium">Reorder Level</th>
-                    <th className="p-3 font-medium">Status</th>
-                    <th className="p-3 font-medium text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody key={currentPage}>
-                  {currentMedicines.map((med, index) => (
-                    <tr
-                      key={med.id}
-                      className="hover:bg-gray-50 transition-colors animate-slide-up-1 h-12"
-                      style={{
-                        animationDelay: `${index * 0.05}s`,
-                        animationFillMode: "both",
-                      }}
-                    >
-                      <td className="p-2 text-sm">{med.medCode}</td>
-                      <td className="p-2 text-sm">{med.genericName}</td>
-                      <td className="p-2 text-sm">{med.brandName}</td>
-                      <td className="p-2 text-sm">{med.reorderLevel}</td>
-                      <td className="p-2 text-sm">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            med.status === "Low Stock"
-                              ? "bg-amber-100 text-amber-700"
-                              : med.status === "Out of Stock"
-                                ? "bg-rose-100 text-rose-700"
-                                : "bg-emerald-100 text-emerald-700"
-                          }`}
-                        >
-                          {med.status}
-                        </span>
-                      </td>
-                      <td className="p-2 text-sm flex justify-center gap-2">
-                        <button
-                          className="cursor-pointer p-2 text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 transition-colors"
-                          title="View Details"
-                          onClick={() => handleOpenView(med)}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          className="cursor-pointer p-2 text-blue-600 bg-blue-100 rounded-md hover:bg-blue-200 transition-colors"
-                          title="Edit"
-                          onClick={() => handleOpenEdit(med)}
-                        >
-                          <PencilIcon className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleOpenDelete(med)}
-                          className="cursor-pointer p-2 text-red-600 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
-                          title="Delete"
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {currentMedicines.length === 0 && (
-                    <tr className="h-64">
-                      <td
-                        colSpan="6"
-                        className="p-8 text-center text-gray-500 align-middle"
-                      >
-                        No medicines found.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+          {/* Search & Filter Row */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Search by code, name, status, or reorder level..."
+                className="input pl-9"
+              />
             </div>
-            {filteredMedicines.length > itemsPerPage && (
-              <div className="flex justify-between items-center pt-4 pr-5 pl-5 mt-auto">
-                <span className="text-sm text-gray-500">
-                  Showing {indexOfFirstItem + 1} to{" "}
-                  {Math.min(indexOfLastItem, filteredMedicines.length)} of{" "}
-                  {filteredMedicines.length} entries
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() =>
-                      setCurrentPage((prev) => Math.max(prev - 1, 1))
-                    }
-                    disabled={currentPage === 1}
-                    className="btn-secondary py-1.5 px-3 text-sm"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    onClick={() =>
-                      setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                    }
-                    disabled={currentPage === totalPages}
-                    className="btn-secondary py-1.5 px-3 text-sm"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
+            <select
+              value={filterStatus}
+              onChange={(e) => {
+                setFilterStatus(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="input w-full sm:w-48"
+            >
+              <option value="">All Status</option>
+              {statuses.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
           </div>
-        </Card>
+
+          <Table
+            headers={[
+              "Med Code",
+              "Generic Name",
+              "Brand Name",
+              "Reorder Level",
+              "Status",
+              "Actions",
+            ]}
+            isEmpty={currentMedicines.length === 0}
+            emptyMessage="No medicines found."
+          >
+            {currentMedicines.map((med, index) => (
+              <tr
+                key={med.id}
+                className="hover:bg-gray-50 transition-colors animate-slide-up-1 h-12"
+                style={{
+                  animationDelay: `${index * 0.05}s`,
+                  animationFillMode: "both",
+                }}
+              >
+                <td className="p-2 text-sm">{med.medCode}</td>
+                <td className="p-2 text-sm">{med.genericName}</td>
+                <td className="p-2 text-sm">{med.brandName}</td>
+                <td className="p-2 text-sm">{med.reorderLevel}</td>
+                <td className="p-2 text-sm">
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      med.status === "Low Stock"
+                        ? "bg-amber-100 text-amber-700"
+                        : med.status === "Out of Stock"
+                          ? "bg-rose-100 text-rose-700"
+                          : "bg-emerald-100 text-emerald-700"
+                    }`}
+                  >
+                    {med.status}
+                  </span>
+                </td>
+                <td className="p-2 text-sm flex justify-center gap-2">
+                  <button
+                    className="cursor-pointer p-2 text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 transition-colors"
+                    title="View Details"
+                    onClick={() => handleOpenView(med)}
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button
+                    className="cursor-pointer p-2 text-blue-600 bg-blue-100 rounded-md hover:bg-blue-200 transition-colors"
+                    title="Edit"
+                    onClick={() => handleOpenEdit(med)}
+                  >
+                    <PencilIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleOpenDelete(med)}
+                    className="cursor-pointer p-2 text-red-600 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
+                    title="Delete"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </Table>
+        </ListCard>
       </div>
 
       {/* Add Medicine Modal */}

@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { Logs, Search, Eye } from "lucide-react";
 
 // Components
-import Card from "../components/card";
+import ListCard from "../components/listCard";
+import Table from "../components/table";
 import Modal from "../components/modal";
 
 // Mock Data
@@ -55,158 +56,113 @@ function AuditLogs() {
 
   return (
     <div className="w-full p-10 max-w-7xl mx-auto max-h-full">
-      <Card
-        className="animate-slide-up min-h-145 flex flex-col justify-between"
+      <ListCard
+        className="animate-slide-up"
         title={"Audit Logs"}
         action={
           <div className="p-2.5 rounded-lg bg-blue-50 text-blue-600">
             <Logs className="w-5 h-5" />
           </div>
         }
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalItems={filteredLogs.length}
+        itemsPerPage={itemsPerPage}
+        onPageChange={setCurrentPage}
       >
-        <div className="mt-5 flex-1 flex flex-col justify-between">
-          <div>
-            {/* Search & Filter Row */}
-            <div className="flex flex-col sm:flex-row gap-3 mb-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  placeholder="Search by Log ID, User, Action, Module, or Details..."
-                  className="input pl-9"
-                />
-              </div>
-              <select
-                value={filterModule}
-                onChange={(e) => {
-                  setFilterModule(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="input w-full sm:w-48"
-              >
-                <option value="">All Modules</option>
-                {modules.map((mod) => (
-                  <option key={mod} value={mod}>
-                    {mod}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Audit Logs Table */}
-            <table className="w-full text-left border-collapse relative">
-              <thead className="sticky top-0 z-10 bg-white">
-                <tr className="border-b bg-gray-50 text-gray-600 text-sm">
-                  <th className="p-3 font-medium">Log ID</th>
-                  <th className="p-3 font-medium">Timestamp</th>
-                  <th className="p-3 font-medium">User</th>
-                  <th className="p-3 font-medium">Action</th>
-                  <th className="p-3 font-medium">Module</th>
-                  <th className="p-3 font-medium text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody key={currentPage}>
-                {currentLogs.map((log, index) => (
-                  <tr
-                    key={log.id}
-                    className="hover:bg-gray-50 transition-colors animate-slide-up h-12"
-                    style={{
-                      animationDelay: `${index * 0.05}s`,
-                      animationFillMode: "both",
-                    }}
-                  >
-                    <td className="p-2 text-sm font-medium text-slate-700">
-                      {log.logId}
-                    </td>
-                    <td className="p-2 text-sm text-gray-500 whitespace-nowrap">
-                      {log.timestamp}
-                    </td>
-                    <td className="p-2 text-sm">
-                      <span className="font-medium text-gray-900">
-                        {log.user}
-                      </span>
-                      <span className="block text-xs text-gray-400">
-                        {log.role}
-                      </span>
-                    </td>
-                    <td className="p-2 text-sm font-medium text-slate-800">
-                      {log.action}
-                    </td>
-                    <td className="p-2 text-sm">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          log.module === "Inventory"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : log.module === "Medicine Master"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-purple-100 text-purple-700"
-                        }`}
-                      >
-                        {log.module}
-                      </span>
-                    </td>
-                    <td className="p-2 text-sm flex justify-center gap-2">
-                      <button
-                        className="cursor-pointer p-2 text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 transition-colors"
-                        title="View Details"
-                        onClick={() => handleOpenView(log)}
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {currentLogs.length === 0 && (
-                  <tr className="h-64">
-                    <td
-                      colSpan="6"
-                      className="p-8 text-center text-gray-500 align-middle"
-                    >
-                      No audit logs found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+        {/* Search & Filter Row */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder="Search by Log ID, User, Action, Module, or Details..."
+              className="input pl-9"
+            />
           </div>
-
-          {/* Pagination */}
-          {filteredLogs.length > itemsPerPage && (
-            <div className="flex justify-between items-center pt-4 pr-5 pl-5 mt-auto">
-              <span className="text-sm text-gray-500">
-                Showing {indexOfFirstItem + 1} to{" "}
-                {Math.min(indexOfLastItem, filteredLogs.length)} of{" "}
-                {filteredLogs.length} entries
-              </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() =>
-                    setCurrentPage((prev) => Math.max(prev - 1, 1))
-                  }
-                  disabled={currentPage === 1}
-                  className="btn-secondary py-1.5 px-3 text-sm"
-                >
-                  Previous
-                </button>
-                <button
-                  onClick={() =>
-                    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                  }
-                  disabled={currentPage === totalPages}
-                  className="btn-secondary py-1.5 px-3 text-sm"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
+          <select
+            value={filterModule}
+            onChange={(e) => {
+              setFilterModule(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="input w-full sm:w-48"
+          >
+            <option value="">All Modules</option>
+            {modules.map((mod) => (
+              <option key={mod} value={mod}>
+                {mod}
+              </option>
+            ))}
+          </select>
         </div>
-      </Card>
+
+        {/* Audit Logs Table */}
+        <Table
+          headers={[
+            "Log ID",
+            "Timestamp",
+            "User",
+            "Action",
+            "Module",
+            "Actions",
+          ]}
+          isEmpty={currentLogs.length === 0}
+          emptyMessage="No audit logs found."
+        >
+          {currentLogs.map((log, index) => (
+            <tr
+              key={log.id}
+              className="hover:bg-gray-50 transition-colors animate-slide-up-1 h-12"
+              style={{
+                animationDelay: `${index * 0.05}s`,
+                animationFillMode: "both",
+              }}
+            >
+              <td className="p-2 text-sm font-medium text-slate-700">
+                {log.logId}
+              </td>
+              <td className="p-2 text-sm text-gray-500 whitespace-nowrap">
+                {log.timestamp}
+              </td>
+              <td className="p-2 text-sm">
+                <span className="font-medium text-gray-900">{log.user}</span>
+                <span className="block text-xs text-gray-400">{log.role}</span>
+              </td>
+              <td className="p-2 text-sm font-medium text-slate-800">
+                {log.action}
+              </td>
+              <td className="p-2 text-sm">
+                <span
+                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    log.module === "Inventory"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : log.module === "Medicine Master"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-purple-100 text-purple-700"
+                  }`}
+                >
+                  {log.module}
+                </span>
+              </td>
+              <td className="p-2 text-sm flex justify-center gap-2">
+                <button
+                  className="cursor-pointer p-2 text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 transition-colors"
+                  title="View Details"
+                  onClick={() => handleOpenView(log)}
+                >
+                  <Eye className="w-4 h-4" />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </Table>
+      </ListCard>
 
       {/* View Audit Log Details Modal */}
       <Modal
