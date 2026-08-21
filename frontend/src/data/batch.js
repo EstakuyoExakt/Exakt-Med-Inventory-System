@@ -7,7 +7,6 @@ export const batches = [
     receivedAt: "2025-05-10",
     expiryDate: "2027-05-15",
     quantity: 250,
-    stock: "Normal",
     status: "Good",
   },
   {
@@ -18,7 +17,6 @@ export const batches = [
     receivedAt: "2025-09-15",
     expiryDate: "2026-09-10",
     quantity: 8,
-    stock: "Low Stock",
     status: "Near Expiry",
   },
   {
@@ -29,7 +27,6 @@ export const batches = [
     receivedAt: "2024-12-10",
     expiryDate: "2026-06-20",
     quantity: 45,
-    stock: "Normal",
     status: "Expired",
   },
   {
@@ -40,7 +37,6 @@ export const batches = [
     receivedAt: "2025-11-20",
     expiryDate: "2027-11-30",
     quantity: 120,
-    stock: "Normal",
     status: "Good",
   },
   {
@@ -51,7 +47,6 @@ export const batches = [
     receivedAt: "2025-03-01",
     expiryDate: "2026-09-01",
     quantity: 20,
-    stock: "Normal",
     status: "Near Expiry",
   },
   {
@@ -62,7 +57,6 @@ export const batches = [
     receivedAt: "2026-01-10",
     expiryDate: "2028-01-15",
     quantity: 300,
-    stock: "Normal",
     status: "Good",
   },
   {
@@ -73,7 +67,6 @@ export const batches = [
     receivedAt: "2024-11-05",
     expiryDate: "2026-05-10",
     quantity: 0,
-    stock: "Out of Stock",
     status: "Expired",
   },
   {
@@ -84,7 +77,6 @@ export const batches = [
     receivedAt: "2025-08-20",
     expiryDate: "2027-08-25",
     quantity: 6,
-    stock: "Low Stock",
     status: "Good",
   },
   {
@@ -95,7 +87,6 @@ export const batches = [
     receivedAt: "2025-10-12",
     expiryDate: "2026-10-05",
     quantity: 75,
-    stock: "Normal",
     status: "Near Expiry",
   },
   {
@@ -106,7 +97,6 @@ export const batches = [
     receivedAt: "2024-10-15",
     expiryDate: "2026-04-18",
     quantity: 15,
-    stock: "Low Stock",
     status: "Expired",
   },
   {
@@ -117,7 +107,6 @@ export const batches = [
     receivedAt: "2025-12-18",
     expiryDate: "2027-12-12",
     quantity: 50,
-    stock: "Normal",
     status: "Good",
   },
   {
@@ -128,7 +117,6 @@ export const batches = [
     receivedAt: "2026-03-25",
     expiryDate: "2028-03-30",
     quantity: 180,
-    stock: "Normal",
     status: "Good",
   },
   {
@@ -139,7 +127,6 @@ export const batches = [
     receivedAt: "2025-09-20",
     expiryDate: "2026-09-28",
     quantity: 4,
-    stock: "Low Stock",
     status: "Near Expiry",
   },
 ];

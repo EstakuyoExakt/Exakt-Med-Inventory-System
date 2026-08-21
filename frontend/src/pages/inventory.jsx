@@ -97,7 +97,6 @@ function Inventory() {
   const [modalState, setModalState] = useState(""); // "" | "receive" | "adjustment" | "transfer" | "view"
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [search, setSearch] = useState("");
-  const [filterStock, setFilterStock] = useState("");
   const [filterExpiry, setFilterExpiry] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 7;
@@ -119,11 +118,6 @@ function Inventory() {
   const handleReceiveSubmit = (e) => {
     e.preventDefault();
     const qty = Number(receiveForm.quantity) || 0;
-
-    // Auto-compute stock status based on quantity
-    let stockStatus = "Normal";
-    if (qty === 0) stockStatus = "Out of Stock";
-    else if (qty <= 15) stockStatus = "Low Stock";
 
     // Auto-compute expiry status based on expiryDate
     let expiryStatus = "Good";
@@ -148,7 +142,6 @@ function Inventory() {
       receivedAt: currentDate.toISOString().split("T")[0],
       expiryDate: receiveForm.expiryDate,
       quantity: qty,
-      stock: stockStatus,
       status: expiryStatus,
     };
 
@@ -225,14 +218,12 @@ function Inventory() {
         prev.filter((b) => b.batchId !== transferForm.batchId),
       );
     } else {
-      const stockStatus = remainingQty <= 15 ? "Low Stock" : "Normal";
       setBatchesList((prev) =>
         prev.map((b) =>
           b.batchId === transferForm.batchId
             ? {
                 ...b,
                 quantity: remainingQty,
-                stock: stockStatus,
               }
             : b,
         ),
@@ -258,14 +249,12 @@ function Inventory() {
         prev.filter((b) => b.batchId !== adjustmentForm.batchId),
       );
     } else {
-      const stockStatus = qty <= 15 ? "Low Stock" : "Normal";
       setBatchesList((prev) =>
         prev.map((b) =>
           b.batchId === adjustmentForm.batchId
             ? {
                 ...b,
                 quantity: qty,
-                stock: stockStatus,
               }
             : b,
         ),
@@ -284,15 +273,14 @@ function Inventory() {
         batch.medicine.toLowerCase().includes(q) ||
         batch.batchId.toLowerCase().includes(q) ||
         batch.expiryDate.includes(q) ||
+        (batch.supplier && batch.supplier.toLowerCase().includes(q)) ||
         (batch.status && batch.status.toLowerCase().includes(q)) ||
-        (batch.stock && batch.stock.toLowerCase().includes(q)) ||
         String(batch.quantity).includes(q);
-      const matchesStock = filterStock === "" || batch.stock === filterStock;
       const matchesExpiry =
         filterExpiry === "" || batch.status === filterExpiry;
-      return matchesSearch && matchesStock && matchesExpiry;
+      return matchesSearch && matchesExpiry;
     });
-  }, [batchesList, search, filterStock, filterExpiry]);
+  }, [batchesList, search, filterExpiry]);
 
   const totalPages = Math.ceil(filteredBatches.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -432,25 +420,12 @@ function Inventory() {
               />
             </div>
             <select
-              value={filterStock}
-              onChange={(e) => {
-                setFilterStock(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="input w-full sm:w-44"
-            >
-              <option value="">All Stock</option>
-              <option value="Normal">Normal</option>
-              <option value="Low Stock">Low Stock</option>
-              <option value="Out of Stock">Out of Stock</option>
-            </select>
-            <select
               value={filterExpiry}
               onChange={(e) => {
                 setFilterExpiry(e.target.value);
                 setCurrentPage(1);
               }}
-              className="input w-full sm:w-44"
+              className="input w-full sm:w-48"
             >
               <option value="">All Expiry Status</option>
               <option value="Good">Good</option>
@@ -466,7 +441,6 @@ function Inventory() {
                 <th className="p-3 font-medium">Medicine</th>
                 <th className="p-3 font-medium">Expiry Date</th>
                 <th className="p-3 font-medium">Quantity</th>
-                <th className="p-3 font-medium">Stock</th>
                 <th className="p-3 font-medium">Status</th>
                 <th className="p-3 font-medium text-center">Actions</th>
               </tr>
@@ -487,19 +461,6 @@ function Inventory() {
                   <td className="p-2 text-sm">{batch.medicine}</td>
                   <td className="p-2 text-sm">{batch.expiryDate}</td>
                   <td className="p-2 text-sm">{batch.quantity}</td>
-                  <td className="p-2 text-sm">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        batch.stock === "Low Stock"
-                          ? "bg-amber-100 text-amber-700"
-                          : batch.stock === "Out of Stock"
-                            ? "bg-rose-100 text-rose-700"
-                            : "bg-emerald-100 text-emerald-700"
-                      }`}
-                    >
-                      {batch.stock}
-                    </span>
-                  </td>
                   <td className="p-2 text-sm">
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -540,7 +501,7 @@ function Inventory() {
               ))}
               {currentBatches.length === 0 && (
                 <tr>
-                  <td colSpan="7" className="p-4 text-center text-gray-500">
+                  <td colSpan="6" className="p-4 text-center text-gray-500">
                     No batches found.
                   </td>
                 </tr>
@@ -878,32 +839,19 @@ function Inventory() {
               </div>
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Stock / Expiry
+                  Status
                 </p>
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      selectedBatch.stock === "Low Stock"
-                        ? "bg-amber-100 text-amber-700"
-                        : selectedBatch.stock === "Out of Stock"
-                          ? "bg-rose-100 text-rose-700"
-                          : "bg-emerald-100 text-emerald-700"
-                    }`}
-                  >
-                    {selectedBatch.stock}
-                  </span>
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      selectedBatch.status === "Near Expiry"
-                        ? "bg-amber-100 text-amber-700"
-                        : selectedBatch.status === "Expired"
-                          ? "bg-rose-100 text-rose-700"
-                          : "bg-emerald-100 text-emerald-700"
-                    }`}
-                  >
-                    {selectedBatch.status}
-                  </span>
-                </div>
+                <span
+                  className={`inline-flex items-center px-2.5 py-0.5 mt-1 rounded-full text-xs font-medium ${
+                    selectedBatch.status === "Near Expiry"
+                      ? "bg-amber-100 text-amber-700"
+                      : selectedBatch.status === "Expired"
+                        ? "bg-rose-100 text-rose-700"
+                        : "bg-emerald-100 text-emerald-700"
+                  }`}
+                >
+                  {selectedBatch.status}
+                </span>
               </div>
             </div>
 
