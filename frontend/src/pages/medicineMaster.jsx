@@ -303,7 +303,7 @@ function MedicineMaster() {
 
         {/* Medicine List table */}
         <Card
-          className="animate-slide-up-3 min-h-145 flex flex-col justify-between"
+          className="animate-slide-up-1 min-h-145 flex flex-col justify-between"
           title={"Medicine List"}
           action={
             <button className="btn-primary" onClick={handleOpenCreate}>
@@ -361,7 +361,7 @@ function MedicineMaster() {
                   {currentMedicines.map((med, index) => (
                     <tr
                       key={med.id}
-                      className="hover:bg-gray-50 transition-colors animate-slide-up h-12"
+                      className="hover:bg-gray-50 transition-colors animate-slide-up-1 h-12"
                       style={{
                         animationDelay: `${index * 0.05}s`,
                         animationFillMode: "both",

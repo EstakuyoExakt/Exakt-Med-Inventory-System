@@ -34,8 +34,6 @@ function Inventory() {
   // Total Stock
   const totalStock = batchesList.reduce((sum, b) => sum + (b.quantity || 0), 0);
 
-
-
   // Near Expiry (within 90 days)
   const nearExpiryCount = useMemo(
     () =>
@@ -279,9 +277,7 @@ function Inventory() {
           <span className="text-3xl font-bold text-slate-900">
             {totalMedicines}
           </span>
-          <p className="text-xs text-slate-500 mt-1">
-            Registered in catalogue
-          </p>
+          <p className="text-xs text-slate-500 mt-1">Registered in catalogue</p>
         </Card>
         <Card
           title={"Total Stock"}
@@ -343,7 +339,7 @@ function Inventory() {
               Receive Stock
             </button>
           }
-          className="animate-slide-up-3 min-h-145 flex flex-col justify-between"
+          className="animate-slide-up-1 min-h-145 flex flex-col justify-between"
         >
           <div className="mt-5 flex-1 flex flex-col justify-between">
             <div>
@@ -406,7 +402,7 @@ function Inventory() {
                   {currentBatches.map((batch, index) => (
                     <tr
                       key={batch.id}
-                      className="hover:bg-gray-50 transition-colors animate-slide-up-3 h-12"
+                      className="hover:bg-gray-50 transition-colors animate-slide-up-1 h-12"
                       style={{
                         animationDelay: `${index * 0.05}s`,
                         animationFillMode: "both",
