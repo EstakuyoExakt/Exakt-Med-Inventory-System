@@ -14,6 +14,7 @@ import {
 import Card from "../../components/card";
 import ListCard from "../../components/listCard";
 import Table from "../../components/table";
+import SearchBar from "../../components/searchBar";
 import Modal from "../../components/modal";
 import Snackbar from "../../components/snackbar";
 
@@ -341,19 +342,14 @@ function FacilityManagement() {
       >
         {/* Search & Filter Row */}
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setCurrentPage(1);
-              }}
-              placeholder="Search by code, name, type, location, or contact..."
-              className="input pl-9"
-            />
-          </div>
+          <SearchBar
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
+            placeholder="Search by code, name, type, location, or contact..."
+          />
           <select
             value={filterStatus}
             onChange={(e) => {
