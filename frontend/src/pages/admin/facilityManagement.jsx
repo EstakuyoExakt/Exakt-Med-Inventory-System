@@ -369,7 +369,6 @@ function FacilityManagement() {
           headers={[
             "Facility Code",
             "Name",
-            "Type",
             "Location",
             "Contact Person",
             "Status",
@@ -393,7 +392,6 @@ function FacilityManagement() {
               <td className="p-2 text-sm font-medium text-slate-900">
                 {fac.name}
               </td>
-              <td className="p-2 text-sm text-slate-600">{fac.type}</td>
               <td className="p-2 text-sm text-slate-500">{fac.location}</td>
               <td className="p-2 text-sm text-slate-700">
                 {fac.contactPerson}

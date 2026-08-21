@@ -16,7 +16,7 @@ function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
-  const isAdmin = currentUser?.role === "admin";
+  const isAdmin = currentUser?.role?.toLowerCase() === "admin";
 
   const adminNavItems = [
     { name: "User Management", path: "/user-management", icon: Users },
