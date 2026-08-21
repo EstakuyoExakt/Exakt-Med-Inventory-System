@@ -217,7 +217,7 @@ function MedicineMaster() {
 
   return (
     <>
-      <div className="grid gap-5 p-10 w-full max-w-7xl mx-auto max-h-full">
+      <div className="p-10 w-full max-w-7xl mx-auto max-h-full">
         {/* Medicine List table */}
         <Card
           className="animate-slide-up"
