@@ -21,6 +21,111 @@ import Snackbar from "../../components/snackbar";
 // Mock Data
 import { facilities as initialFacilities } from "../../data/facility";
 
+// Form Fields Component defined outside to prevent focus loss on typing
+function FacilityFormFields({ formData, handleFormChange }) {
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">
+            Facility Code
+          </label>
+          <input
+            name="facilityCode"
+            value={formData.facilityCode}
+            onChange={handleFormChange}
+            placeholder="e.g. FAC-001"
+            required
+            className="input"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">
+            Facility Name
+          </label>
+          <input
+            name="name"
+            value={formData.name}
+            onChange={handleFormChange}
+            placeholder="e.g. Central Pharmacy Warehouse"
+            required
+            className="input"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">
+            Facility Type
+          </label>
+          <input
+            name="type"
+            value={formData.type}
+            onChange={handleFormChange}
+            placeholder="e.g. Central Warehouse, Hospital Ward"
+            required
+            className="input"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Status</label>
+          <select
+            name="status"
+            value={formData.status}
+            onChange={handleFormChange}
+            className="input"
+          >
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-gray-700">Location</label>
+        <input
+          name="location"
+          value={formData.location}
+          onChange={handleFormChange}
+          placeholder="e.g. Main Hospital Building, Basement 1"
+          required
+          className="input"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">
+            Contact Person
+          </label>
+          <input
+            name="contactPerson"
+            value={formData.contactPerson}
+            onChange={handleFormChange}
+            placeholder="e.g. Dr. Roberto Santos"
+            required
+            className="input"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">
+            Contact Number
+          </label>
+          <input
+            name="contactNumber"
+            value={formData.contactNumber}
+            onChange={handleFormChange}
+            placeholder="e.g. +63 917 123 4567"
+            required
+            className="input"
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
 function FacilityManagement() {
   const [facilitiesList, setFacilitiesList] = useState(initialFacilities);
   const [search, setSearch] = useState("");
@@ -173,108 +278,7 @@ function FacilityManagement() {
     indexOfLastItem,
   );
 
-  // Form Fields Component
-  const FacilityFormFields = () => (
-    <>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Facility Code
-          </label>
-          <input
-            name="facilityCode"
-            value={formData.facilityCode}
-            onChange={handleFormChange}
-            placeholder="e.g. FAC-001"
-            required
-            className="input"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Facility Name
-          </label>
-          <input
-            name="name"
-            value={formData.name}
-            onChange={handleFormChange}
-            placeholder="e.g. Central Pharmacy Warehouse"
-            required
-            className="input"
-          />
-        </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Facility Type
-          </label>
-          <input
-            name="type"
-            value={formData.type}
-            onChange={handleFormChange}
-            placeholder="e.g. Central Warehouse, Hospital Ward"
-            required
-            className="input"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">Status</label>
-          <select
-            name="status"
-            value={formData.status}
-            onChange={handleFormChange}
-            className="input"
-          >
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-gray-700">Location</label>
-        <input
-          name="location"
-          value={formData.location}
-          onChange={handleFormChange}
-          placeholder="e.g. Main Hospital Building, Basement 1"
-          required
-          className="input"
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Contact Person
-          </label>
-          <input
-            name="contactPerson"
-            value={formData.contactPerson}
-            onChange={handleFormChange}
-            placeholder="e.g. Dr. Roberto Santos"
-            required
-            className="input"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Contact Number
-          </label>
-          <input
-            name="contactNumber"
-            value={formData.contactNumber}
-            onChange={handleFormChange}
-            placeholder="e.g. +63 917 123 4567"
-            required
-            className="input"
-          />
-        </div>
-      </div>
-    </>
-  );
 
   return (
     <div className="w-full p-10 max-w-7xl mx-auto overflow-y-auto max-h-full flex flex-col gap-5">
@@ -533,7 +537,10 @@ function FacilityManagement() {
         title="Add Facility"
       >
         <form onSubmit={handleCreateSubmit} className="grid gap-4">
-          <FacilityFormFields />
+          <FacilityFormFields
+            formData={formData}
+            handleFormChange={handleFormChange}
+          />
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
@@ -557,7 +564,10 @@ function FacilityManagement() {
         title="Edit Facility"
       >
         <form onSubmit={handleEditSubmit} className="grid gap-4">
-          <FacilityFormFields />
+          <FacilityFormFields
+            formData={formData}
+            handleFormChange={handleFormChange}
+          />
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"

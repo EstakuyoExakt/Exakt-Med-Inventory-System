@@ -21,6 +21,131 @@ import Snackbar from "../../components/snackbar";
 // Mock Data
 import { suppliers as initialSuppliers } from "../../data/supplier";
 
+// Form Fields Component defined outside to prevent focus loss on typing
+function SupplierFormFields({ formData, handleFormChange }) {
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">
+            Supplier Code
+          </label>
+          <input
+            name="supplierCode"
+            value={formData.supplierCode}
+            onChange={handleFormChange}
+            placeholder="e.g. SUP-001"
+            required
+            className="input"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">
+            Company Name
+          </label>
+          <input
+            name="name"
+            value={formData.name}
+            onChange={handleFormChange}
+            placeholder="e.g. Unilab Pharmaceuticals Inc."
+            required
+            className="input"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">
+            Contact Person
+          </label>
+          <input
+            name="contactPerson"
+            value={formData.contactPerson}
+            onChange={handleFormChange}
+            placeholder="e.g. Carlos Mendoza"
+            required
+            className="input"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">
+            Email Address
+          </label>
+          <input
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleFormChange}
+            placeholder="e.g. contact@supplier.com"
+            required
+            className="input"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">
+            Contact Number
+          </label>
+          <input
+            name="contactNumber"
+            value={formData.contactNumber}
+            onChange={handleFormChange}
+            placeholder="e.g. +63 917 111 2233"
+            required
+            className="input"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">
+            Payment Terms
+          </label>
+          <select
+            name="paymentTerms"
+            value={formData.paymentTerms}
+            onChange={handleFormChange}
+            className="input"
+          >
+            <option value="COD">COD</option>
+            <option value="Net 15">Net 15</option>
+            <option value="Net 30">Net 30</option>
+            <option value="Net 45">Net 45</option>
+            <option value="Net 60">Net 60</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Address</label>
+          <input
+            name="address"
+            value={formData.address}
+            onChange={handleFormChange}
+            placeholder="e.g. 66 United Street, Mandaluyong City"
+            required
+            className="input"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Status</label>
+          <select
+            name="status"
+            value={formData.status}
+            onChange={handleFormChange}
+            className="input"
+          >
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function SupplierManagement() {
   const [suppliersList, setSuppliersList] = useState(initialSuppliers);
   const [search, setSearch] = useState("");
@@ -176,128 +301,7 @@ function SupplierManagement() {
     indexOfLastItem,
   );
 
-  // Form Fields Component
-  const SupplierFormFields = () => (
-    <>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Supplier Code
-          </label>
-          <input
-            name="supplierCode"
-            value={formData.supplierCode}
-            onChange={handleFormChange}
-            placeholder="e.g. SUP-001"
-            required
-            className="input"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Company Name
-          </label>
-          <input
-            name="name"
-            value={formData.name}
-            onChange={handleFormChange}
-            placeholder="e.g. Unilab Pharmaceuticals Inc."
-            required
-            className="input"
-          />
-        </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Contact Person
-          </label>
-          <input
-            name="contactPerson"
-            value={formData.contactPerson}
-            onChange={handleFormChange}
-            placeholder="e.g. Carlos Mendoza"
-            required
-            className="input"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Email Address
-          </label>
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleFormChange}
-            placeholder="e.g. contact@supplier.com"
-            required
-            className="input"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Contact Number
-          </label>
-          <input
-            name="contactNumber"
-            value={formData.contactNumber}
-            onChange={handleFormChange}
-            placeholder="e.g. +63 917 111 2233"
-            required
-            className="input"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Payment Terms
-          </label>
-          <select
-            name="paymentTerms"
-            value={formData.paymentTerms}
-            onChange={handleFormChange}
-            className="input"
-          >
-            <option value="COD">COD</option>
-            <option value="Net 15">Net 15</option>
-            <option value="Net 30">Net 30</option>
-            <option value="Net 45">Net 45</option>
-            <option value="Net 60">Net 60</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">Address</label>
-          <input
-            name="address"
-            value={formData.address}
-            onChange={handleFormChange}
-            placeholder="e.g. 66 United Street, Mandaluyong City"
-            required
-            className="input"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">Status</label>
-          <select
-            name="status"
-            value={formData.status}
-            onChange={handleFormChange}
-            className="input"
-          >
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </select>
-        </div>
-      </div>
-    </>
-  );
 
   return (
     <div className="w-full p-10 max-w-7xl mx-auto overflow-y-auto max-h-full flex flex-col gap-5">
@@ -562,7 +566,10 @@ function SupplierManagement() {
         title="Add Supplier"
       >
         <form onSubmit={handleCreateSubmit} className="grid gap-4">
-          <SupplierFormFields />
+          <SupplierFormFields
+            formData={formData}
+            handleFormChange={handleFormChange}
+          />
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
@@ -586,7 +593,10 @@ function SupplierManagement() {
         title="Edit Supplier"
       >
         <form onSubmit={handleEditSubmit} className="grid gap-4">
-          <SupplierFormFields />
+          <SupplierFormFields
+            formData={formData}
+            handleFormChange={handleFormChange}
+          />
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"

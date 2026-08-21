@@ -20,6 +20,138 @@ import Snackbar from "../../components/snackbar";
 // Mock Data
 import { users as initialUsers } from "../../data/user";
 
+// Shared Form Fields defined outside component to prevent focus loss on re-render
+function UserFormFields({
+  formData,
+  handleFormChange,
+  isCreate = false,
+  passwordError = "",
+}) {
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Full Name</label>
+          <input
+            name="name"
+            value={formData.name}
+            onChange={handleFormChange}
+            placeholder="e.g. John Doe"
+            required
+            className="input"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Username</label>
+          <input
+            name="username"
+            value={formData.username}
+            onChange={handleFormChange}
+            placeholder="e.g. jdoe"
+            required
+            className="input"
+          />
+        </div>
+      </div>
+
+      <div
+        className={isCreate ? "flex flex-col gap-1" : "grid grid-cols-2 gap-4"}
+      >
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">
+            Email Address
+          </label>
+          <input
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleFormChange}
+            placeholder="e.g. jdoe@exaktmed.com"
+            required
+            className="input"
+          />
+        </div>
+        {!isCreate && (
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Password</label>
+            <input
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleFormChange}
+              placeholder="Enter password"
+              required
+              className="input"
+            />
+          </div>
+        )}
+      </div>
+
+      {isCreate && (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Password</label>
+            <input
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleFormChange}
+              placeholder="Enter password"
+              required
+              className="input"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">
+              Confirm Password
+            </label>
+            <input
+              type="password"
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={handleFormChange}
+              placeholder="Confirm password"
+              required
+              className="input"
+            />
+          </div>
+        </div>
+      )}
+
+      {passwordError && (
+        <p className="text-xs font-medium text-red-600 -mt-2">{passwordError}</p>
+      )}
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Role</label>
+          <select
+            name="role"
+            value={formData.role}
+            onChange={handleFormChange}
+            className="input"
+          >
+            <option value="Admin">Admin</option>
+            <option value="Manager">Manager</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Status</label>
+          <select
+            name="status"
+            value={formData.status}
+            onChange={handleFormChange}
+            className="input"
+          >
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function UserManagement() {
   const [usersList, setUsersList] = useState(initialUsers);
   const [search, setSearch] = useState("");
@@ -48,19 +180,25 @@ function UserManagement() {
     username: "",
     email: "",
     password: "",
+    confirmPassword: "",
     role: "Manager",
     status: "Active",
   };
   const [formData, setFormData] = useState(initialForm);
+  const [passwordError, setPasswordError] = useState("");
 
   const handleFormChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    if (name === "password" || name === "confirmPassword") {
+      setPasswordError("");
+    }
   };
 
   const handleCloseModal = () => {
     setModalState("");
     setSelectedUser(null);
+    setPasswordError("");
     setFormData(initialForm);
   };
 
@@ -72,12 +210,23 @@ function UserManagement() {
 
   const handleCreateSubmit = (e) => {
     e.preventDefault();
+    if (formData.password !== formData.confirmPassword) {
+      setPasswordError("Passwords do not match. Please re-enter.");
+      return;
+    }
+    setPasswordError("");
+
     const nextId =
       usersList.length > 0 ? Math.max(...usersList.map((u) => u.id)) + 1 : 1;
 
     const newUser = {
       id: nextId,
-      ...formData,
+      name: formData.name,
+      username: formData.username,
+      email: formData.email,
+      password: formData.password,
+      role: formData.role,
+      status: formData.status,
       createdAt: new Date().toISOString().split("T")[0],
     };
 
@@ -150,92 +299,6 @@ function UserManagement() {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentUsers = filteredUsers.slice(indexOfFirstItem, indexOfLastItem);
-
-  // Shared Form Fields
-  const UserFormFields = () => (
-    <>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">Full Name</label>
-          <input
-            name="name"
-            value={formData.name}
-            onChange={handleFormChange}
-            placeholder="e.g. John Doe"
-            required
-            className="input"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">Username</label>
-          <input
-            name="username"
-            value={formData.username}
-            onChange={handleFormChange}
-            placeholder="e.g. jdoe"
-            required
-            className="input"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Email Address
-          </label>
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleFormChange}
-            placeholder="e.g. jdoe@exaktmed.com"
-            required
-            className="input"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">Password</label>
-          <input
-            type="password"
-            name="password"
-            value={formData.password}
-            onChange={handleFormChange}
-            placeholder="Enter password"
-            required
-            className="input"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">Role</label>
-          <select
-            name="role"
-            value={formData.role}
-            onChange={handleFormChange}
-            className="input"
-          >
-            <option value="Admin">Admin</option>
-            <option value="Manager">Manager</option>
-          </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">Status</label>
-          <select
-            name="status"
-            value={formData.status}
-            onChange={handleFormChange}
-            className="input"
-          >
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </select>
-        </div>
-      </div>
-    </>
-  );
 
   return (
     <div className="w-full p-10 max-w-7xl mx-auto overflow-y-auto max-h-full flex flex-col gap-5">
@@ -397,7 +460,12 @@ function UserManagement() {
         title="Add User Account"
       >
         <form onSubmit={handleCreateSubmit} className="grid gap-4">
-          <UserFormFields />
+          <UserFormFields
+            formData={formData}
+            handleFormChange={handleFormChange}
+            isCreate={true}
+            passwordError={passwordError}
+          />
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
@@ -421,7 +489,11 @@ function UserManagement() {
         title="Edit User Account"
       >
         <form onSubmit={handleEditSubmit} className="grid gap-4">
-          <UserFormFields />
+          <UserFormFields
+            formData={formData}
+            handleFormChange={handleFormChange}
+            isCreate={false}
+          />
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"

@@ -20,6 +20,93 @@ import SearchBar from "../components/searchBar";
 import Modal from "../components/modal";
 import Snackbar from "../components/snackbar";
 
+function MedicineFormFields({ formData, handleFormChange }) {
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Med Code</label>
+          <input
+            name="medCode"
+            value={formData.medCode}
+            onChange={handleFormChange}
+            placeholder="e.g. MED-001"
+            required
+            className="input"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">
+            Reorder Level
+          </label>
+          <input
+            type="number"
+            name="reorderLevel"
+            value={formData.reorderLevel}
+            onChange={handleFormChange}
+            placeholder="e.g. 50"
+            required
+            className="input"
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-gray-700">
+          Generic Name
+        </label>
+        <input
+          name="genericName"
+          value={formData.genericName}
+          onChange={handleFormChange}
+          placeholder="e.g. Paracetamol"
+          required
+          className="input"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-gray-700">Brand Name</label>
+        <input
+          name="brandName"
+          value={formData.brandName}
+          onChange={handleFormChange}
+          placeholder="e.g. Biogesic"
+          required
+          className="input"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">
+            Dosage Type
+          </label>
+          <input
+            name="dosageType"
+            value={formData.dosageType}
+            onChange={handleFormChange}
+            placeholder="e.g. Tablet, Capsule"
+            required
+            className="input"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Strength</label>
+          <input
+            name="strength"
+            value={formData.strength}
+            onChange={handleFormChange}
+            placeholder="e.g. 500mg"
+            required
+            className="input"
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
 function MedicineMaster() {
   const getMedicineQuantity = (med) => {
     if (!med) return 0;
@@ -182,92 +269,6 @@ function MedicineMaster() {
   const currentMedicines = filteredMedicines.slice(
     indexOfFirstItem,
     indexOfLastItem,
-  );
-
-  // Shared form fields for create/edit
-  const MedicineFormFields = () => (
-    <>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">Med Code</label>
-          <input
-            name="medCode"
-            value={formData.medCode}
-            onChange={handleFormChange}
-            placeholder="e.g. MED-013"
-            required
-            className="input"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Reorder Level
-          </label>
-          <input
-            type="number"
-            name="reorderLevel"
-            value={formData.reorderLevel}
-            onChange={handleFormChange}
-            placeholder="e.g. 50"
-            required
-            className="input"
-          />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-gray-700">
-          Generic Name
-        </label>
-        <input
-          name="genericName"
-          value={formData.genericName}
-          onChange={handleFormChange}
-          placeholder="e.g. Paracetamol"
-          required
-          className="input"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-gray-700">Brand Name</label>
-        <input
-          name="brandName"
-          value={formData.brandName}
-          onChange={handleFormChange}
-          placeholder="e.g. Biogesic"
-          required
-          className="input"
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Dosage Type
-          </label>
-          <input
-            name="dosageType"
-            value={formData.dosageType}
-            onChange={handleFormChange}
-            placeholder="e.g. Tablet, Capsule"
-            required
-            className="input"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">Strength</label>
-          <input
-            name="strength"
-            value={formData.strength}
-            onChange={handleFormChange}
-            placeholder="e.g. 500mg"
-            required
-            className="input"
-          />
-        </div>
-      </div>
-    </>
   );
 
   return (
@@ -438,7 +439,11 @@ function MedicineMaster() {
         title="Add Medicine"
       >
         <form onSubmit={handleAddMedicine} className="grid gap-4">
-          <MedicineFormFields />
+          <MedicineFormFields
+            formData={formData}
+            handleFormChange={handleFormChange}
+            statuses={statuses}
+          />
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
@@ -462,7 +467,11 @@ function MedicineMaster() {
         title="Edit Medicine"
       >
         <form onSubmit={handleEditMedicine} className="grid gap-4">
-          <MedicineFormFields />
+          <MedicineFormFields
+            formData={formData}
+            handleFormChange={handleFormChange}
+            statuses={statuses}
+          />
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
