@@ -10,17 +10,17 @@ import {
 } from "lucide-react";
 
 // Components
-import Card from "../components/card";
-import ListCard from "../components/listCard";
-import Table from "../components/table";
-import SearchBar from "../components/searchBar";
-import Modal from "../components/modal";
-import Snackbar from "../components/snackbar";
+import Card from "../../components/card";
+import ListCard from "../../components/listCard";
+import Table from "../../components/table";
+import SearchBar from "../../components/searchBar";
+import Modal from "../../components/modal";
+import Snackbar from "../../components/snackbar";
 
 // Mock Data
-import { invoices as initialInvoices } from "../data/accounting";
-import { suppliers } from "../data/supplier";
-import { medicines } from "../data/medicine";
+import { invoices as initialInvoices } from "../../data/accounting";
+import { suppliers } from "../../data/supplier";
+import { medicines } from "../../data/medicine";
 
 // External Form Component to prevent focus loss on re-render
 function InvoiceFormFields({ formData, handleFormChange }) {

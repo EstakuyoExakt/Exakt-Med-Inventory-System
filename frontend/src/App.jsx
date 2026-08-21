@@ -5,11 +5,11 @@ import Login from "./pages/login";
 import Dashboard from "./pages/dashboard";
 import MedicineMaster from "./pages/medicineMaster";
 import Inventory from "./pages/inventory";
-import Accounting from "./pages/accounting";
 import AuditLogs from "./pages/auditLogs";
 import UserManagement from "./pages/admin/userManagement";
 import FacilityManagement from "./pages/admin/facilityManagement";
 import SupplierManagement from "./pages/admin/supplierManagement";
+import Accounting from "./pages/admin/accounting";
 
 // Components
 import Sidebar from "./components/sidebar";
