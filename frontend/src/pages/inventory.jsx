@@ -10,6 +10,7 @@ import {
   Plus,
   SlidersHorizontal,
   ArrowRightLeft,
+  Eye,
 } from "lucide-react";
 
 // Components
@@ -21,6 +22,7 @@ import Snackbar from "../components/snackbar";
 import { medicines } from "../data/medicine";
 import { batches as initialBatches } from "../data/batch";
 import { facilities } from "../data/facility";
+import { suppliers } from "../data/supplier";
 
 function Inventory() {
   const currentDate = new Date("2026-08-19");
@@ -92,7 +94,8 @@ function Inventory() {
   );
 
   // Inventory List State
-  const [modalState, setModalState] = useState(""); // "" | "receive" | "adjustment" | "transfer"
+  const [modalState, setModalState] = useState(""); // "" | "receive" | "adjustment" | "transfer" | "view"
+  const [selectedBatch, setSelectedBatch] = useState(null);
   const [search, setSearch] = useState("");
   const [filterStock, setFilterStock] = useState("");
   const [filterExpiry, setFilterExpiry] = useState("");
@@ -103,6 +106,7 @@ function Inventory() {
   // Receive Form State
   const initialReceiveForm = {
     medicine: "",
+    supplier: "",
     expiryDate: "",
     quantity: "",
   };
@@ -140,6 +144,8 @@ function Inventory() {
       id: nextId,
       batchId: `BAT-${1000 + nextId}`,
       medicine: receiveForm.medicine,
+      supplier: receiveForm.supplier,
+      receivedAt: currentDate.toISOString().split("T")[0],
       expiryDate: receiveForm.expiryDate,
       quantity: qty,
       stock: stockStatus,
@@ -150,6 +156,12 @@ function Inventory() {
     setReceiveForm(initialReceiveForm);
     setModalState("");
     setSnackbar("Stock received successfully!");
+  };
+
+  // View State Handler
+  const handleOpenView = (batch) => {
+    setSelectedBatch(batch);
+    setModalState("view");
   };
 
   // Adjustment Form State
@@ -503,6 +515,13 @@ function Inventory() {
                   </td>
                   <td className="p-2 text-sm flex justify-center gap-2">
                     <button
+                      className="cursor-pointer p-2 text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 transition-colors"
+                      title="View Details"
+                      onClick={() => handleOpenView(batch)}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button
                       className="cursor-pointer p-2 text-indigo-600 bg-indigo-100 rounded-md hover:bg-indigo-200 transition-colors"
                       title="Stock Adjustment"
                       onClick={() => handleOpenAdjustment(batch)}
@@ -589,6 +608,26 @@ function Inventory() {
                   value={`${med.genericName} (${med.brandName})`}
                 >
                   {med.genericName} ({med.brandName}) - {med.strength}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">
+              Supplier
+            </label>
+            <select
+              name="supplier"
+              value={receiveForm.supplier}
+              onChange={handleReceiveChange}
+              required
+              className="input"
+            >
+              <option value="">Select Supplier</option>
+              {suppliers.map((sup) => (
+                <option key={sup.id} value={sup.name}>
+                  {sup.name} ({sup.supplierCode})
                 </option>
               ))}
             </select>
@@ -815,6 +854,120 @@ function Inventory() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* View Batch Details Modal */}
+      <Modal
+        isOpen={modalState === "view"}
+        onClose={() => {
+          setModalState("");
+          setSelectedBatch(null);
+        }}
+        title="Batch Details"
+      >
+        {selectedBatch && (
+          <div className="grid gap-4">
+            <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Batch ID
+                </p>
+                <p className="text-sm font-semibold text-slate-900 mt-1">
+                  {selectedBatch.batchId}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Stock / Expiry
+                </p>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      selectedBatch.stock === "Low Stock"
+                        ? "bg-amber-100 text-amber-700"
+                        : selectedBatch.stock === "Out of Stock"
+                          ? "bg-rose-100 text-rose-700"
+                          : "bg-emerald-100 text-emerald-700"
+                    }`}
+                  >
+                    {selectedBatch.stock}
+                  </span>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      selectedBatch.status === "Near Expiry"
+                        ? "bg-amber-100 text-amber-700"
+                        : selectedBatch.status === "Expired"
+                          ? "bg-rose-100 text-rose-700"
+                          : "bg-emerald-100 text-emerald-700"
+                    }`}
+                  >
+                    {selectedBatch.status}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-8 gap-y-3 max-w-sm mx-auto w-full">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs font-medium text-gray-500">
+                    Medicine
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 mt-0.5">
+                    {selectedBatch.medicine}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500">
+                    Quantity
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 mt-0.5">
+                    {selectedBatch.quantity} units
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs font-medium text-gray-500">
+                    Supplier
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 mt-0.5">
+                    {selectedBatch.supplier || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500">
+                    Received Date
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 mt-0.5">
+                    {selectedBatch.receivedAt || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500">
+                    Expiry Date
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 mt-0.5">
+                    {selectedBatch.expiryDate}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setModalState("");
+                  setSelectedBatch(null);
+                }}
+                className="btn-secondary"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Snackbar Notification */}
