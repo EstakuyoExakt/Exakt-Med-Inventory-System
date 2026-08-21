@@ -9,6 +9,7 @@ import {
   PackageOpen,
 } from "lucide-react";
 import { medicines as initialMedicines } from "../data/medicine";
+import { batches } from "../data/batch";
 
 // Components
 import Card from "../components/card";
@@ -16,7 +17,31 @@ import Modal from "../components/modal";
 import Snackbar from "../components/snackbar";
 
 function MedicineMaster() {
-  const [medicines, setMedicines] = useState(initialMedicines);
+  const getMedicineQuantity = (med) => {
+    if (!med) return 0;
+    if (typeof med.quantity === "number") {
+      return med.quantity;
+    }
+    const matchingBatches = batches.filter(
+      (b) =>
+        b.medicine.toLowerCase().includes(med.genericName.toLowerCase()) ||
+        b.medicine.toLowerCase().includes(med.brandName.toLowerCase()),
+    );
+    if (matchingBatches.length > 0) {
+      return matchingBatches.reduce(
+        (acc, curr) => acc + (curr.quantity || 0),
+        0,
+      );
+    }
+    return 0;
+  };
+
+  const [medicines, setMedicines] = useState(() =>
+    initialMedicines.map((med) => ({
+      ...med,
+      quantity: getMedicineQuantity(med),
+    })),
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [modalState, setModalState] = useState(""); // "" | "create" | "edit" | "delete"
   const [selectedMed, setSelectedMed] = useState(null);
@@ -30,6 +55,7 @@ function MedicineMaster() {
     brandName: "",
     dosageType: "",
     strength: "",
+    quantity: 0,
     reorderLevel: "",
     status: "Out of Stock",
   };
@@ -47,7 +73,10 @@ function MedicineMaster() {
 
   // View
   const handleOpenView = (med) => {
-    setSelectedMed(med);
+    setSelectedMed({
+      ...med,
+      quantity: getMedicineQuantity(med),
+    });
     setModalState("view");
   };
 
@@ -63,6 +92,7 @@ function MedicineMaster() {
       id:
         medicines.length > 0 ? Math.max(...medicines.map((m) => m.id)) + 1 : 1,
       ...formData,
+      quantity: Number(formData.quantity) || 0,
       reorderLevel: Number(formData.reorderLevel) || 0,
     };
     setMedicines((prev) => [...prev, newMed]);
@@ -79,6 +109,7 @@ function MedicineMaster() {
       brandName: med.brandName,
       dosageType: med.dosageType ?? "",
       strength: med.strength ?? "",
+      quantity: med.quantity ?? 0,
       reorderLevel: med.reorderLevel ?? "",
       status: med.status || "Over Stock",
     });
@@ -577,6 +608,12 @@ function MedicineMaster() {
                   <p className="text-xs font-medium text-gray-500">Strength</p>
                   <p className="text-sm font-medium text-gray-900 mt-0.5">
                     {selectedMed.strength || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500">Quantity</p>
+                  <p className="text-sm font-medium text-gray-900 mt-0.5">
+                    {getMedicineQuantity(selectedMed)} units
                   </p>
                 </div>
               </div>
