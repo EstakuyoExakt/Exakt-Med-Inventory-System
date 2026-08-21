@@ -8,6 +8,8 @@ import {
   Cross,
   DollarSign,
   Users,
+  Hospital,
+  Truck,
 } from "lucide-react";
 
 function Sidebar() {
@@ -18,6 +20,16 @@ function Sidebar() {
 
   const adminNavItems = [
     { name: "User Management", path: "/user-management", icon: Users },
+    {
+      name: "Facility Management",
+      path: "/facility-management",
+      icon: Hospital,
+    },
+    {
+      name: "Supplier Management",
+      path: "/supplier-management",
+      icon: Truck,
+    },
   ];
 
   const mainNavItems = [

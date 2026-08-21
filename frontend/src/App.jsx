@@ -8,6 +8,8 @@ import Inventory from "./pages/inventory";
 import Accounting from "./pages/accounting";
 import AuditLogs from "./pages/auditLogs";
 import UserManagement from "./pages/admin/userManagement";
+import FacilityManagement from "./pages/admin/facilityManagement";
+import SupplierManagement from "./pages/admin/supplierManagement";
 
 // Components
 import Sidebar from "./components/sidebar";
@@ -29,7 +31,11 @@ function App() {
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/accounting" element={<Accounting />} />
           <Route path="/audit-logs" element={<AuditLogs />} />
+
+          {/* Admin Pages */}
           <Route path="/user-management" element={<UserManagement />} />
+          <Route path="/facility-management" element={<FacilityManagement />} />
+          <Route path="/supplier-management" element={<SupplierManagement />} />
         </Routes>
       </div>
     </>
