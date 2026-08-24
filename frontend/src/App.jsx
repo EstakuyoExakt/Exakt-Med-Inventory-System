@@ -1,18 +1,10 @@
 import { Route, Routes, useLocation } from "react-router-dom";
 
 // Pages
-import Login from "./pages/login";
-import Dashboard from "./pages/dashboard";
-import MedicineMaster from "./pages/medicineMaster";
-import Inventory from "./pages/inventory";
-import AuditLogs from "./pages/auditLogs";
-import UserManagement from "./pages/admin/userManagement";
-import FacilityManagement from "./pages/admin/facilityManagement";
-import SupplierManagement from "./pages/admin/supplierManagement";
-import Accounting from "./pages/admin/accounting";
+import Login from "./features/authentication/login";
 
 // Components
-import Sidebar from "./components/sidebar";
+import Sidebar from "./components/common/sidebar";
 
 function App() {
   const location = useLocation();
@@ -26,16 +18,6 @@ function App() {
       >
         <Routes>
           <Route path="/" element={<Login />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/medicine-master" element={<MedicineMaster />} />
-          <Route path="/inventory" element={<Inventory />} />
-          <Route path="/audit-logs" element={<AuditLogs />} />
-
-          {/* Admin Pages */}
-          <Route path="/user-management" element={<UserManagement />} />
-          <Route path="/facility-management" element={<FacilityManagement />} />
-          <Route path="/supplier-management" element={<SupplierManagement />} />
-          <Route path="/accounting" element={<Accounting />} />
         </Routes>
       </div>
     </>

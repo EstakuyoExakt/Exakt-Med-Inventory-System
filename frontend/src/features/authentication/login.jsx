@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Loader2, Boxes } from "lucide-react";
-import { users } from "../data/user";
+import { users } from "../../data/user";
 
 function Login() {
   const navigate = useNavigate();
