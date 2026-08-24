@@ -399,59 +399,66 @@ function Inventory() {
             isEmpty={currentBatches.length === 0}
             emptyMessage="No batches found."
           >
-            {currentBatches.map((batch, index) => (
-              <tr
-                key={batch.id}
-                className="hover:bg-gray-50 transition-colors animate-slide-up-1 h-12"
-                style={{
-                  animationDelay: `${index * 0.05}s`,
-                  animationFillMode: "both",
-                }}
-              >
-                <td className="p-2 text-sm font-medium text-slate-700">
-                  {batch.batchId}
-                </td>
-                <td className="p-2 text-sm">{batch.medicine}</td>
-                <td className="p-2 text-sm">{batch.expiryDate}</td>
-                <td className="p-2 text-sm">{batch.quantity}</td>
-                <td className="p-2 text-sm">
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      batch.status === "Near Expiry"
-                        ? "bg-amber-100 text-amber-700"
-                        : batch.status === "Expired"
-                          ? "bg-rose-100 text-rose-700"
-                          : "bg-emerald-100 text-emerald-700"
-                    }`}
-                  >
-                    {batch.status}
-                  </span>
-                </td>
-                <td className="p-2 text-sm flex justify-center gap-2">
-                  <button
-                    className="cursor-pointer p-2 text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 transition-colors"
-                    title="View Details"
-                    onClick={() => handleOpenView(batch)}
-                  >
-                    <Eye className="w-4 h-4" />
-                  </button>
-                  <button
-                    className="cursor-pointer p-2 text-indigo-600 bg-indigo-100 rounded-md hover:bg-indigo-200 transition-colors"
-                    title="Stock Adjustment"
-                    onClick={() => handleOpenAdjustment(batch)}
-                  >
-                    <SlidersHorizontal className="w-4 h-4" />
-                  </button>
-                  <button
-                    className="cursor-pointer p-2 text-teal-600 bg-teal-100 rounded-md hover:bg-teal-200 transition-colors"
-                    title="Transfer Stock"
-                    onClick={() => handleOpenTransfer(batch)}
-                  >
-                    <ArrowRightLeft className="w-4 h-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {currentBatches.map((batch, index) => {
+              const isExpired = batch.status === "Expired";
+              return (
+                <tr
+                  key={batch.id}
+                  className={`transition-colors animate-slide-up-1 h-12 ${
+                    isExpired
+                      ? "bg-rose-200 hover:bg-rose-300"
+                      : "hover:bg-gray-50"
+                  }`}
+                  style={{
+                    animationDelay: `${index * 0.05}s`,
+                    animationFillMode: "both",
+                  }}
+                >
+                  <td className="p-2 text-sm font-medium text-slate-700">
+                    {batch.batchId}
+                  </td>
+                  <td className="p-2 text-sm">{batch.medicine}</td>
+                  <td className="p-2 text-sm">{batch.expiryDate}</td>
+                  <td className="p-2 text-sm">{batch.quantity}</td>
+                  <td className="p-2 text-sm">
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        batch.status === "Near Expiry"
+                          ? "bg-amber-100 text-amber-700"
+                          : batch.status === "Expired"
+                            ? "bg-rose-100 text-rose-700"
+                            : "bg-emerald-100 text-emerald-700"
+                      }`}
+                    >
+                      {batch.status}
+                    </span>
+                  </td>
+                  <td className="p-2 text-sm flex justify-center gap-2">
+                    <button
+                      className="cursor-pointer p-2 text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 transition-colors"
+                      title="View Details"
+                      onClick={() => handleOpenView(batch)}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button
+                      className="cursor-pointer p-2 text-indigo-600 bg-indigo-100 rounded-md hover:bg-indigo-200 transition-colors"
+                      title="Stock Adjustment"
+                      onClick={() => handleOpenAdjustment(batch)}
+                    >
+                      <SlidersHorizontal className="w-4 h-4" />
+                    </button>
+                    <button
+                      className="cursor-pointer p-2 text-teal-600 bg-teal-100 rounded-md hover:bg-teal-200 transition-colors"
+                      title="Transfer Stock"
+                      onClick={() => handleOpenTransfer(batch)}
+                    >
+                      <ArrowRightLeft className="w-4 h-4" />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </Table>
         </ListCard>
       </div>

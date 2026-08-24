@@ -398,59 +398,66 @@ function MedicineMaster() {
             isEmpty={currentMedicines.length === 0}
             emptyMessage="No medicines found."
           >
-            {currentMedicines.map((med, index) => (
-              <tr
-                key={med.id}
-                className="hover:bg-gray-50 transition-colors animate-slide-up-1 h-12"
-                style={{
-                  animationDelay: `${index * 0.05}s`,
-                  animationFillMode: "both",
-                }}
-              >
-                <td className="p-2 text-sm">{med.medCode}</td>
-                <td className="p-2 text-sm">{med.genericName}</td>
-                <td className="p-2 text-sm">{med.brandName}</td>
-                <td className="p-2 text-sm">{med.reorderLevel}</td>
-                <td className="p-2 text-sm">
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      med.status === "Low Stock"
-                        ? "bg-amber-100 text-amber-700"
-                        : med.status === "Out of Stock"
-                          ? "bg-rose-100 text-rose-700"
-                          : med.status === "Over Stock"
-                            ? "bg-purple-100 text-purple-700"
-                            : "bg-emerald-100 text-emerald-700"
-                    }`}
-                  >
-                    {med.status}
-                  </span>
-                </td>
-                <td className="p-2 text-sm flex justify-center gap-2">
-                  <button
-                    className="cursor-pointer p-2 text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 transition-colors"
-                    title="View Details"
-                    onClick={() => handleOpenView(med)}
-                  >
-                    <Eye className="w-4 h-4" />
-                  </button>
-                  <button
-                    className="cursor-pointer p-2 text-blue-600 bg-blue-100 rounded-md hover:bg-blue-200 transition-colors"
-                    title="Edit"
-                    onClick={() => handleOpenEdit(med)}
-                  >
-                    <PencilIcon className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleOpenDelete(med)}
-                    className="cursor-pointer p-2 text-red-600 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
-                    title="Delete"
-                  >
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {currentMedicines.map((med, index) => {
+              const isOutOfStock = med.status === "Out of Stock";
+              return (
+                <tr
+                  key={med.id}
+                  className={`transition-colors animate-slide-up-1 h-12 ${
+                    isOutOfStock
+                      ? "bg-rose-200 hover:bg-rose-300"
+                      : "hover:bg-gray-50"
+                  }`}
+                  style={{
+                    animationDelay: `${index * 0.05}s`,
+                    animationFillMode: "both",
+                  }}
+                >
+                  <td className="p-2 text-sm">{med.medCode}</td>
+                  <td className="p-2 text-sm">{med.genericName}</td>
+                  <td className="p-2 text-sm">{med.brandName}</td>
+                  <td className="p-2 text-sm">{med.reorderLevel}</td>
+                  <td className="p-2 text-sm">
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        med.status === "Low Stock"
+                          ? "bg-amber-100 text-amber-700"
+                          : med.status === "Out of Stock"
+                            ? "bg-rose-100 text-rose-700"
+                            : med.status === "Over Stock"
+                              ? "bg-purple-100 text-purple-700"
+                              : "bg-emerald-100 text-emerald-700"
+                      }`}
+                    >
+                      {med.status}
+                    </span>
+                  </td>
+                  <td className="p-2 text-sm flex justify-center gap-2">
+                    <button
+                      className="cursor-pointer p-2 text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 transition-colors"
+                      title="View Details"
+                      onClick={() => handleOpenView(med)}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button
+                      className="cursor-pointer p-2 text-blue-600 bg-blue-100 rounded-md hover:bg-blue-200 transition-colors"
+                      title="Edit"
+                      onClick={() => handleOpenEdit(med)}
+                    >
+                      <PencilIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleOpenDelete(med)}
+                      className="cursor-pointer p-2 text-red-600 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
+                      title="Delete"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </Table>
         </ListCard>
       </div>
