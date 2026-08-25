@@ -37,7 +37,7 @@ function App() {
       {!isAuthPage && <Sidebar />}
 
       <main
-        className={`flex-1 ${
+        className={`flex-1 min-w-0 ${
           !isAuthPage
             ? "ml-64 p-8 min-h-screen"
             : "flex justify-center items-center min-h-screen"
