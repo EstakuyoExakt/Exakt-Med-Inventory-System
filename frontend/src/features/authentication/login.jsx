@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Loader2, Boxes } from "lucide-react";
+import { Eye, EyeOff, Loader2, Boxes, ShieldCheck } from "lucide-react";
 import { users } from "../../data/user";
+import { getRedirectPathForRole } from "../../utils/helpers";
 
 function Login() {
   const navigate = useNavigate();
@@ -20,37 +21,60 @@ function Login() {
 
     setTimeout(() => {
       const matchedUser = users.find(
-        (user) => user.username === username && user.password === password,
+        (user) =>
+          user.username.toLowerCase() === username.trim().toLowerCase() &&
+          user.password === password,
       );
 
-      if (matchedUser) {
-        localStorage.setItem("currentUser", JSON.stringify(matchedUser));
-        navigate("/dashboard");
-      } else {
+      if (!matchedUser) {
         setErrorMessage("Invalid username or password. Please try again.");
         setIsLoading(false);
+        return;
       }
-    }, 600);
+
+      // Check account status
+      if (matchedUser.status !== "Active") {
+        setErrorMessage(
+          "Your account is inactive. Please contact an administrator.",
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      // Store authenticated user in localStorage
+      localStorage.setItem("currentUser", JSON.stringify(matchedUser));
+
+      // Redirect dynamically based on role
+      const redirectPath = getRedirectPathForRole(matchedUser.role);
+      navigate(redirectPath, { replace: true });
+    }, 500);
+  };
+
+  // Quick fill helper for testing different roles
+  const handleQuickFill = (user) => {
+    setUsername(user.username);
+    setPassword(user.password);
+    setErrorMessage("");
   };
 
   return (
-    <div className="w-full max-w-md mx-4 p-8 bg-white rounded-2xl shadow-xl border border-gray-300">
+    <div className="w-full max-w-md mx-4 p-8 bg-white rounded-2xl shadow-xl border border-gray-200">
       {/* Brand Header */}
-      <div className="text-center mb-8">
+      <div className="text-center mb-6">
         <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-50 text-blue-600 mb-3 shadow-inner">
           <Boxes className="w-6 h-6" />
         </div>
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
           Exakt Med Inventory
         </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Enter your credentials to access the inventory system
+        <p className="text-xs text-gray-500 mt-1">
+          Role-Based Hospital & Pharmacy Management
         </p>
       </div>
 
-      {/* Error Message */}
+      {/* Error Alert */}
       {errorMessage && (
-        <div className="text-center mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg">
+        <div className="text-center mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl">
           {errorMessage}
         </div>
       )}
@@ -71,7 +95,7 @@ function Login() {
             type="text"
             required
             autoComplete="username"
-            placeholder="johndoe"
+            placeholder="e.g. ExaktAdmin, msantos"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             className="input"
@@ -113,9 +137,9 @@ function Login() {
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? (
-                <EyeOff className="w-5 h-5" />
+                <EyeOff className="w-4 h-4" />
               ) : (
-                <Eye className="w-5 h-5" />
+                <Eye className="w-4 h-4" />
               )}
             </button>
           </div>
@@ -130,17 +154,44 @@ function Login() {
           {isLoading ? (
             <span className="inline-flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Signing in...
+              Authenticating role...
             </span>
           ) : (
-            "Sign In"
+            <span className="inline-flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4" />
+              Sign In
+            </span>
           )}
         </button>
       </form>
 
+      {/* Demo Role Fast-Switcher for Easy Testing */}
+      <div className="mt-6 pt-5 border-t border-gray-100">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 text-center mb-2.5">
+          Quick Demo Accounts
+        </p>
+        <div className="grid grid-cols-2 gap-1.5">
+          {users.map((demoUser) => (
+            <button
+              key={demoUser.id}
+              type="button"
+              onClick={() => handleQuickFill(demoUser)}
+              className="text-left px-2.5 py-1.5 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-colors text-xs text-gray-700 cursor-pointer"
+            >
+              <span className="font-semibold block truncate">
+                {demoUser.role}
+              </span>
+              <span className="text-[11px] text-gray-400 block truncate">
+                {demoUser.username}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Footer Info */}
-      <div className="flex items-center justify-center gap-1.5 text-xs text-gray-500 mt-6">
-        <span>All Rights Reserved 2026-2027</span>
+      <div className="flex items-center justify-center gap-1.5 text-xs text-gray-400 mt-5">
+        <span>Exakt Med &copy; 2026-2027</span>
       </div>
     </div>
   );
