@@ -1,8 +1,9 @@
-function RoleGuard({ allowedRoles = [], children, fallback = null }) {
-  const userString = localStorage.getItem("currentUser");
-  const user = userString ? JSON.parse(userString) : null;
+import useRole from "../../hooks/useRole";
 
-  if (!user || !allowedRoles.includes(user.role)) {
+function RoleGuard({ allowedRoles = [], children, fallback = null }) {
+  const { hasRole } = useRole();
+
+  if (!hasRole(allowedRoles)) {
     return fallback;
   }
 

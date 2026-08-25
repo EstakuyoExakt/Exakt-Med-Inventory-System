@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Loader2, Boxes, ShieldCheck } from "lucide-react";
 import { users } from "../../data/user";
-import { getRedirectPathForRole } from "../../utils/helpers";
+import useAuth from "../../hooks/useAuth";
 
 function Login() {
-  const navigate = useNavigate();
+  const { login } = useAuth();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -41,12 +40,8 @@ function Login() {
         return;
       }
 
-      // Store authenticated user in localStorage
-      localStorage.setItem("currentUser", JSON.stringify(matchedUser));
-
-      // Redirect dynamically based on role
-      const redirectPath = getRedirectPathForRole(matchedUser.role);
-      navigate(redirectPath, { replace: true });
+      // Use the auth hook to store user and handle role-based navigation
+      login(matchedUser);
     }, 500);
   };
 
