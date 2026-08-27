@@ -65,7 +65,7 @@ export const NAVIGATION_ITEMS = [
   },
   {
     title: "Batch Management",
-    path: "/procurement/batches",
+    path: "/procurement/batch-management",
     icon: Package,
     roles: [ROLES.PROCUREMENT],
   },

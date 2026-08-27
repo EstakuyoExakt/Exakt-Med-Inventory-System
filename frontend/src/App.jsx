@@ -13,11 +13,12 @@ import BillingConfirmation from "./features/admin/billingConfirmation";
 // Pharmacist Manager Pages
 import PharmacistDashboard from "./features/pharmacist-manager/pharmacistDashboard";
 import SkuManagement from "./features/pharmacist-manager/skuManagement";
-import BatchManagement from "./features/pharmacist-manager/batchManagement";
 
 // Procurement Officer Pages
 import ProcurementDashboard from "./features/procurement-officer/procurementDashboard";
-import Batches from "./features/procurement-officer/batches";
+
+// Shared Pages
+import BatchManagement from "./features/shared/batchManagement";
 
 // Accountant Pages
 import AccountantDashboard from "./features/accountant/accountantDashboard";
@@ -81,7 +82,10 @@ function App() {
               path="/procurement/dashboard"
               element={<ProcurementDashboard />}
             />
-            <Route path="/procurement/batches" element={<Batches />} />
+            <Route
+              path="/procurement/batch-management"
+              element={<BatchManagement />}
+            />
           </Route>
 
           {/* Accountant Protected Routes */}

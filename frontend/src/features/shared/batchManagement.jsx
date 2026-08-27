@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   AlertCircle,
   CheckCircle2,
+  Plus,
   Eye,
   Sliders,
   ArrowRightLeft,
@@ -17,80 +18,24 @@ import {
   Building2,
 } from "lucide-react";
 
-// Common Components
+// Common Components & Guards
 import Card from "../../components/common/card";
 import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
+import RoleGuard from "../../components/guard/roleGuard";
+import { ROLES } from "../../config/roles";
+import { getExpiryStatus } from "../../utils/helpers";
+import {
+  ADJUSTMENT_REASONS,
+  QUARANTINE_REASONS,
+  DEFAULT_RECEIVE_BATCH,
+} from "../../utils/constants";
 
 // Data Imports
 import { batches as initialBatches } from "../../data/batches";
 import { initialSkus } from "../../data/skuManagement";
 import { facilities } from "../../data/facility";
-
-const ADJUSTMENT_REASONS = [
-  "Physical Cycle Count Discrepancy",
-  "Damaged Goods / Packaging Compromised",
-  "Spillage / Broken Ampoules",
-  "Internal Quality Audit Adjustment",
-  "Clinical Sample / Laboratory Use",
-  "Return from Department",
-  "Other Correction",
-];
-
-const QUARANTINE_REASONS = [
-  "FDA Regulatory Advisory / Recall",
-  "Temperature Excursion during Cold Chain Transit",
-  "Suspected Chemical / Physical Contamination",
-  "Compromised Packaging / Seal Defect",
-  "Pending Secondary Quality Assurance Testing",
-  "Discoloration or Precipitation Observed",
-  "Other Quality Issue",
-];
-
-// Helper to determine expiry status
-const getExpiryStatus = (expiryDateStr) => {
-  if (!expiryDateStr) {
-    return {
-      status: "VALID",
-      label: "Valid",
-      color: "text-emerald-700 bg-emerald-50 border-emerald-200",
-      dot: "bg-emerald-500",
-      daysRemaining: 999,
-    };
-  }
-
-  const today = new Date();
-  const expDate = new Date(expiryDateStr);
-  const diffTime = expDate - today;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-  if (diffDays < 0) {
-    return {
-      status: "EXPIRED",
-      label: `Expired (${Math.abs(diffDays)}d ago)`,
-      color: "text-red-700 bg-red-50 border-red-200",
-      dot: "bg-red-500",
-      daysRemaining: diffDays,
-    };
-  } else if (diffDays <= 90) {
-    return {
-      status: "NEAR_EXPIRY",
-      label: `Near Expiry (${diffDays}d left)`,
-      color: "text-amber-700 bg-amber-50 border-amber-200",
-      dot: "bg-amber-500",
-      daysRemaining: diffDays,
-    };
-  } else {
-    return {
-      status: "HEALTHY",
-      label: `${diffDays}d remaining`,
-      color: "text-emerald-700 bg-emerald-50 border-emerald-200",
-      dot: "bg-emerald-500",
-      daysRemaining: diffDays,
-    };
-  }
-};
 
 function BatchManagement() {
   const [batchList, setBatchList] = useState(() =>
@@ -111,10 +56,11 @@ function BatchManagement() {
   const itemsPerPage = 6;
 
   // Modal State
-  const [modalMode, setModalMode] = useState(null); // 'view' | 'adjust' | 'transfer' | 'quarantine' | 'delete' | null
+  const [modalMode, setModalMode] = useState(null); // 'receive' | 'view' | 'adjust' | 'transfer' | 'quarantine' | 'delete' | null
   const [selectedBatch, setSelectedBatch] = useState(null);
 
   // Form States for Modals
+  const [receiveFormData, setReceiveFormData] = useState(DEFAULT_RECEIVE_BATCH);
   const [adjustFormData, setAdjustFormData] = useState({
     type: "ADD", // 'ADD' | 'SUBTRACT' | 'SET'
     amount: 10,
@@ -236,11 +182,35 @@ function BatchManagement() {
   };
 
   // --- MODAL OPENERS ---
+
+  // 1. Procurement Officer: Receive Batch
+  const handleOpenReceiveModal = () => {
+    const defaultSku = initialSkus[0]?.sku || "AMOX500-CAP-100";
+    const nextNum = String(batchList.length + 1).padStart(4, "0");
+    const today = new Date();
+    const futureDate = new Date();
+    futureDate.setFullYear(today.getFullYear() + 2);
+
+    setReceiveFormData({
+      sku: defaultSku,
+      batchNumber: `BAT-2025-${nextNum}`,
+      manufacturingDate: today.toISOString().split("T")[0],
+      expiryDate: futureDate.toISOString().split("T")[0],
+      quantity: 500,
+      location: facilities[0]?.name || "Exakt Central General Hospital",
+    });
+    setFormErrors({});
+    setSelectedBatch(null);
+    setModalMode("receive");
+  };
+
+  // 2. View Batch Dossier (All roles)
   const handleOpenViewModal = (batch) => {
     setSelectedBatch(batch);
     setModalMode("view");
   };
 
+  // 3. Pharmacist Manager: Stock Adjustment
   const handleOpenAdjustModal = (batch) => {
     setSelectedBatch(batch);
     setAdjustFormData({
@@ -253,6 +223,7 @@ function BatchManagement() {
     setModalMode("adjust");
   };
 
+  // 4. Pharmacist Manager: Transfer Stock
   const handleOpenTransferModal = (batch) => {
     setSelectedBatch(batch);
     const availableTargets = facilities.filter((f) => f.name !== batch.location);
@@ -265,6 +236,7 @@ function BatchManagement() {
     setModalMode("transfer");
   };
 
+  // 5. Pharmacist Manager: Quarantine Control
   const handleOpenQuarantineModal = (batch) => {
     setSelectedBatch(batch);
     setQuarantineFormData({
@@ -275,6 +247,7 @@ function BatchManagement() {
     setModalMode("quarantine");
   };
 
+  // 6. Pharmacist Manager: Delete Batch
   const handleOpenDeleteModal = (batch) => {
     setSelectedBatch(batch);
     setModalMode("delete");
@@ -288,7 +261,58 @@ function BatchManagement() {
 
   // --- ACTIONS & SUBMISSIONS ---
 
-  // 1. Submit Stock Adjustment
+  // 1. Submit Received Batch (Procurement Officer)
+  const handleSaveReceivedBatch = (e) => {
+    e.preventDefault();
+    const errors = {};
+
+    if (!receiveFormData.sku) errors.sku = "SKU is required.";
+    if (!receiveFormData.batchNumber.trim())
+      errors.batchNumber = "Batch number is required.";
+    else {
+      const exists = batchList.some(
+        (b) =>
+          b.batchNumber.toLowerCase() ===
+          receiveFormData.batchNumber.trim().toLowerCase(),
+      );
+      if (exists) errors.batchNumber = "Batch number already exists.";
+    }
+    if (!receiveFormData.manufacturingDate)
+      errors.manufacturingDate = "Manufacturing date is required.";
+    if (!receiveFormData.expiryDate) errors.expiryDate = "Expiry date is required.";
+    if (
+      receiveFormData.manufacturingDate &&
+      receiveFormData.expiryDate &&
+      new Date(receiveFormData.expiryDate) <= new Date(receiveFormData.manufacturingDate)
+    ) {
+      errors.expiryDate = "Expiry date must be after manufacturing date.";
+    }
+    if (Number(receiveFormData.quantity) <= 0)
+      errors.quantity = "Received quantity must be greater than 0.";
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    const newBatch = {
+      id: Date.now(),
+      batchNumber: receiveFormData.batchNumber.trim().toUpperCase(),
+      sku: receiveFormData.sku,
+      manufacturingDate: receiveFormData.manufacturingDate,
+      expiryDate: receiveFormData.expiryDate,
+      quantity: Number(receiveFormData.quantity) || 0,
+      location: receiveFormData.location,
+      isQuarantined: false,
+      quarantineReason: "",
+      quarantineDate: "",
+    };
+
+    setBatchList((prev) => [newBatch, ...prev]);
+    handleCloseModal();
+  };
+
+  // 2. Submit Stock Adjustment (Pharmacist Manager)
   const handleSaveStockAdjustment = (e) => {
     e.preventDefault();
     if (!selectedBatch) return;
@@ -334,7 +358,7 @@ function BatchManagement() {
     handleCloseModal();
   };
 
-  // 2. Submit Transfer Stock
+  // 3. Submit Transfer Stock (Pharmacist Manager)
   const handleSaveTransferStock = (e) => {
     e.preventDefault();
     if (!selectedBatch) return;
@@ -396,7 +420,7 @@ function BatchManagement() {
     handleCloseModal();
   };
 
-  // 3. Submit Quarantine / Release
+  // 4. Submit Quarantine / Release (Pharmacist Manager)
   const handleSaveQuarantineToggle = (e) => {
     e.preventDefault();
     if (!selectedBatch) return;
@@ -423,7 +447,7 @@ function BatchManagement() {
     handleCloseModal();
   };
 
-  // 4. Delete Batch Confirmation
+  // 5. Delete Batch Confirmation (Pharmacist Manager)
   const handleConfirmDelete = () => {
     if (!selectedBatch) return;
     setBatchList((prev) => prev.filter((b) => b.id !== selectedBatch.id));
@@ -443,10 +467,22 @@ function BatchManagement() {
             Batch Management & Expiry Control
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Track medicine lots, adjust physical quantities, transfer stock
-            between facilities, and enforce safety quarantine protocols
+            Centralized inventory lot tracking, expiration monitoring, stock
+            adjustments, transfers, and quarantine protocols
           </p>
         </div>
+
+        {/* Receive New Stock (Procurement Officer Only) */}
+        <RoleGuard allowedRoles={[ROLES.PROCUREMENT]}>
+          <button
+            type="button"
+            onClick={handleOpenReceiveModal}
+            className="btn-primary self-start sm:self-auto shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Receive Stock / Register Batch</span>
+          </button>
+        </RoleGuard>
       </div>
 
       {/* 4 Metric KPI Cards */}
@@ -607,7 +643,7 @@ function BatchManagement() {
                   Status
                 </th>
                 <th scope="col" className="px-6 py-3.5 text-right">
-                  Actions & Modules
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -709,10 +745,10 @@ function BatchManagement() {
                         )}
                       </td>
 
-                      {/* Actions Group with Modules */}
+                      {/* Actions Group */}
                       <td className="px-6 py-4 whitespace-nowrap text-right text-xs">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* 1. View Details */}
+                          {/* 1. View Details (Shared: All Roles) */}
                           <button
                             type="button"
                             onClick={() => handleOpenViewModal(batch)}
@@ -723,61 +759,64 @@ function BatchManagement() {
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* 2. Module: Stock Adjustment */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenAdjustModal(batch)}
-                            className="btn-secondary p-1.5 text-gray-600 hover:text-amber-600 hover:border-amber-300"
-                            title="Stock Adjustment (Count / Write-off)"
-                            aria-label="Stock Adjustment"
-                          >
-                            <Sliders className="w-3.5 h-3.5" />
-                          </button>
+                          {/* 2. Pharmacist Manager Protected Modules */}
+                          <RoleGuard allowedRoles={[ROLES.PHARMACIST]}>
+                            {/* Stock Adjustment */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAdjustModal(batch)}
+                              className="btn-secondary p-1.5 text-gray-600 hover:text-amber-600 hover:border-amber-300"
+                              title="Stock Adjustment (Count / Write-off)"
+                              aria-label="Stock Adjustment"
+                            >
+                              <Sliders className="w-3.5 h-3.5" />
+                            </button>
 
-                          {/* 3. Module: Transfer Stock */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenTransferModal(batch)}
-                            className="btn-secondary p-1.5 text-gray-600 hover:text-purple-600 hover:border-purple-300"
-                            title="Transfer Stock to Another Facility"
-                            aria-label="Transfer Stock"
-                          >
-                            <ArrowRightLeft className="w-3.5 h-3.5" />
-                          </button>
+                            {/* Transfer Stock */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenTransferModal(batch)}
+                              className="btn-secondary p-1.5 text-gray-600 hover:text-purple-600 hover:border-purple-300"
+                              title="Transfer Stock to Another Facility"
+                              aria-label="Transfer Stock"
+                            >
+                              <ArrowRightLeft className="w-3.5 h-3.5" />
+                            </button>
 
-                          {/* 4. Module: Quarantine / Release */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenQuarantineModal(batch)}
-                            className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                              batch.isQuarantined
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                                : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
-                            }`}
-                            title={
-                              batch.isQuarantined
-                                ? "Release from Quarantine"
-                                : "Quarantine this Batch"
-                            }
-                            aria-label="Quarantine Control"
-                          >
-                            {batch.isQuarantined ? (
-                              <ShieldCheck className="w-3.5 h-3.5" />
-                            ) : (
-                              <ShieldAlert className="w-3.5 h-3.5" />
-                            )}
-                          </button>
+                            {/* Quarantine / Release */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenQuarantineModal(batch)}
+                              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                                batch.isQuarantined
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                                  : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
+                              }`}
+                              title={
+                                batch.isQuarantined
+                                  ? "Release from Quarantine"
+                                  : "Quarantine this Batch"
+                              }
+                              aria-label="Quarantine Control"
+                            >
+                              {batch.isQuarantined ? (
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                              ) : (
+                                <ShieldAlert className="w-3.5 h-3.5" />
+                              )}
+                            </button>
 
-                          {/* 5. Delete */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenDeleteModal(batch)}
-                            className="btn-danger p-1.5"
-                            title="Delete Batch Record"
-                            aria-label="Delete Batch Record"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                            {/* Delete Batch */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDeleteModal(batch)}
+                              className="btn-danger p-1.5"
+                              title="Delete Batch Record"
+                              aria-label="Delete Batch Record"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </RoleGuard>
                         </div>
                       </td>
                     </tr>
@@ -816,7 +855,203 @@ function BatchManagement() {
       </Card>
 
       {/* ======================================================== */}
-      {/* 1. MODULE: STOCK ADJUSTMENT MODAL                        */}
+      {/* 1. MODULE: RECEIVE NEW STOCK MODAL (Procurement Officer) */}
+      {/* ======================================================== */}
+      <Modal
+        isOpen={modalMode === "receive"}
+        onClose={handleCloseModal}
+        title="Receive New Stock & Register Batch"
+        size="lg"
+      >
+        <form onSubmit={handleSaveReceivedBatch} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* SKU Selector */}
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="receive-batch-sku"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Target Stock-Keeping Unit (SKU) <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="receive-batch-sku"
+                value={receiveFormData.sku}
+                onChange={(e) =>
+                  setReceiveFormData((prev) => ({ ...prev, sku: e.target.value }))
+                }
+                className="input"
+              >
+                {initialSkus.map((s) => (
+                  <option key={s.sku} value={s.sku}>
+                    {s.sku} — {s.brandName} ({s.genericName} {s.dosage})
+                  </option>
+                ))}
+              </select>
+              {formErrors.sku && (
+                <p className="text-xs text-red-500 mt-1">{formErrors.sku}</p>
+              )}
+            </div>
+
+            {/* Batch Number */}
+            <div>
+              <label
+                htmlFor="receive-batch-number"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Batch / Lot Number <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="receive-batch-number"
+                type="text"
+                value={receiveFormData.batchNumber}
+                onChange={(e) =>
+                  setReceiveFormData((prev) => ({
+                    ...prev,
+                    batchNumber: e.target.value,
+                  }))
+                }
+                placeholder="BAT-2025-0199"
+                className={`input uppercase font-mono ${
+                  formErrors.batchNumber
+                    ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                    : ""
+                }`}
+              />
+              {formErrors.batchNumber && (
+                <p className="text-xs text-red-500 mt-1">
+                  {formErrors.batchNumber}
+                </p>
+              )}
+            </div>
+
+            {/* Received Quantity */}
+            <div>
+              <label
+                htmlFor="receive-batch-quantity"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Received Quantity (Units) <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="receive-batch-quantity"
+                type="number"
+                min="1"
+                value={receiveFormData.quantity}
+                onChange={(e) =>
+                  setReceiveFormData((prev) => ({
+                    ...prev,
+                    quantity: Number(e.target.value),
+                  }))
+                }
+                className="input"
+              />
+              {formErrors.quantity && (
+                <p className="text-xs text-red-500 mt-1">
+                  {formErrors.quantity}
+                </p>
+              )}
+            </div>
+
+            {/* Manufacturing Date */}
+            <div>
+              <label
+                htmlFor="receive-batch-mfg"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Manufacturing Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="receive-batch-mfg"
+                type="date"
+                value={receiveFormData.manufacturingDate}
+                onChange={(e) =>
+                  setReceiveFormData((prev) => ({
+                    ...prev,
+                    manufacturingDate: e.target.value,
+                  }))
+                }
+                className="input"
+              />
+              {formErrors.manufacturingDate && (
+                <p className="text-xs text-red-500 mt-1">
+                  {formErrors.manufacturingDate}
+                </p>
+              )}
+            </div>
+
+            {/* Expiry Date */}
+            <div>
+              <label
+                htmlFor="receive-batch-exp"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Expiration Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="receive-batch-exp"
+                type="date"
+                value={receiveFormData.expiryDate}
+                onChange={(e) =>
+                  setReceiveFormData((prev) => ({
+                    ...prev,
+                    expiryDate: e.target.value,
+                  }))
+                }
+                className="input"
+              />
+              {formErrors.expiryDate && (
+                <p className="text-xs text-red-500 mt-1">
+                  {formErrors.expiryDate}
+                </p>
+              )}
+            </div>
+
+            {/* Storage Facility */}
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="receive-batch-location"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Receiving Facility / Location <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="receive-batch-location"
+                value={receiveFormData.location}
+                onChange={(e) =>
+                  setReceiveFormData((prev) => ({
+                    ...prev,
+                    location: e.target.value,
+                  }))
+                }
+                className="input"
+              >
+                {facilities.map((f) => (
+                  <option key={f.id} value={f.name}>
+                    {f.name} ({f.type})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={handleCloseModal}
+              className="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary">
+              <Plus className="w-4 h-4" />
+              <span>Confirm Stock Receipt</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* 2. MODULE: STOCK ADJUSTMENT MODAL (Pharmacist Manager)   */}
       {/* ======================================================== */}
       <Modal
         isOpen={modalMode === "adjust" && Boolean(selectedBatch)}
@@ -997,7 +1232,7 @@ function BatchManagement() {
       </Modal>
 
       {/* ======================================================== */}
-      {/* 2. MODULE: TRANSFER STOCK MODAL                          */}
+      {/* 3. MODULE: TRANSFER STOCK MODAL (Pharmacist Manager)     */}
       {/* ======================================================== */}
       <Modal
         isOpen={modalMode === "transfer" && Boolean(selectedBatch)}
@@ -1133,7 +1368,7 @@ function BatchManagement() {
       </Modal>
 
       {/* ======================================================== */}
-      {/* 3. MODULE: QUARANTINE / RELEASE MODAL                    */}
+      {/* 4. MODULE: QUARANTINE / RELEASE (Pharmacist Manager)     */}
       {/* ======================================================== */}
       <Modal
         isOpen={modalMode === "quarantine" && Boolean(selectedBatch)}
@@ -1262,7 +1497,7 @@ function BatchManagement() {
       </Modal>
 
       {/* ======================================================== */}
-      {/* 4. VIEW BATCH DETAILS MODAL                              */}
+      {/* 5. VIEW BATCH DETAILS MODAL (Shared: All Roles)          */}
       {/* ======================================================== */}
       <Modal
         isOpen={modalMode === "view" && Boolean(selectedBatch)}
@@ -1390,29 +1625,33 @@ function BatchManagement() {
               >
                 Close
               </button>
-              <button
-                type="button"
-                onClick={() => handleOpenAdjustModal(selectedBatch)}
-                className="btn-secondary text-xs text-amber-700 hover:text-amber-800"
-              >
-                <Sliders className="w-3.5 h-3.5" />
-                <span>Adjust Stock</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleOpenTransferModal(selectedBatch)}
-                className="btn-primary text-xs"
-              >
-                <ArrowRightLeft className="w-3.5 h-3.5" />
-                <span>Transfer Stock</span>
-              </button>
+
+              {/* Pharmacist Action Shortcuts */}
+              <RoleGuard allowedRoles={[ROLES.PHARMACIST]}>
+                <button
+                  type="button"
+                  onClick={() => handleOpenAdjustModal(selectedBatch)}
+                  className="btn-secondary text-xs text-amber-700 hover:text-amber-800"
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>Adjust Stock</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenTransferModal(selectedBatch)}
+                  className="btn-primary text-xs"
+                >
+                  <ArrowRightLeft className="w-3.5 h-3.5" />
+                  <span>Transfer Stock</span>
+                </button>
+              </RoleGuard>
             </div>
           </div>
         )}
       </Modal>
 
       {/* ======================================================== */}
-      {/* 5. DELETE BATCH MODAL                                    */}
+      {/* 6. DELETE BATCH MODAL (Pharmacist Manager)               */}
       {/* ======================================================== */}
       <Modal
         isOpen={modalMode === "delete" && Boolean(selectedBatch)}

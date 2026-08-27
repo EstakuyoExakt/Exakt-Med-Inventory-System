@@ -18,24 +18,15 @@ import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 
-// Data Imports
+// Data & Constants Imports
 import {
   initialSkus,
   DOSAGE_FORMS,
   PACKAGING_UNITS,
 } from "../../data/skuManagement";
 import { medicines, MEDICINE_TYPES } from "../../data/medicine";
-
-const FORM_CODES = {
-  Tablet: "TAB",
-  Capsule: "CAP",
-  Syrup: "SYR",
-  Suspension: "SUS",
-  Inhaler: "INH",
-  Injectable: "INJ",
-  Ointment: "OIN",
-  Drops: "DRP",
-};
+import { FORM_CODES, DEFAULT_FORM_DATA } from "../../utils/constants";
+import { getStockStatus } from "../../utils/helpers";
 
 const extractPackSize = (packagingUnit) => {
   const match = packagingUnit ? packagingUnit.match(/\b(\d+)\b/) : null;
@@ -56,21 +47,6 @@ const generateSkuCode = (brandOrGeneric, dosage, form, packagingUnit) => {
   const packSize = extractPackSize(packagingUnit || "Box of 100");
 
   return `${prefix}${dosageDigits}-${formCode}-${packSize}`;
-};
-
-const DEFAULT_FORM_DATA = {
-  medicineId: "",
-  sku: "",
-  brandName: "",
-  genericName: "",
-  dosage: "",
-  type: "Antibiotics",
-  dosageForm: "Tablet",
-  packagingUnit: "Box of 100 (10x10 Blister)",
-  minimumLevel: 50,
-  reorderLevel: 150,
-  maximumLevel: 1000,
-  status: "Active",
 };
 
 function SkuManagement() {
@@ -108,36 +84,6 @@ function SkuManagement() {
     () => skuList.filter((s) => s.currentStock <= s.minimumLevel).length,
     [skuList],
   );
-
-  // Helper to determine stock status badge
-  const getStockStatus = (sku) => {
-    if (sku.currentStock === 0) {
-      return {
-        label: "Out of Stock",
-        color: "bg-red-50 text-red-700 border-red-200",
-        dotColor: "bg-red-500",
-      };
-    }
-    if (sku.currentStock <= sku.minimumLevel) {
-      return {
-        label: "Critical (Below Min)",
-        color: "bg-red-50 text-red-700 border-red-200",
-        dotColor: "bg-red-500",
-      };
-    }
-    if (sku.currentStock <= sku.reorderLevel) {
-      return {
-        label: "Reorder Triggered",
-        color: "bg-amber-50 text-amber-700 border-amber-200",
-        dotColor: "bg-amber-500",
-      };
-    }
-    return {
-      label: "Optimal Stock",
-      color: "bg-emerald-50 text-emerald-700 border-emerald-200",
-      dotColor: "bg-emerald-500",
-    };
-  };
 
   // Filtered SKUs
   const filteredSkus = useMemo(() => {
