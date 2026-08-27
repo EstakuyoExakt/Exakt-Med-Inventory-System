@@ -12,7 +12,8 @@ import BillingConfirmation from "./features/admin/billingConfirmation";
 
 // Pharmacist Manager Pages
 import PharmacistDashboard from "./features/pharmacist-manager/pharmacistDashboard";
-import Medicine from "./features/pharmacist-manager/medicine";
+import SkuManagement from "./features/pharmacist-manager/skuManagement";
+import BatchManagement from "./features/pharmacist-manager/batchManagement";
 
 // Procurement Officer Pages
 import ProcurementDashboard from "./features/procurement-officer/procurementDashboard";
@@ -62,7 +63,14 @@ function App() {
               path="/pharmacist/dashboard"
               element={<PharmacistDashboard />}
             />
-            <Route path="/pharmacist/medicines" element={<Medicine />} />
+            <Route
+              path="/pharmacist/sku-management"
+              element={<SkuManagement />}
+            />
+            <Route
+              path="/pharmacist/batch-management"
+              element={<BatchManagement />}
+            />
           </Route>
 
           {/* Procurement Officer Protected Routes */}

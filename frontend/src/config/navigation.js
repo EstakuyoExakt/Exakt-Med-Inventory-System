@@ -44,9 +44,15 @@ export const NAVIGATION_ITEMS = [
     roles: [ROLES.PHARMACIST],
   },
   {
-    title: "Medicine Inventory",
-    path: "/pharmacist/medicines",
+    title: "SKU Management",
+    path: "/pharmacist/sku-management",
     icon: Pill,
+    roles: [ROLES.PHARMACIST],
+  },
+  {
+    title: "Batch Management",
+    path: "/pharmacist/batch-management",
+    icon: Package,
     roles: [ROLES.PHARMACIST],
   },
 
