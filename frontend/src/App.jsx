@@ -16,6 +16,7 @@ import SkuManagement from "./features/pharmacist-manager/skuManagement";
 
 // Procurement Officer Pages
 import ProcurementDashboard from "./features/procurement-officer/procurementDashboard";
+import OrderRequest from "./features/procurement-officer/orderRequest";
 
 // Shared Pages
 import BatchManagement from "./features/shared/batchManagement";
@@ -85,6 +86,10 @@ function App() {
             <Route
               path="/procurement/batch-management"
               element={<BatchManagement />}
+            />
+            <Route
+              path="/procurement/order-request"
+              element={<OrderRequest />}
             />
           </Route>
 

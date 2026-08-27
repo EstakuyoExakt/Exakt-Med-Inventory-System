@@ -6,6 +6,7 @@ import {
   Pill,
   Package,
   Receipt,
+  ClipboardList,
 } from "lucide-react";
 import { ROLES } from "./roles";
 
@@ -67,6 +68,12 @@ export const NAVIGATION_ITEMS = [
     title: "Batch Management",
     path: "/procurement/batch-management",
     icon: Package,
+    roles: [ROLES.PROCUREMENT],
+  },
+  {
+    title: "Order Request",
+    path: "/procurement/order-request",
+    icon: ClipboardList,
     roles: [ROLES.PROCUREMENT],
   },
 
