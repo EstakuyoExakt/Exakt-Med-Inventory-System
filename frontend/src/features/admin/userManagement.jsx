@@ -6,22 +6,36 @@ import {
   Package,
   Receipt,
   UserPlus,
-  Filter,
-  MoreVertical,
   Mail,
   Phone,
   Eye,
   Pencil,
   Trash2,
+  AlertTriangle,
+  CheckCircle2,
+  Calendar,
+  Lock,
+  User as UserIcon,
 } from "lucide-react";
 
 // Components
 import Card from "../../components/common/card";
 import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
+import Modal from "../../components/common/modal";
 
 import { users as initialUsers } from "../../data/user";
 import { ROLES, ROLE_DETAILS } from "../../config/roles";
+
+const DEFAULT_FORM_DATA = {
+  name: "",
+  username: "",
+  email: "",
+  phone: "",
+  role: ROLES.PHARMACIST,
+  status: "Active",
+  password: "exaktpassword",
+};
 
 function UserManagement() {
   const [userList, setUserList] = useState(initialUsers);
@@ -30,6 +44,12 @@ function UserManagement() {
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
+
+  // Modal State
+  const [modalMode, setModalMode] = useState(null); // 'add' | 'view' | 'edit' | 'delete' | null
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
+  const [formErrors, setFormErrors] = useState({});
 
   // Calculate totals for each role
   const totalAdmins = useMemo(
@@ -89,6 +109,156 @@ function UserManagement() {
     setCurrentPage(1);
   };
 
+  // Modal Open Handlers
+  const handleOpenAddModal = () => {
+    setFormData(DEFAULT_FORM_DATA);
+    setFormErrors({});
+    setSelectedUser(null);
+    setModalMode("add");
+  };
+
+  const handleOpenViewModal = (user) => {
+    setSelectedUser(user);
+    setModalMode("view");
+  };
+
+  const handleOpenEditModal = (user) => {
+    setSelectedUser(user);
+    setFormData({
+      name: user.name || "",
+      username: user.username || "",
+      email: user.email || "",
+      phone: user.phone || "",
+      role: user.role || ROLES.PHARMACIST,
+      status: user.status || "Active",
+      password: user.password || "exaktpassword",
+    });
+    setFormErrors({});
+    setModalMode("edit");
+  };
+
+  const handleOpenDeleteModal = (user) => {
+    setSelectedUser(user);
+    setModalMode("delete");
+  };
+
+  const handleCloseModal = () => {
+    setModalMode(null);
+    setSelectedUser(null);
+    setFormErrors({});
+  };
+
+  // Form Field Change Handler
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (formErrors[name]) {
+      setFormErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+  };
+
+  // Form Validation
+  const validateForm = () => {
+    const errors = {};
+
+    if (!formData.name.trim()) {
+      errors.name = "Full name is required.";
+    }
+
+    if (!formData.username.trim()) {
+      errors.username = "Username is required.";
+    } else {
+      const usernameExists = userList.some(
+        (u) =>
+          u.username.toLowerCase() === formData.username.trim().toLowerCase() &&
+          (!selectedUser || u.id !== selectedUser.id),
+      );
+      if (usernameExists) {
+        errors.username = "Username is already taken.";
+      }
+    }
+
+    if (!formData.email.trim()) {
+      errors.email = "Email address is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      errors.email = "Please enter a valid email address.";
+    } else {
+      const emailExists = userList.some(
+        (u) =>
+          u.email.toLowerCase() === formData.email.trim().toLowerCase() &&
+          (!selectedUser || u.id !== selectedUser.id),
+      );
+      if (emailExists) {
+        errors.email = "Email address is already in use.";
+      }
+    }
+
+    if (!formData.role) {
+      errors.role = "Role is required.";
+    }
+
+    if (!formData.status) {
+      errors.status = "Status is required.";
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Save (Add or Edit) User
+  const handleSaveUser = (e) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    if (modalMode === "add") {
+      const newUser = {
+        id: Date.now(),
+        name: formData.name.trim(),
+        username: formData.username.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim() || "+63 900 000 0000",
+        role: formData.role,
+        status: formData.status,
+        password: formData.password || "exaktpassword",
+        createdAt: new Date().toISOString().split("T")[0],
+      };
+      setUserList((prev) => [newUser, ...prev]);
+    } else if (modalMode === "edit" && selectedUser) {
+      setUserList((prev) =>
+        prev.map((u) =>
+          u.id === selectedUser.id
+            ? {
+                ...u,
+                name: formData.name.trim(),
+                username: formData.username.trim(),
+                email: formData.email.trim(),
+                phone: formData.phone.trim(),
+                role: formData.role,
+                status: formData.status,
+                password: formData.password || u.password,
+              }
+            : u,
+        ),
+      );
+    }
+
+    handleCloseModal();
+  };
+
+  // Delete User Confirmation
+  const handleConfirmDelete = () => {
+    if (!selectedUser) return;
+
+    setUserList((prev) => prev.filter((u) => u.id !== selectedUser.id));
+
+    // If deleting the last item on the current page, adjust page if needed
+    if (paginatedUsers.length === 1 && currentPage > 1) {
+      setCurrentPage((prev) => prev - 1);
+    }
+
+    handleCloseModal();
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -103,6 +273,7 @@ function UserManagement() {
         </div>
         <button
           type="button"
+          onClick={handleOpenAddModal}
           className="btn-primary self-start sm:self-auto shadow-sm"
         >
           <UserPlus className="w-4 h-4" />
@@ -337,6 +508,7 @@ function UserManagement() {
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
+                            onClick={() => handleOpenViewModal(user)}
                             className="btn-secondary p-1.5 text-gray-600 hover:text-blue-600 hover:border-blue-300"
                             title="View User"
                             aria-label="View User"
@@ -345,6 +517,7 @@ function UserManagement() {
                           </button>
                           <button
                             type="button"
+                            onClick={() => handleOpenEditModal(user)}
                             className="btn-secondary p-1.5 text-gray-600 hover:text-amber-600 hover:border-amber-300"
                             title="Edit User"
                             aria-label="Edit User"
@@ -353,6 +526,7 @@ function UserManagement() {
                           </button>
                           <button
                             type="button"
+                            onClick={() => handleOpenDeleteModal(user)}
                             className="btn-danger p-1.5"
                             title="Delete User"
                             aria-label="Delete User"
@@ -395,6 +569,380 @@ function UserManagement() {
           </div>
         )}
       </Card>
+
+      {/* --- ADD / EDIT USER MODAL --- */}
+      <Modal
+        isOpen={modalMode === "add" || modalMode === "edit"}
+        onClose={handleCloseModal}
+        title={modalMode === "add" ? "Add New User" : "Edit User Account"}
+        size="lg"
+      >
+        <form onSubmit={handleSaveUser} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Full Name */}
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="user-fullname"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Full Name <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  id="user-fullname"
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  placeholder="e.g. Dr. Jane Smith"
+                  className={`input pl-10 ${
+                    formErrors.name ? "border-red-500 focus:border-red-500 focus:ring-red-500/30" : ""
+                  }`}
+                />
+                <UserIcon className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+              {formErrors.name && (
+                <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>
+              )}
+            </div>
+
+            {/* Username */}
+            <div>
+              <label
+                htmlFor="user-username"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Username <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-mono pointer-events-none">
+                  @
+                </span>
+                <input
+                  id="user-username"
+                  type="text"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleInputChange}
+                  placeholder="jsmith"
+                  className={`input pl-8 ${
+                    formErrors.username ? "border-red-500 focus:border-red-500 focus:ring-red-500/30" : ""
+                  }`}
+                />
+              </div>
+              {formErrors.username && (
+                <p className="text-xs text-red-500 mt-1">
+                  {formErrors.username}
+                </p>
+              )}
+            </div>
+
+            {/* Email Address */}
+            <div>
+              <label
+                htmlFor="user-email"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Email Address <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  id="user-email"
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  placeholder="jane.smith@exaktmed.com"
+                  className={`input pl-10 ${
+                    formErrors.email ? "border-red-500 focus:border-red-500 focus:ring-red-500/30" : ""
+                  }`}
+                />
+                <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+              {formErrors.email && (
+                <p className="text-xs text-red-500 mt-1">{formErrors.email}</p>
+              )}
+            </div>
+
+            {/* Phone Number */}
+            <div>
+              <label
+                htmlFor="user-phone"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Phone Number
+              </label>
+              <div className="relative">
+                <input
+                  id="user-phone"
+                  type="text"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  placeholder="+63 917 000 0000"
+                  className="input pl-10"
+                />
+                <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* Assigned Role */}
+            <div>
+              <label
+                htmlFor="user-role"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Role <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="user-role"
+                name="role"
+                value={formData.role}
+                onChange={handleInputChange}
+                className="input"
+              >
+                <option value={ROLES.ADMIN}>Admin</option>
+                <option value={ROLES.PHARMACIST}>Pharmacist Manager</option>
+                <option value={ROLES.PROCUREMENT}>Procurement Officer</option>
+                <option value={ROLES.ACCOUNTANT}>Accountant</option>
+              </select>
+            </div>
+
+            {/* Status */}
+            <div>
+              <label
+                htmlFor="user-status"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Account Status <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="user-status"
+                name="status"
+                value={formData.status}
+                onChange={handleInputChange}
+                className="input"
+              >
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+
+            {/* Password */}
+            <div>
+              <label
+                htmlFor="user-password"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                {modalMode === "add" ? "Default Password" : "Reset Password"}
+              </label>
+              <div className="relative">
+                <input
+                  id="user-password"
+                  type="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  placeholder="••••••••"
+                  className="input pl-10"
+                />
+                <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">
+                {modalMode === "add"
+                  ? "Standard temporary password for first login."
+                  : "Leave untouched to keep current password."}
+              </p>
+            </div>
+          </div>
+
+          {/* Modal Action Buttons */}
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={handleCloseModal}
+              className="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary">
+              {modalMode === "add" ? (
+                <>
+                  <UserPlus className="w-4 h-4" />
+                  <span>Create User</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Save Changes</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* --- VIEW USER MODAL --- */}
+      <Modal
+        isOpen={modalMode === "view" && Boolean(selectedUser)}
+        onClose={handleCloseModal}
+        title="User Details"
+        size="md"
+      >
+        {selectedUser && (
+          <div className="space-y-5">
+            {/* Header Avatar & Name */}
+            <div className="flex items-center gap-4 p-4 rounded-xl bg-gray-50 border border-gray-100">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 font-bold text-white text-xl shadow-sm">
+                {selectedUser.name.charAt(0)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base font-bold text-gray-900 truncate">
+                    {selectedUser.name}
+                  </h3>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ${
+                      ROLE_DETAILS[selectedUser.role]?.badgeColor ||
+                      "bg-gray-100 text-gray-700 border-gray-200"
+                    }`}
+                  >
+                    {selectedUser.role}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 font-mono mt-0.5">
+                  @{selectedUser.username}
+                </p>
+              </div>
+            </div>
+
+            {/* Info Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="p-3 rounded-lg border border-gray-100 bg-white space-y-1">
+                <span className="text-gray-400 font-medium flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5" /> Email Address
+                </span>
+                <p className="font-semibold text-gray-900 truncate">
+                  {selectedUser.email}
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg border border-gray-100 bg-white space-y-1">
+                <span className="text-gray-400 font-medium flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5" /> Phone Number
+                </span>
+                <p className="font-semibold text-gray-900">
+                  {selectedUser.phone || "Not specified"}
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg border border-gray-100 bg-white space-y-1">
+                <span className="text-gray-400 font-medium flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5" /> Account Status
+                </span>
+                <div className="flex items-center gap-1.5 pt-0.5">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      selectedUser.status === "Active"
+                        ? "bg-emerald-500"
+                        : "bg-gray-400"
+                    }`}
+                  />
+                  <span
+                    className={`font-semibold ${
+                      selectedUser.status === "Active"
+                        ? "text-emerald-700"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    {selectedUser.status}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg border border-gray-100 bg-white space-y-1">
+                <span className="text-gray-400 font-medium flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5" /> Date Joined
+                </span>
+                <p className="font-semibold text-gray-900">
+                  {selectedUser.createdAt || "N/A"}
+                </p>
+              </div>
+            </div>
+
+            {/* Role Summary Note */}
+            <div className="p-3 rounded-lg bg-blue-50/50 border border-blue-100 text-xs text-blue-800">
+              <span className="font-semibold">Role Scope:</span>{" "}
+              {ROLE_DETAILS[selectedUser.role]?.description ||
+                "Standard system access permissions."}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                className="btn-secondary text-xs"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOpenEditModal(selectedUser)}
+                className="btn-primary text-xs"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                <span>Edit User</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* --- DELETE USER CONFIRMATION MODAL --- */}
+      <Modal
+        isOpen={modalMode === "delete" && Boolean(selectedUser)}
+        onClose={handleCloseModal}
+        title="Delete User Account"
+        size="sm"
+      >
+        {selectedUser && (
+          <div className="space-y-4">
+            <div className="flex items-start gap-3.5 p-3.5 rounded-xl bg-red-50 border border-red-100 text-red-800">
+              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-1">
+                <p className="font-semibold text-red-900">
+                  Are you sure you want to delete this user?
+                </p>
+                <p className="text-red-700">
+                  This will permanently remove the account for{" "}
+                  <span className="font-bold">{selectedUser.name}</span> (
+                  <span className="font-mono">@{selectedUser.username}</span>).
+                  This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                className="btn-secondary text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="btn-danger text-xs"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Account</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
