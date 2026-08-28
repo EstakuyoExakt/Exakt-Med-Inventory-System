@@ -32,12 +32,6 @@ export const NAVIGATION_ITEMS = [
     roles: [ROLES.ADMIN],
   },
   {
-    title: "Billing Confirmation",
-    path: "/admin/billing",
-    icon: Receipt,
-    roles: [ROLES.ADMIN],
-  },
-  {
     title: "Audit Logs",
     path: "/admin/audit-logs",
     icon: History,

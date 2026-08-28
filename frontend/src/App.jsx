@@ -8,7 +8,6 @@ import Unauthorized from "./features/authentication/unauthorized";
 import FacilityManagement from "./features/admin/facilityManagement";
 import SupplierManagement from "./features/admin/supplierManagement";
 import UserManagement from "./features/admin/userManagement";
-import BillingConfirmation from "./features/admin/billingConfirmation";
 
 // Pharmacist Manager Pages
 import PharmacistDashboard from "./features/pharmacist-manager/pharmacistDashboard";
@@ -57,7 +56,6 @@ function App() {
             <Route path="/admin/users" element={<UserManagement />} />
             <Route path="/admin/suppliers" element={<SupplierManagement />} />
             <Route path="/admin/facilities" element={<FacilityManagement />} />
-            <Route path="/admin/billing" element={<BillingConfirmation />} />
             <Route path="/admin/audit-logs" element={<AuditLogs />} />
           </Route>
 
