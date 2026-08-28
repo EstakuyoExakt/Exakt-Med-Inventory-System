@@ -7,6 +7,7 @@ import {
   Package,
   Receipt,
   ClipboardList,
+  History,
 } from "lucide-react";
 import { ROLES } from "./roles";
 
@@ -32,8 +33,14 @@ export const NAVIGATION_ITEMS = [
   },
   {
     title: "Billing Confirmation",
-    path: "admin/billing",
+    path: "/admin/billing",
     icon: Receipt,
+    roles: [ROLES.ADMIN],
+  },
+  {
+    title: "Audit Logs",
+    path: "/admin/audit-logs",
+    icon: History,
     roles: [ROLES.ADMIN],
   },
 
@@ -56,6 +63,12 @@ export const NAVIGATION_ITEMS = [
     icon: Package,
     roles: [ROLES.PHARMACIST],
   },
+  {
+    title: "Audit Logs",
+    path: "/pharmacist/audit-logs",
+    icon: History,
+    roles: [ROLES.PHARMACIST],
+  },
 
   // --- Procurement Officer Routes ---
   {
@@ -76,6 +89,12 @@ export const NAVIGATION_ITEMS = [
     icon: ClipboardList,
     roles: [ROLES.PROCUREMENT],
   },
+  {
+    title: "Audit Logs",
+    path: "/procurement/audit-logs",
+    icon: History,
+    roles: [ROLES.PROCUREMENT],
+  },
 
   // --- Accountant Routes ---
   {
@@ -88,6 +107,12 @@ export const NAVIGATION_ITEMS = [
     title: "Invoices & Billing",
     path: "/accountant/invoices",
     icon: Receipt,
+    roles: [ROLES.ACCOUNTANT],
+  },
+  {
+    title: "Audit Logs",
+    path: "/accountant/audit-logs",
+    icon: History,
     roles: [ROLES.ACCOUNTANT],
   },
 ];

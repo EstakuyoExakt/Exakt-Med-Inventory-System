@@ -20,6 +20,7 @@ import OrderRequest from "./features/procurement-officer/orderRequest";
 
 // Shared Pages
 import BatchManagement from "./features/shared/batchManagement";
+import AuditLogs from "./features/shared/audtiLogs";
 
 // Accountant Pages
 import AccountantDashboard from "./features/accountant/accountantDashboard";
@@ -57,6 +58,7 @@ function App() {
             <Route path="/admin/suppliers" element={<SupplierManagement />} />
             <Route path="/admin/facilities" element={<FacilityManagement />} />
             <Route path="/admin/billing" element={<BillingConfirmation />} />
+            <Route path="/admin/audit-logs" element={<AuditLogs />} />
           </Route>
 
           {/* Pharmacist Manager Protected Routes */}
@@ -73,6 +75,7 @@ function App() {
               path="/pharmacist/batch-management"
               element={<BatchManagement />}
             />
+            <Route path="/pharmacist/audit-logs" element={<AuditLogs />} />
           </Route>
 
           {/* Procurement Officer Protected Routes */}
@@ -91,6 +94,7 @@ function App() {
               path="/procurement/order-request"
               element={<OrderRequest />}
             />
+            <Route path="/procurement/audit-logs" element={<AuditLogs />} />
           </Route>
 
           {/* Accountant Protected Routes */}
@@ -100,6 +104,7 @@ function App() {
               element={<AccountantDashboard />}
             />
             <Route path="/accountant/invoices" element={<Invoice />} />
+            <Route path="/accountant/audit-logs" element={<AuditLogs />} />
           </Route>
 
           {/* Fallback Catch-All Route */}
