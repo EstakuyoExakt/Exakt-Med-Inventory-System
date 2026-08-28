@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Eye, EyeOff, Loader2, Boxes, ShieldCheck } from "lucide-react";
 import { users } from "../../data/user";
 import useAuth from "../../hooks/useAuth";
@@ -12,6 +12,18 @@ function Login() {
 
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // 1 User per role for quick demo testing
+  const uniqueRoleUsers = useMemo(() => {
+    const seenRoles = new Set();
+    return users.filter((user) => {
+      if (seenRoles.has(user.role)) {
+        return false;
+      }
+      seenRoles.add(user.role);
+      return true;
+    });
+  }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -166,7 +178,7 @@ function Login() {
           Quick Demo Accounts
         </p>
         <div className="grid grid-cols-2 gap-1.5">
-          {users.map((demoUser) => (
+          {uniqueRoleUsers.map((demoUser) => (
             <button
               key={demoUser.id}
               type="button"
