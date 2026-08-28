@@ -79,12 +79,6 @@ export const NAVIGATION_ITEMS = [
     roles: [ROLES.PROCUREMENT],
   },
   {
-    title: "Batch Management",
-    path: "/procurement/batch-management",
-    icon: Package,
-    roles: [ROLES.PROCUREMENT],
-  },
-  {
     title: "Order Request",
     path: "/procurement/order-request",
     icon: ClipboardList,

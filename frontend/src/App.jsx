@@ -12,13 +12,13 @@ import UserManagement from "./features/admin/userManagement";
 // Pharmacist Manager Pages
 import PharmacistDashboard from "./features/pharmacist-manager/pharmacistDashboard";
 import SkuManagement from "./features/pharmacist-manager/skuManagement";
+import BatchManagement from "./features/pharmacist-manager/batchManagement";
 
 // Procurement Officer Pages
 import ProcurementDashboard from "./features/procurement-officer/procurementDashboard";
 import OrderRequest from "./features/procurement-officer/orderRequest";
 
 // Shared Pages
-import BatchManagement from "./features/shared/batchManagement";
 import RequestedOrders from "./features/shared/requestedOrders";
 import AuditLogs from "./features/shared/audtiLogs";
 
@@ -88,10 +88,6 @@ function App() {
             <Route
               path="/procurement/dashboard"
               element={<ProcurementDashboard />}
-            />
-            <Route
-              path="/procurement/batch-management"
-              element={<BatchManagement />}
             />
             <Route
               path="/procurement/order-request"

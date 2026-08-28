@@ -47,6 +47,7 @@ function OrderRequest() {
   const [orderForm, setOrderForm] = useState({
     supplierId: suppliers[0]?.id || 1,
     quantity: 100,
+    totalCost: "",
     targetFacility: facilities[0]?.name || "Exakt Central General Hospital",
     priority: "Normal", // 'Urgent' | 'Normal'
     notes: "",
@@ -123,6 +124,7 @@ function OrderRequest() {
     setOrderForm({
       supplierId: suppliers[0]?.id || 1,
       quantity: suggestedQty,
+      totalCost: "",
       targetFacility: facilities[0]?.name || "Exakt Central General Hospital",
       priority: sku.currentStock <= sku.minimumLevel ? "Urgent" : "Normal",
       notes: "",
@@ -156,6 +158,10 @@ function OrderRequest() {
       errors.quantity = "Order quantity must be greater than 0.";
     }
 
+    if (orderForm.totalCost === "" || Number(orderForm.totalCost) < 0) {
+      errors.totalCost = "Please enter the total cost.";
+    }
+
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
@@ -172,6 +178,7 @@ function OrderRequest() {
       genericName: selectedSku.genericName,
       dosage: selectedSku.dosage,
       quantity: Number(orderForm.quantity),
+      totalCost: Number(orderForm.totalCost) || 0,
       packagingUnit: selectedSku.packagingUnit,
       supplierName: supplierObj ? supplierObj.name : "Supplier",
       targetFacility: orderForm.targetFacility,
@@ -587,8 +594,43 @@ function OrderRequest() {
                 )}
               </div>
 
-              {/* Target Receiving Facility */}
+              {/* Total Cost */}
               <div>
+                <label
+                  htmlFor="order-total-cost"
+                  className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+                >
+                  Total Cost (₱) <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">
+                    ₱
+                  </span>
+                  <input
+                    id="order-total-cost"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={orderForm.totalCost}
+                    onChange={(e) =>
+                      setOrderForm((prev) => ({
+                        ...prev,
+                        totalCost: e.target.value,
+                      }))
+                    }
+                    placeholder="0.00"
+                    className="input pl-7"
+                  />
+                </div>
+                {formErrors.totalCost && (
+                  <p className="text-xs text-red-500 mt-1">
+                    {formErrors.totalCost}
+                  </p>
+                )}
+              </div>
+
+              {/* Target Receiving Facility */}
+              <div className="sm:col-span-2">
                 <label
                   htmlFor="order-facility"
                   className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
@@ -724,6 +766,21 @@ function OrderRequest() {
                   {submittedOrder.quantity.toLocaleString()} units
                 </span>
               </div>
+              {submittedOrder.totalCost !== undefined && (
+                <div className="flex justify-between border-b border-gray-200/60 pb-1.5">
+                  <span className="text-gray-500">Total Cost:</span>
+                  <span className="font-mono font-bold text-emerald-700">
+                    ₱
+                    {Number(submittedOrder.totalCost).toLocaleString(
+                      undefined,
+                      {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      },
+                    )}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between border-b border-gray-200/60 pb-1.5">
                 <span className="text-gray-500">Vendor:</span>
                 <span className="font-semibold text-gray-800">

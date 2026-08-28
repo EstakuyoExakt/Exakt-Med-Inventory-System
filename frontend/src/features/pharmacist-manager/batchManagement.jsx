@@ -22,8 +22,6 @@ import Card from "../../components/common/card";
 import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
-import RoleGuard from "../../components/guard/roleGuard";
-import { ROLES } from "../../config/roles";
 import { getExpiryStatus } from "../../utils/helpers";
 import {
   ADJUSTMENT_REASONS,
@@ -454,17 +452,15 @@ function BatchManagement() {
           </p>
         </div>
 
-        {/* Receive New Stock (Procurement Officer Only) */}
-        <RoleGuard allowedRoles={[ROLES.PROCUREMENT]}>
-          <button
-            type="button"
-            onClick={handleOpenReceiveModal}
-            className="btn-primary self-start sm:self-auto shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Receive Stock / Register Batch</span>
-          </button>
-        </RoleGuard>
+        {/* Receive New Stock Action */}
+        <button
+          type="button"
+          onClick={handleOpenReceiveModal}
+          className="btn-primary self-start sm:self-auto shadow-sm"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Receive Stock / Register Batch</span>
+        </button>
       </div>
 
       {/* 4 Metric KPI Cards */}
@@ -741,53 +737,50 @@ function BatchManagement() {
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* 2. Pharmacist Manager Protected Modules */}
-                          <RoleGuard allowedRoles={[ROLES.PHARMACIST]}>
-                            {/* Stock Adjustment */}
-                            <button
-                              type="button"
-                              onClick={() => handleOpenAdjustModal(batch)}
-                              className="btn-secondary p-1.5 text-gray-600 hover:text-amber-600 hover:border-amber-300"
-                              title="Stock Adjustment (Count / Write-off)"
-                              aria-label="Stock Adjustment"
-                            >
-                              <Sliders className="w-3.5 h-3.5" />
-                            </button>
+                          {/* Stock Adjustment */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAdjustModal(batch)}
+                            className="btn-secondary p-1.5 text-gray-600 hover:text-amber-600 hover:border-amber-300"
+                            title="Stock Adjustment (Count / Write-off)"
+                            aria-label="Stock Adjustment"
+                          >
+                            <Sliders className="w-3.5 h-3.5" />
+                          </button>
 
-                            {/* Transfer Stock */}
-                            <button
-                              type="button"
-                              onClick={() => handleOpenTransferModal(batch)}
-                              className="btn-secondary p-1.5 text-gray-600 hover:text-purple-600 hover:border-purple-300"
-                              title="Transfer Stock to Another Facility"
-                              aria-label="Transfer Stock"
-                            >
-                              <ArrowRightLeft className="w-3.5 h-3.5" />
-                            </button>
+                          {/* Transfer Stock */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenTransferModal(batch)}
+                            className="btn-secondary p-1.5 text-gray-600 hover:text-purple-600 hover:border-purple-300"
+                            title="Transfer Stock to Another Facility"
+                            aria-label="Transfer Stock"
+                          >
+                            <ArrowRightLeft className="w-3.5 h-3.5" />
+                          </button>
 
-                            {/* Quarantine / Release */}
-                            <button
-                              type="button"
-                              onClick={() => handleOpenQuarantineModal(batch)}
-                              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                                batch.isQuarantined
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                                  : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
-                              }`}
-                              title={
-                                batch.isQuarantined
-                                  ? "Release from Quarantine"
-                                  : "Quarantine this Batch"
-                              }
-                              aria-label="Quarantine Control"
-                            >
-                              {batch.isQuarantined ? (
-                                <ShieldCheck className="w-3.5 h-3.5" />
-                              ) : (
-                                <ShieldAlert className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          </RoleGuard>
+                          {/* Quarantine / Release */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenQuarantineModal(batch)}
+                            className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                              batch.isQuarantined
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                                : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
+                            }`}
+                            title={
+                              batch.isQuarantined
+                                ? "Release from Quarantine"
+                                : "Quarantine this Batch"
+                            }
+                            aria-label="Quarantine Control"
+                          >
+                            {batch.isQuarantined ? (
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                            ) : (
+                              <ShieldAlert className="w-3.5 h-3.5" />
+                            )}
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1597,25 +1590,23 @@ function BatchManagement() {
                 Close
               </button>
 
-              {/* Pharmacist Action Shortcuts */}
-              <RoleGuard allowedRoles={[ROLES.PHARMACIST]}>
-                <button
-                  type="button"
-                  onClick={() => handleOpenAdjustModal(selectedBatch)}
-                  className="btn-secondary text-xs text-amber-700 hover:text-amber-800"
-                >
-                  <Sliders className="w-3.5 h-3.5" />
-                  <span>Adjust Stock</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleOpenTransferModal(selectedBatch)}
-                  className="btn-primary text-xs"
-                >
-                  <ArrowRightLeft className="w-3.5 h-3.5" />
-                  <span>Transfer Stock</span>
-                </button>
-              </RoleGuard>
+              {/* Action Shortcuts */}
+              <button
+                type="button"
+                onClick={() => handleOpenAdjustModal(selectedBatch)}
+                className="btn-secondary text-xs text-amber-700 hover:text-amber-800"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Adjust Stock</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOpenTransferModal(selectedBatch)}
+                className="btn-primary text-xs"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                <span>Transfer Stock</span>
+              </button>
             </div>
           </div>
         )}

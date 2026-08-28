@@ -16,6 +16,7 @@ import {
   Building2,
   Send,
   Pill,
+  ClipboardCheck,
 } from "lucide-react";
 
 // Common Components
@@ -57,11 +58,11 @@ function ProcurementDashboard() {
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">
           <Link
-            to="/procurement/batch-management"
+            to="/procurement/requested-orders"
             className="btn-secondary text-xs shadow-sm flex items-center gap-1.5"
           >
-            <Package className="w-3.5 h-3.5 text-gray-600" />
-            <span>Batch Management</span>
+            <ClipboardCheck className="w-3.5 h-3.5 text-gray-600" />
+            <span>Requested Orders</span>
           </Link>
           <Link
             to="/procurement/order-request"
@@ -247,7 +248,7 @@ function ProcurementDashboard() {
                   Recent Requisitions
                 </h3>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Latest purchase order dispatches and transit statuses
+                  Latest purchase order dispatches and approval statuses
                 </p>
               </div>
               <span className="text-xs font-mono font-bold bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-100">
@@ -293,12 +294,12 @@ function ProcurementDashboard() {
           </div>
 
           <div className="p-3.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between text-xs">
-            <span className="text-gray-500">Need to record incoming batches?</span>
+            <span className="text-gray-500">Track all submitted purchase orders?</span>
             <Link
-              to="/procurement/batch-management"
+              to="/procurement/requested-orders"
               className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1"
             >
-              Receive Batches <ArrowRight className="w-3 h-3" />
+              View Requested Orders <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
         </Card>
