@@ -19,6 +19,7 @@ import OrderRequest from "./features/procurement-officer/orderRequest";
 
 // Shared Pages
 import BatchManagement from "./features/shared/batchManagement";
+import RequestedOrders from "./features/shared/requestedOrders";
 import AuditLogs from "./features/shared/audtiLogs";
 
 // Accountant Pages
@@ -56,6 +57,10 @@ function App() {
             <Route path="/admin/users" element={<UserManagement />} />
             <Route path="/admin/suppliers" element={<SupplierManagement />} />
             <Route path="/admin/facilities" element={<FacilityManagement />} />
+            <Route
+              path="/admin/requested-orders"
+              element={<RequestedOrders />}
+            />
             <Route path="/admin/audit-logs" element={<AuditLogs />} />
           </Route>
 
@@ -91,6 +96,10 @@ function App() {
             <Route
               path="/procurement/order-request"
               element={<OrderRequest />}
+            />
+            <Route
+              path="/procurement/requested-orders"
+              element={<RequestedOrders />}
             />
             <Route path="/procurement/audit-logs" element={<AuditLogs />} />
           </Route>

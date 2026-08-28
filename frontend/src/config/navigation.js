@@ -7,6 +7,7 @@ import {
   Package,
   Receipt,
   ClipboardList,
+  ClipboardCheck,
   History,
 } from "lucide-react";
 import { ROLES } from "./roles";
@@ -29,6 +30,12 @@ export const NAVIGATION_ITEMS = [
     title: "Facility Management",
     path: "/admin/facilities",
     icon: Building2,
+    roles: [ROLES.ADMIN],
+  },
+  {
+    title: "Requested Orders",
+    path: "/admin/requested-orders",
+    icon: ClipboardCheck,
     roles: [ROLES.ADMIN],
   },
   {
@@ -81,6 +88,12 @@ export const NAVIGATION_ITEMS = [
     title: "Order Request",
     path: "/procurement/order-request",
     icon: ClipboardList,
+    roles: [ROLES.PROCUREMENT],
+  },
+  {
+    title: "Requested Orders",
+    path: "/procurement/requested-orders",
+    icon: ClipboardCheck,
     roles: [ROLES.PROCUREMENT],
   },
   {
