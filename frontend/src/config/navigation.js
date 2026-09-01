@@ -8,6 +8,7 @@ import {
   ClipboardList,
   ClipboardCheck,
   History,
+  DollarSign,
 } from "lucide-react";
 import { ROLES } from "./roles";
 
@@ -35,6 +36,12 @@ export const NAVIGATION_ITEMS = [
     title: "Requested Orders",
     path: "/admin/requested-orders",
     icon: ClipboardCheck,
+    roles: [ROLES.ADMIN],
+  },
+  {
+    title: "Accounting",
+    path: "/admin/accounting",
+    icon: DollarSign,
     roles: [ROLES.ADMIN],
   },
   {
