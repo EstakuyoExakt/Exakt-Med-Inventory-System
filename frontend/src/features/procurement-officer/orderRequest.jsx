@@ -10,11 +10,15 @@ import {
   Calendar,
   CheckCircle2,
   ArrowRight,
-  TrendingDown,
   Clock,
   Send,
   Eye,
-  FileText,
+  Trash2,
+  Plus,
+  Layers,
+  CheckSquare,
+  Square,
+  ListPlus,
 } from "lucide-react";
 
 // Common Components
@@ -38,21 +42,27 @@ function OrderRequest() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
+  // Multi-Selection State for Table Checkboxes
+  const [selectedSkuIds, setSelectedSkuIds] = useState([]);
+
   // Modal States
-  const [selectedSku, setSelectedSku] = useState(null);
+  const [selectedSkuForView, setSelectedSkuForView] = useState(null);
   const [modalMode, setModalMode] = useState(null); // 'order' | 'view' | 'success' | null
   const [submittedOrder, setSubmittedOrder] = useState(null);
 
-  // Form State for Order Request
+  // Multi-Item Order Form State
   const [orderForm, setOrderForm] = useState({
     supplierId: suppliers[0]?.id || 1,
-    quantity: 100,
-    totalCost: "",
     targetFacility: facilities[0]?.name || "Exakt Central General Hospital",
     priority: "Normal", // 'Urgent' | 'Normal'
+    totalCost: "",
     notes: "",
+    items: [], // [{ sku, brandName, genericName, dosage, packagingUnit, currentStock, minimumLevel, maximumLevel, reorderLevel, quantity }]
   });
   const [formErrors, setFormErrors] = useState({});
+
+  // Additional SKU Selector inside Modal
+  const [skuToAdd, setSkuToAdd] = useState("");
 
   // 1. Total Minimum SKUs (currentStock <= minimumLevel)
   const totalMinimumSkus = useMemo(() => {
@@ -113,37 +123,166 @@ function OrderRequest() {
     setCurrentPage(1);
   };
 
-  // Open Order Modal for SKU
-  const handleOpenOrderModal = (sku) => {
+  // Checkbox Selection Handlers
+  const handleToggleSelectSku = (skuId) => {
+    setSelectedSkuIds((prev) =>
+      prev.includes(skuId)
+        ? prev.filter((id) => id !== skuId)
+        : [...prev, skuId],
+    );
+  };
+
+  const handleSelectAllVisible = () => {
+    const visibleIds = paginatedReorderSkus.map((s) => s.id);
+    const allSelected = visibleIds.every((id) => selectedSkuIds.includes(id));
+    if (allSelected) {
+      setSelectedSkuIds((prev) =>
+        prev.filter((id) => !visibleIds.includes(id)),
+      );
+    } else {
+      setSelectedSkuIds((prev) => [
+        ...prev,
+        ...visibleIds.filter((id) => !prev.includes(id)),
+      ]);
+    }
+  };
+
+  const handleSelectAllCritical = () => {
+    const criticalIds = skuList
+      .filter((s) => s.currentStock <= s.minimumLevel)
+      .map((s) => s.id);
+    setSelectedSkuIds(criticalIds);
+  };
+
+  // Helper to build line item with suggested quantity
+  const buildLineItem = (sku) => {
     const suggestedQty = Math.max(
       sku.maximumLevel - sku.currentStock,
       sku.reorderLevel * 2,
     );
+    return {
+      id: sku.id,
+      sku: sku.sku,
+      brandName: sku.brandName,
+      genericName: sku.genericName,
+      dosage: sku.dosage,
+      dosageForm: sku.dosageForm,
+      packagingUnit: sku.packagingUnit,
+      currentStock: sku.currentStock,
+      minimumLevel: sku.minimumLevel,
+      maximumLevel: sku.maximumLevel,
+      reorderLevel: sku.reorderLevel,
+      quantity: suggestedQty > 0 ? suggestedQty : 100,
+    };
+  };
 
-    setSelectedSku(sku);
+  // Open Multi-Item Requisition Modal with selected items
+  const handleOpenMultiOrderModal = (initialSkusToOrder = []) => {
+    let itemsToInclude = [];
+
+    if (initialSkusToOrder.length > 0) {
+      itemsToInclude = initialSkusToOrder.map(buildLineItem);
+    } else if (selectedSkuIds.length > 0) {
+      const selectedObjList = skuList.filter((s) =>
+        selectedSkuIds.includes(s.id),
+      );
+      itemsToInclude = selectedObjList.map(buildLineItem);
+    } else if (reorderSkus.length > 0) {
+      // Default with the first 2 reorder SKUs if none selected
+      itemsToInclude = [buildLineItem(reorderSkus[0])];
+    }
+
+    const hasCritical = itemsToInclude.some(
+      (item) => item.currentStock <= item.minimumLevel,
+    );
+
     setOrderForm({
       supplierId: suppliers[0]?.id || 1,
-      quantity: suggestedQty,
-      totalCost: "",
       targetFacility: facilities[0]?.name || "Exakt Central General Hospital",
-      priority: sku.currentStock <= sku.minimumLevel ? "Urgent" : "Normal",
+      priority: hasCritical ? "Urgent" : "Normal",
+      totalCost: "",
       notes: "",
+      items: itemsToInclude,
     });
     setFormErrors({});
+    setSkuToAdd("");
     setModalMode("order");
+  };
+
+  // Open Order Modal for a single row button
+  const handleOpenSingleOrderModal = (sku) => {
+    handleOpenMultiOrderModal([sku]);
   };
 
   // Open View Details Modal
   const handleOpenViewModal = (sku) => {
-    setSelectedSku(sku);
+    setSelectedSkuForView(sku);
     setModalMode("view");
   };
 
   const handleCloseModal = () => {
     setModalMode(null);
-    setSelectedSku(null);
+    setSelectedSkuForView(null);
     setFormErrors({});
   };
+
+  // Add Item to Order Form within the Modal
+  const handleAddItemToForm = (skuCode) => {
+    if (!skuCode) return;
+    const targetSku = skuList.find((s) => s.sku === skuCode);
+    if (!targetSku) return;
+
+    if (orderForm.items.some((i) => i.sku === targetSku.sku)) {
+      setFormErrors((prev) => ({
+        ...prev,
+        itemAdd: "This medicine is already added to the order request.",
+      }));
+      return;
+    }
+
+    setOrderForm((prev) => ({
+      ...prev,
+      items: [...prev.items, buildLineItem(targetSku)],
+    }));
+    setFormErrors((prev) => ({ ...prev, itemAdd: "", items: "" }));
+    setSkuToAdd("");
+  };
+
+  // Remove Item from Order Form within the Modal
+  const handleRemoveItemFromForm = (skuCode) => {
+    setOrderForm((prev) => ({
+      ...prev,
+      items: prev.items.filter((i) => i.sku !== skuCode),
+    }));
+  };
+
+  // Update item quantity in Order Form
+  const handleUpdateItemQuantity = (skuCode, qty) => {
+    setOrderForm((prev) => ({
+      ...prev,
+      items: prev.items.map((i) =>
+        i.sku === skuCode
+          ? { ...i, quantity: Math.max(1, Number(qty) || 1) }
+          : i,
+      ),
+    }));
+  };
+
+  // Total Units in the current Order Form
+  const totalFormUnits = useMemo(() => {
+    return orderForm.items.reduce(
+      (sum, i) => sum + (Number(i.quantity) || 0),
+      0,
+    );
+  }, [orderForm.items]);
+
+  // Available SKUs that need restocking and haven't been added yet
+  const availableSkusToAdd = useMemo(() => {
+    const addedSkus = new Set(orderForm.items.map((i) => i.sku));
+    return skuList.filter(
+      (s) => s.currentStock <= s.reorderLevel && !addedSkus.has(s.sku),
+    );
+  }, [skuList, orderForm.items]);
 
   // Handle Form Submission
   const handleSubmitOrder = (e) => {
@@ -151,15 +290,20 @@ function OrderRequest() {
     const errors = {};
 
     if (!orderForm.supplierId) {
-      errors.supplierId = "Please select a supplier.";
+      errors.supplierId = "Please select an assigned supplier.";
     }
 
-    if (Number(orderForm.quantity) <= 0) {
-      errors.quantity = "Order quantity must be greater than 0.";
+    if (!orderForm.items || orderForm.items.length === 0) {
+      errors.items = "Please add at least one medicine to this purchase order.";
+    }
+
+    if (orderForm.items.some((i) => !i.quantity || Number(i.quantity) <= 0)) {
+      errors.items =
+        "All ordered medicines must have a quantity greater than 0.";
     }
 
     if (orderForm.totalCost === "" || Number(orderForm.totalCost) < 0) {
-      errors.totalCost = "Please enter the total cost.";
+      errors.totalCost = "Please enter a valid total requisition cost.";
     }
 
     if (Object.keys(errors).length > 0) {
@@ -171,23 +315,24 @@ function OrderRequest() {
       (s) => s.id === Number(orderForm.supplierId),
     );
 
+    const generatedPoNumber = `PO-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+
     const newRequest = {
-      orderId: `PO-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-      sku: selectedSku.sku,
-      brandName: selectedSku.brandName,
-      genericName: selectedSku.genericName,
-      dosage: selectedSku.dosage,
-      quantity: Number(orderForm.quantity),
-      totalCost: Number(orderForm.totalCost) || 0,
-      packagingUnit: selectedSku.packagingUnit,
+      orderId: generatedPoNumber,
+      orderNumber: generatedPoNumber,
+      supplierId: Number(orderForm.supplierId),
       supplierName: supplierObj ? supplierObj.name : "Supplier",
       targetFacility: orderForm.targetFacility,
       priority: orderForm.priority,
+      totalCost: Number(orderForm.totalCost) || 0,
       notes: orderForm.notes,
+      items: orderForm.items,
+      totalUnits: totalFormUnits,
       createdAt: new Date().toLocaleDateString(),
     };
 
     setSubmittedOrder(newRequest);
+    setSelectedSkuIds([]); // Clear selection
     setModalMode("success");
   };
 
@@ -196,13 +341,29 @@ function OrderRequest() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            Procurement Order Requests
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2.5">
+            <PackagePlus className="w-7 h-7 text-blue-600" />
+            <span>Procurement Order Requests</span>
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Identify SKUs below reorder and safety minimum thresholds to
-            initiate supplier purchase requisitions
+            Batch multiple restock items into a consolidated purchase order
+            requisition for suppliers
           </p>
+        </div>
+
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => handleOpenMultiOrderModal()}
+            className="btn-primary shadow-xs flex items-center gap-2 text-xs py-2 px-3.5"
+          >
+            <ListPlus className="w-4 h-4" />
+            <span>
+              {selectedSkuIds.length > 0
+                ? `Create PO for (${selectedSkuIds.length}) Selected`
+                : "Create Multi-Item PO Request"}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -218,10 +379,21 @@ function OrderRequest() {
               <h3 className="text-3xl font-extrabold text-red-600 mt-1.5">
                 {totalMinimumSkus}
               </h3>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 mt-1 bg-red-100/70 px-2 py-0.5 rounded-full">
-                <AlertCircle className="w-3 h-3" /> Critical emergency shortage
-                (&le; Min level)
-              </span>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 bg-red-100/70 px-2 py-0.5 rounded-full">
+                  <AlertCircle className="w-3 h-3" /> Critical emergency
+                  shortage (&le; Min)
+                </span>
+                {totalMinimumSkus > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleSelectAllCritical}
+                    className="text-[11px] font-bold text-red-700 underline hover:text-red-900 cursor-pointer"
+                  >
+                    Select All Critical
+                  </button>
+                )}
+              </div>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-100 text-red-600 border border-red-200 shadow-xs">
               <AlertTriangle className="w-6 h-6" />
@@ -297,11 +469,54 @@ function OrderRequest() {
           </div>
         </div>
 
+        {/* Multi-Select Floating Action Bar if items checked */}
+        {selectedSkuIds.length > 0 && (
+          <div className="p-3 bg-blue-50/90 border-b border-blue-100 flex items-center justify-between text-xs text-blue-900">
+            <div className="flex items-center gap-2 font-semibold">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white text-[11px] font-bold">
+                {selectedSkuIds.length}
+              </span>
+              <span>Medicines selected for batch requisition</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedSkuIds([])}
+                className="btn-secondary py-1 px-2.5 text-xs text-gray-600 hover:text-gray-900"
+              >
+                Clear Selection
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOpenMultiOrderModal()}
+                className="btn-primary py-1 px-3 text-xs shadow-xs flex items-center gap-1.5"
+              >
+                <PackagePlus className="w-3.5 h-3.5" />
+                <span>Create Combined PO ({selectedSkuIds.length})</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Table View */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-gray-600">
             <thead className="bg-gray-50 text-[11px] uppercase tracking-wider text-gray-500 font-semibold border-b border-gray-200">
               <tr>
+                <th scope="col" className="px-4 py-3.5 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    onChange={handleSelectAllVisible}
+                    checked={
+                      paginatedReorderSkus.length > 0 &&
+                      paginatedReorderSkus.every((s) =>
+                        selectedSkuIds.includes(s.id),
+                      )
+                    }
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    title="Select all visible on page"
+                  />
+                </th>
                 <th scope="col" className="px-6 py-3.5">
                   SKU & Medicine
                 </th>
@@ -323,16 +538,29 @@ function OrderRequest() {
               {paginatedReorderSkus.length > 0 ? (
                 paginatedReorderSkus.map((item) => {
                   const status = getStockStatus(item);
+                  const isSelected = selectedSkuIds.includes(item.id);
 
                   return (
                     <tr
                       key={item.id}
                       className={`hover:bg-blue-50/30 transition-colors ${
-                        item.currentStock <= item.minimumLevel
-                          ? "bg-red-50/20"
-                          : ""
+                        isSelected
+                          ? "bg-blue-50/40"
+                          : item.currentStock <= item.minimumLevel
+                            ? "bg-red-50/15"
+                            : ""
                       }`}
                     >
+                      {/* Checkbox */}
+                      <td className="px-4 py-4 whitespace-nowrap text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelectSku(item.id)}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        />
+                      </td>
+
                       {/* SKU & Drug Info */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-start gap-3">
@@ -423,18 +651,18 @@ function OrderRequest() {
                             type="button"
                             onClick={() => handleOpenViewModal(item)}
                             className="btn-secondary p-1.5 text-gray-600 hover:text-blue-600"
-                            title="View SKU Thresholds"
+                            title="View SKU Diagnostics"
                             aria-label="View SKU Details"
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleOpenOrderModal(item)}
+                            onClick={() => handleOpenSingleOrderModal(item)}
                             className="btn-primary py-1.5 px-3 text-xs shadow-sm flex items-center gap-1.5 font-medium"
                           >
                             <PackagePlus className="w-3.5 h-3.5" />
-                            <span>Create Request</span>
+                            <span>Add to PO</span>
                           </button>
                         </div>
                       </td>
@@ -444,7 +672,7 @@ function OrderRequest() {
               ) : (
                 <tr>
                   <td
-                    colSpan="5"
+                    colSpan="6"
                     className="px-6 py-12 text-center text-gray-400"
                   >
                     <CheckCircle2 className="w-9 h-9 mx-auto mb-2 text-emerald-500" />
@@ -476,250 +704,327 @@ function OrderRequest() {
       </Card>
 
       {/* ======================================================== */}
-      {/* 1. MODAL: CREATE ORDER REQUEST                           */}
+      {/* 1. MODAL: CREATE MULTI-ITEM PURCHASE ORDER REQUEST       */}
       {/* ======================================================== */}
       <Modal
-        isOpen={modalMode === "order" && Boolean(selectedSku)}
+        isOpen={modalMode === "order"}
         onClose={handleCloseModal}
-        title="Create Purchase Order Requisition"
-        size="lg"
+        title="Create Purchase Order Requisition (Multi-Medicine)"
+        size="xl"
       >
-        {selectedSku && (
-          <form onSubmit={handleSubmitOrder} className="space-y-4">
-            {/* SKU Overview Banner */}
-            <div className="p-4 rounded-xl bg-linear-to-r from-blue-50 to-indigo-50/60 border border-blue-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-gray-900 text-sm">
-                    {selectedSku.brandName}
-                  </span>
-                  <span className="font-mono text-xs font-bold text-blue-700 bg-white border border-blue-200 px-2 py-0.5 rounded">
-                    {selectedSku.sku}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-600 mt-0.5">
-                  {selectedSku.genericName} • {selectedSku.dosage} (
-                  {selectedSku.packagingUnit})
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs">
-                <div className="bg-white/80 border border-blue-200 px-2.5 py-1 rounded text-center">
-                  <span className="text-[10px] block uppercase text-gray-500 font-semibold">
-                    Current
-                  </span>
-                  <span className="font-bold text-red-600">
-                    {selectedSku.currentStock}
-                  </span>
-                </div>
-                <div className="bg-white/80 border border-blue-200 px-2.5 py-1 rounded text-center">
-                  <span className="text-[10px] block uppercase text-gray-500 font-semibold">
-                    Max Cap
-                  </span>
-                  <span className="font-bold text-emerald-700">
-                    {selectedSku.maximumLevel}
-                  </span>
-                </div>
-              </div>
+        <form onSubmit={handleSubmitOrder} className="space-y-4">
+          {/* Supplier, Facility & Priority Header Controls */}
+          <div className="p-4 rounded-xl bg-gray-50 border border-gray-200/80 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            {/* Supplier Selection */}
+            <div>
+              <label
+                htmlFor="order-supplier"
+                className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1"
+              >
+                Assigned Supplier <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="order-supplier"
+                value={orderForm.supplierId}
+                onChange={(e) =>
+                  setOrderForm((prev) => ({
+                    ...prev,
+                    supplierId: Number(e.target.value),
+                  }))
+                }
+                className="input py-2 text-xs"
+              >
+                {suppliers
+                  .filter((s) => s.status === "Active")
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.supplierCode})
+                    </option>
+                  ))}
+              </select>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Supplier Selection */}
-              <div className="sm:col-span-2">
-                <label
-                  htmlFor="order-supplier"
-                  className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-                >
-                  Assigned Supplier <span className="text-red-500">*</span>
-                </label>
-                <select
-                  id="order-supplier"
-                  value={orderForm.supplierId}
-                  onChange={(e) =>
-                    setOrderForm((prev) => ({
-                      ...prev,
-                      supplierId: Number(e.target.value),
-                    }))
-                  }
-                  className="input"
-                >
-                  {suppliers
-                    .filter((s) => s.status === "Active")
-                    .map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({s.supplierCode}) — Terms: {s.paymentTerms}
-                      </option>
-                    ))}
-                </select>
-                {formErrors.supplierId && (
-                  <p className="text-xs text-red-500 mt-1">
-                    {formErrors.supplierId}
-                  </p>
-                )}
-              </div>
+            {/* Destination Facility */}
+            <div>
+              <label
+                htmlFor="order-facility"
+                className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1"
+              >
+                Destination Facility <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="order-facility"
+                value={orderForm.targetFacility}
+                onChange={(e) =>
+                  setOrderForm((prev) => ({
+                    ...prev,
+                    targetFacility: e.target.value,
+                  }))
+                }
+                className="input py-2 text-xs"
+              >
+                {facilities.map((f) => (
+                  <option key={f.id} value={f.name}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-              {/* Order Quantity */}
-              <div>
-                <label
-                  htmlFor="order-qty"
-                  className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-                >
-                  Order Quantity (Units) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="order-qty"
-                  type="number"
-                  min="1"
-                  value={orderForm.quantity}
-                  onChange={(e) =>
-                    setOrderForm((prev) => ({
-                      ...prev,
-                      quantity: Number(e.target.value),
-                    }))
-                  }
-                  className="input"
-                />
-                <span className="text-[10px] text-gray-400 mt-1 block">
-                  Suggested restock: +
-                  {Math.max(
-                    selectedSku.maximumLevel - selectedSku.currentStock,
-                    0,
-                  )}{" "}
-                  units
+            {/* Requisition Priority */}
+            <div>
+              <label
+                htmlFor="order-priority"
+                className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1"
+              >
+                Requisition Priority <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="order-priority"
+                value={orderForm.priority}
+                onChange={(e) =>
+                  setOrderForm((prev) => ({
+                    ...prev,
+                    priority: e.target.value,
+                  }))
+                }
+                className="input py-2 text-xs font-semibold"
+              >
+                <option value="Normal">Normal Standard Lead Time</option>
+                <option value="Urgent">Urgent Emergency Restock</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Section: Included Medicines List */}
+          <div className="space-y-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center">
+                <span className="text-xs font-bold uppercase tracking-wider text-gray-800">
+                  Ordered Medicines ({orderForm.items.length})
                 </span>
-                {formErrors.quantity && (
-                  <p className="text-xs text-red-500 mt-1">
-                    {formErrors.quantity}
-                  </p>
-                )}
+                <span className="text-xs text-blue-700 font-mono font-bold bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full text-center">
+                  Total Units {totalFormUnits.toLocaleString()}
+                </span>
               </div>
 
-              {/* Total Cost */}
-              <div>
-                <label
-                  htmlFor="order-total-cost"
-                  className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-                >
-                  Total Cost (₱) <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">
-                    ₱
-                  </span>
-                  <input
-                    id="order-total-cost"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={orderForm.totalCost}
-                    onChange={(e) =>
-                      setOrderForm((prev) => ({
-                        ...prev,
-                        totalCost: e.target.value,
-                      }))
-                    }
-                    placeholder="0.00"
-                    className="input pl-7"
-                  />
-                </div>
-                {formErrors.totalCost && (
-                  <p className="text-xs text-red-500 mt-1">
-                    {formErrors.totalCost}
-                  </p>
-                )}
-              </div>
-
-              {/* Target Receiving Facility */}
-              <div className="sm:col-span-2">
-                <label
-                  htmlFor="order-facility"
-                  className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-                >
-                  Destination Receiving Facility{" "}
-                  <span className="text-red-500">*</span>
-                </label>
+              {/* Add More Medicine Dropdown */}
+              <div className="flex items-center gap-1.5">
                 <select
-                  id="order-facility"
-                  value={orderForm.targetFacility}
-                  onChange={(e) =>
-                    setOrderForm((prev) => ({
-                      ...prev,
-                      targetFacility: e.target.value,
-                    }))
-                  }
-                  className="input"
+                  value={skuToAdd}
+                  onChange={(e) => setSkuToAdd(e.target.value)}
+                  className="input py-1 px-2 text-xs w-56"
                 >
-                  {facilities.map((f) => (
-                    <option key={f.id} value={f.name}>
-                      {f.name} ({f.type})
+                  <option value="">+ Add another medicine...</option>
+                  {availableSkusToAdd.map((s) => (
+                    <option key={s.id} value={s.sku}>
+                      {s.brandName} ({s.sku}) — Stock: {s.currentStock}
                     </option>
                   ))}
                 </select>
+                <button
+                  type="button"
+                  onClick={() => handleAddItemToForm(skuToAdd)}
+                  disabled={!skuToAdd}
+                  className="btn-secondary py-1 px-2.5 text-xs flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add</span>
+                </button>
               </div>
+            </div>
 
-              {/* Order Priority */}
-              <div className="sm:col-span-2">
-                <label
-                  htmlFor="order-priority"
-                  className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-                >
-                  Requisition Priority <span className="text-red-500">*</span>
-                </label>
-                <select
-                  id="order-priority"
-                  value={orderForm.priority}
-                  onChange={(e) =>
-                    setOrderForm((prev) => ({
-                      ...prev,
-                      priority: e.target.value,
-                    }))
-                  }
-                  className="input"
-                >
-                  <option value="Normal">Normal Standard Lead Time</option>
-                  <option value="Urgent">Urgent Emergency Restock</option>
-                </select>
-              </div>
+            {formErrors.itemAdd && (
+              <p className="text-xs text-amber-600">{formErrors.itemAdd}</p>
+            )}
+            {formErrors.items && (
+              <p className="text-xs text-red-500">{formErrors.items}</p>
+            )}
 
-              {/* Notes */}
-              <div className="sm:col-span-2">
-                <label
-                  htmlFor="order-notes"
-                  className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-                >
-                  Procurement Notes / Justification (Optional)
-                </label>
+            {/* Medicines Items Table */}
+            <div className="border border-gray-200 rounded-xl overflow-hidden max-h-60 overflow-y-auto">
+              <table className="w-full text-left text-xs text-gray-600">
+                <thead className="bg-gray-100 text-[10px] uppercase font-bold text-gray-600 sticky top-0 border-b border-gray-200">
+                  <tr>
+                    <th className="px-3.5 py-2.5">Medication & SKU</th>
+                    <th className="px-3.5 py-2.5">Current / Max</th>
+                    <th className="px-3.5 py-2.5 w-36">Order Quantity</th>
+                    <th className="px-3.5 py-2.5 w-10 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {orderForm.items.length > 0 ? (
+                    orderForm.items.map((item, idx) => (
+                      <tr key={item.sku} className="hover:bg-gray-50/80">
+                        <td className="px-3.5 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-gray-900">
+                              {item.brandName}
+                            </span>
+                            <span className="font-mono text-[10px] text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded font-semibold">
+                              {item.sku}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-gray-500">
+                            {item.genericName} • {item.dosage} (
+                            {item.packagingUnit})
+                          </div>
+                        </td>
+
+                        <td className="px-3.5 py-2.5 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5 text-[11px]">
+                            <span
+                              className={`font-bold ${
+                                item.currentStock <= item.minimumLevel
+                                  ? "text-red-600"
+                                  : "text-amber-600"
+                              }`}
+                            >
+                              {item.currentStock}
+                            </span>
+                            <span className="text-gray-400">/</span>
+                            <span className="text-gray-600">
+                              Max: {item.maximumLevel}
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="px-3.5 py-2.5">
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) =>
+                                handleUpdateItemQuantity(
+                                  item.sku,
+                                  e.target.value,
+                                )
+                              }
+                              className="input py-1 px-2 text-xs w-24 font-bold text-gray-900"
+                            />
+                            <span className="text-[10px] text-gray-500">
+                              units
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="px-3.5 py-2.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItemFromForm(item.sku)}
+                            className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors cursor-pointer"
+                            title="Remove line item from this PO"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan="4"
+                        className="px-4 py-8 text-center text-gray-400"
+                      >
+                        <Layers className="w-6 h-6 mx-auto mb-1 text-gray-300" />
+                        <p className="font-semibold text-gray-600">
+                          No medicines selected
+                        </p>
+                        <p className="text-[11px]">
+                          Choose from the dropdown above to add medicines to
+                          this PO.
+                        </p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Bottom Financial & Notes Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            {/* Total Cost Field */}
+            <div>
+              <label
+                htmlFor="order-total-cost"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Total Quoted PO Cost (₱) <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">
+                  ₱
+                </span>
                 <input
-                  id="order-notes"
-                  type="text"
-                  value={orderForm.notes}
+                  id="order-total-cost"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={orderForm.totalCost}
                   onChange={(e) =>
                     setOrderForm((prev) => ({
                       ...prev,
-                      notes: e.target.value,
+                      totalCost: e.target.value,
                     }))
                   }
-                  placeholder="e.g. Critical hospital safety buffer depleted"
-                  className="input"
+                  placeholder="0.00"
+                  className="input pl-7 font-mono font-bold"
                 />
               </div>
+              {formErrors.totalCost && (
+                <p className="text-xs text-red-500 mt-1">
+                  {formErrors.totalCost}
+                </p>
+              )}
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={handleCloseModal}
-                className="btn-secondary"
+            {/* Notes */}
+            <div>
+              <label
+                htmlFor="order-notes"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
               >
-                Cancel
-              </button>
-              <button type="submit" className="btn-primary">
-                <Send className="w-4 h-4" />
-                <span>Submit Purchase Request</span>
-              </button>
+                Procurement Justification Notes
+              </label>
+              <input
+                id="order-notes"
+                type="text"
+                value={orderForm.notes}
+                onChange={(e) =>
+                  setOrderForm((prev) => ({
+                    ...prev,
+                    notes: e.target.value,
+                  }))
+                }
+                placeholder="e.g. Critical hospital safety buffer depleted"
+                className="input"
+              />
             </div>
-          </form>
-        )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={handleCloseModal}
+              className="btn-secondary text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={orderForm.items.length === 0}
+              className="btn-primary text-xs flex items-center gap-1.5 shadow-xs"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>
+                Submit Purchase Requisition ({orderForm.items.length} SKUs)
+              </span>
+            </button>
+          </div>
+        </form>
       </Modal>
 
       {/* ======================================================== */}
@@ -728,70 +1033,93 @@ function OrderRequest() {
       <Modal
         isOpen={modalMode === "success" && Boolean(submittedOrder)}
         onClose={handleCloseModal}
-        title="Purchase Request Submitted"
-        size="md"
+        title="Purchase Order Requisition Submitted"
+        size="xl"
       >
         {submittedOrder && (
-          <div className="space-y-4 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 mx-auto">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-
-            <div>
-              <h3 className="text-base font-bold text-gray-900">
-                Order Request Created Successfully
+          <div className="space-y-4">
+            <div className="text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 mx-auto">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 mt-2">
+                Purchase Order Requisition Created
               </h3>
-              <p className="text-xs text-gray-500 mt-1">
-                Purchase Order reference has been generated and dispatched to
-                the supplier.
+              <p className="text-xs text-gray-500 mt-0.5">
+                Consolidated purchase order reference has been generated and
+                dispatched to the supplier.
               </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 text-left text-xs space-y-2">
+            {/* PO Summary Card */}
+            <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 text-xs space-y-2">
               <div className="flex justify-between border-b border-gray-200/60 pb-1.5">
-                <span className="text-gray-500">Order Reference:</span>
-                <span className="font-mono font-bold text-blue-700">
+                <span className="text-gray-500">PO Number:</span>
+                <span className="font-mono font-bold text-blue-700 text-sm">
                   {submittedOrder.orderId}
                 </span>
               </div>
               <div className="flex justify-between border-b border-gray-200/60 pb-1.5">
-                <span className="text-gray-500">Target SKU:</span>
-                <span className="font-semibold text-gray-900">
-                  {submittedOrder.sku} ({submittedOrder.brandName})
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200/60 pb-1.5">
-                <span className="text-gray-500">Requested Quantity:</span>
-                <span className="font-bold text-gray-900">
-                  {submittedOrder.quantity.toLocaleString()} units
-                </span>
-              </div>
-              {submittedOrder.totalCost !== undefined && (
-                <div className="flex justify-between border-b border-gray-200/60 pb-1.5">
-                  <span className="text-gray-500">Total Cost:</span>
-                  <span className="font-mono font-bold text-emerald-700">
-                    ₱
-                    {Number(submittedOrder.totalCost).toLocaleString(
-                      undefined,
-                      {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      },
-                    )}
-                  </span>
-                </div>
-              )}
-              <div className="flex justify-between border-b border-gray-200/60 pb-1.5">
                 <span className="text-gray-500">Vendor:</span>
-                <span className="font-semibold text-gray-800">
+                <span className="font-semibold text-gray-900">
                   {submittedOrder.supplierName}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Destination:</span>
+              <div className="flex justify-between border-b border-gray-200/60 pb-1.5">
+                <span className="text-gray-500">Destination Facility:</span>
                 <span className="font-semibold text-gray-800">
                   {submittedOrder.targetFacility}
                 </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200/60 pb-1.5">
+                <span className="text-gray-500">Total Quoted Cost:</span>
+                <span className="font-mono font-bold text-emerald-700 text-sm">
+                  ₱
+                  {Number(submittedOrder.totalCost).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Total Volume:</span>
+                <span className="font-bold text-gray-900">
+                  {submittedOrder.totalUnits.toLocaleString()} units (
+                  {submittedOrder.items.length} line items)
+                </span>
+              </div>
+            </div>
+
+            {/* Included Line Items Table */}
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-700">
+                Included Medication Line Items
+              </p>
+              <div className="border border-gray-200 rounded-lg overflow-hidden max-h-40 overflow-y-auto">
+                <table className="w-full text-left text-xs text-gray-600">
+                  <thead className="bg-gray-100 text-[10px] uppercase font-bold text-gray-600 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-1.5">Medicine</th>
+                      <th className="px-3 py-1.5">SKU</th>
+                      <th className="px-3 py-1.5 text-right">Quantity</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {submittedOrder.items.map((item) => (
+                      <tr key={item.sku}>
+                        <td className="px-3 py-1.5 font-semibold text-gray-900">
+                          {item.brandName} ({item.dosage})
+                        </td>
+                        <td className="px-3 py-1.5 font-mono text-[11px] text-blue-700">
+                          {item.sku}
+                        </td>
+                        <td className="px-3 py-1.5 text-right font-bold text-gray-900">
+                          {item.quantity.toLocaleString()} units
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
 
@@ -799,7 +1127,7 @@ function OrderRequest() {
               <button
                 type="button"
                 onClick={handleCloseModal}
-                className="btn-primary w-full justify-center"
+                className="btn-primary w-full justify-center text-xs py-2"
               >
                 Done
               </button>
@@ -812,12 +1140,12 @@ function OrderRequest() {
       {/* 3. MODAL: VIEW SKU THRESHOLD DETAILS                     */}
       {/* ======================================================== */}
       <Modal
-        isOpen={modalMode === "view" && Boolean(selectedSku)}
+        isOpen={modalMode === "view" && Boolean(selectedSkuForView)}
         onClose={handleCloseModal}
         title="SKU Inventory & Threshold Diagnostics"
         size="md"
       >
-        {selectedSku && (
+        {selectedSkuForView && (
           <div className="space-y-4">
             <div className="flex items-start gap-4 p-4 rounded-xl bg-gray-50 border border-gray-100">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 font-bold text-white shadow-sm shrink-0">
@@ -826,19 +1154,19 @@ function OrderRequest() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="text-base font-bold text-gray-900">
-                    {selectedSku.brandName}
+                    {selectedSkuForView.brandName}
                   </h3>
                   <span className="font-mono text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-bold">
-                    {selectedSku.sku}
+                    {selectedSkuForView.sku}
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  {selectedSku.genericName} • {selectedSku.dosage}
+                  {selectedSkuForView.genericName} • {selectedSkuForView.dosage}
                 </p>
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap text-xs text-gray-500">
-                  <span>{selectedSku.dosageForm}</span>
+                  <span>{selectedSkuForView.dosageForm}</span>
                   <span>•</span>
-                  <span>{selectedSku.packagingUnit}</span>
+                  <span>{selectedSkuForView.packagingUnit}</span>
                 </div>
               </div>
             </div>
@@ -850,7 +1178,7 @@ function OrderRequest() {
                   Minimum Level
                 </span>
                 <span className="font-bold text-red-900 text-sm">
-                  {selectedSku.minimumLevel}
+                  {selectedSkuForView.minimumLevel}
                 </span>
               </div>
               <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-100">
@@ -858,7 +1186,7 @@ function OrderRequest() {
                   Reorder Trigger
                 </span>
                 <span className="font-bold text-amber-900 text-sm">
-                  {selectedSku.reorderLevel}
+                  {selectedSkuForView.reorderLevel}
                 </span>
               </div>
               <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-100">
@@ -866,7 +1194,7 @@ function OrderRequest() {
                   Max Capacity
                 </span>
                 <span className="font-bold text-emerald-900 text-sm">
-                  {selectedSku.maximumLevel}
+                  {selectedSkuForView.maximumLevel}
                 </span>
               </div>
             </div>
@@ -881,7 +1209,10 @@ function OrderRequest() {
               </button>
               <button
                 type="button"
-                onClick={() => handleOpenOrderModal(selectedSku)}
+                onClick={() => {
+                  handleCloseModal();
+                  handleOpenSingleOrderModal(selectedSkuForView);
+                }}
                 className="btn-primary text-xs"
               >
                 <PackagePlus className="w-3.5 h-3.5" />

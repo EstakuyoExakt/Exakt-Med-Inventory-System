@@ -14,7 +14,9 @@ function Modal({ isOpen, onClose, title, children, size = "md" }) {
   // Prevent body scroll when modal is open
   useEffect(() => {
     document.body.style.overflow = isOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -40,7 +42,7 @@ function Modal({ isOpen, onClose, title, children, size = "md" }) {
 
       {/* Modal Panel */}
       <div
-        className={`relative bg-white rounded-2xl shadow-2xl w-full ${sizeClasses[size]} mx-auto animate-slide-up`}
+        className={`relative bg-white rounded-2xl shadow-2xl w-full ${sizeClasses[size]} mx-auto animate-slide-up overflow-y-auto max-h-full scrollbar-thin`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
