@@ -5,7 +5,6 @@ import {
   Truck,
   Pill,
   Package,
-  Receipt,
   ClipboardList,
   ClipboardCheck,
   History,
@@ -95,25 +94,5 @@ export const NAVIGATION_ITEMS = [
     path: "/procurement/audit-logs",
     icon: History,
     roles: [ROLES.PROCUREMENT],
-  },
-
-  // --- Accountant Routes ---
-  {
-    title: "Financial Dashboard",
-    path: "/accountant/dashboard",
-    icon: LayoutDashboard,
-    roles: [ROLES.ACCOUNTANT],
-  },
-  {
-    title: "Invoices & Billing",
-    path: "/accountant/invoices",
-    icon: Receipt,
-    roles: [ROLES.ACCOUNTANT],
-  },
-  {
-    title: "Audit Logs",
-    path: "/accountant/audit-logs",
-    icon: History,
-    roles: [ROLES.ACCOUNTANT],
   },
 ];

@@ -2,7 +2,6 @@ export const ROLES = {
   ADMIN: "Admin",
   PHARMACIST: "Pharmacist Manager",
   PROCUREMENT: "Procurement Officer",
-  ACCOUNTANT: "Accountant",
 };
 
 export const ROLE_DETAILS = {
@@ -24,11 +23,5 @@ export const ROLE_DETAILS = {
     description: "Oversees purchase orders, supplier batches, and receiving",
     badgeColor: "bg-blue-100 text-blue-700 border-blue-200",
     defaultRoute: "/procurement/dashboard",
-  },
-  [ROLES.ACCOUNTANT]: {
-    label: "Accountant",
-    description: "Handles billing, invoices, payments, and financial summaries",
-    badgeColor: "bg-amber-100 text-amber-700 border-amber-200",
-    defaultRoute: "/accountant/dashboard",
   },
 };

@@ -22,10 +22,6 @@ import OrderRequest from "./features/procurement-officer/orderRequest";
 import RequestedOrders from "./features/shared/requestedOrders";
 import AuditLogs from "./features/shared/audtiLogs";
 
-// Accountant Pages
-import AccountantDashboard from "./features/accountant/accountantDashboard";
-import Invoice from "./features/accountant/invoice";
-
 // Components, Guard & Config
 import Sidebar from "./components/common/sidebar";
 import ProtectedRoute from "./components/guard/protectedRoutes";
@@ -98,16 +94,6 @@ function App() {
               element={<RequestedOrders />}
             />
             <Route path="/procurement/audit-logs" element={<AuditLogs />} />
-          </Route>
-
-          {/* Accountant Protected Routes */}
-          <Route element={<ProtectedRoute allowedRoles={[ROLES.ACCOUNTANT]} />}>
-            <Route
-              path="/accountant/dashboard"
-              element={<AccountantDashboard />}
-            />
-            <Route path="/accountant/invoices" element={<Invoice />} />
-            <Route path="/accountant/audit-logs" element={<AuditLogs />} />
           </Route>
 
           {/* Fallback Catch-All Route */}

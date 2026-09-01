@@ -52,6 +52,7 @@ function UserManagement() {
   const [formErrors, setFormErrors] = useState({});
 
   // Calculate totals for each role
+  const totalUsers = userList.length;
   const totalAdmins = useMemo(
     () => userList.filter((u) => u.role === ROLES.ADMIN).length,
     [userList],
@@ -62,10 +63,6 @@ function UserManagement() {
   );
   const totalProcurements = useMemo(
     () => userList.filter((u) => u.role === ROLES.PROCUREMENT).length,
-    [userList],
-  );
-  const totalAccountants = useMemo(
-    () => userList.filter((u) => u.role === ROLES.ACCOUNTANT).length,
     [userList],
   );
 
@@ -283,6 +280,26 @@ function UserManagement() {
 
       {/* 4 Total Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Registered Users */}
+        <Card className="p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Total Users
+              </p>
+              <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                {totalUsers}
+              </h3>
+              <span className="inline-block text-[11px] font-medium text-blue-600 mt-1">
+                Active & registered accounts
+              </span>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
+              <Users className="w-5 h-5" />
+            </div>
+          </div>
+        </Card>
+
         {/* Total Admins */}
         <Card className="p-5">
           <div className="flex items-center justify-between">
@@ -333,32 +350,12 @@ function UserManagement() {
               <h3 className="text-2xl font-bold text-gray-900 mt-1">
                 {totalProcurements}
               </h3>
-              <span className="inline-block text-[11px] font-medium text-blue-600 mt-1">
-                Batches & suppliers
-              </span>
-            </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
-              <Package className="w-5 h-5" />
-            </div>
-          </div>
-        </Card>
-
-        {/* Total Accountants */}
-        <Card className="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Accountants
-              </p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                {totalAccountants}
-              </h3>
               <span className="inline-block text-[11px] font-medium text-amber-600 mt-1">
-                Billing & invoices
+                Batches & purchase orders
               </span>
             </div>
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
-              <Receipt className="w-5 h-5" />
+              <Package className="w-5 h-5" />
             </div>
           </div>
         </Card>
@@ -391,7 +388,6 @@ function UserManagement() {
               <option value={ROLES.ADMIN}>Admin</option>
               <option value={ROLES.PHARMACIST}>Pharmacist Manager</option>
               <option value={ROLES.PROCUREMENT}>Procurement Officer</option>
-              <option value={ROLES.ACCOUNTANT}>Accountant</option>
             </select>
 
             {/* Status Filter */}
@@ -704,7 +700,6 @@ function UserManagement() {
                 <option value={ROLES.ADMIN}>Admin</option>
                 <option value={ROLES.PHARMACIST}>Pharmacist Manager</option>
                 <option value={ROLES.PROCUREMENT}>Procurement Officer</option>
-                <option value={ROLES.ACCOUNTANT}>Accountant</option>
               </select>
             </div>
 

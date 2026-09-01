@@ -12,7 +12,6 @@ export function useRole() {
   const isAdmin = role === ROLES.ADMIN;
   const isPharmacist = role === ROLES.PHARMACIST;
   const isProcurement = role === ROLES.PROCUREMENT;
-  const isAccountant = role === ROLES.ACCOUNTANT;
 
   const hasRole = (allowedRoles) => {
     if (!role || !isAuthenticated) return false;
@@ -37,7 +36,6 @@ export function useRole() {
     isAdmin,
     isPharmacist,
     isProcurement,
-    isAccountant,
     hasRole,
   };
 }
