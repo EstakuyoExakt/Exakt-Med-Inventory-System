@@ -14,6 +14,7 @@ import {
   Calendar,
   MapPin,
   User as UserIcon,
+  Layers,
 } from "lucide-react";
 
 // Components
@@ -23,6 +24,9 @@ import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 
 import { facilities as initialFacilities } from "../../data/facility";
+import { projects } from "../../data/projects";
+import { getProjectForFacility } from "../../utils/helpers";
+import useAuth from "../../hooks/useAuth";
 
 const FACILITY_TYPE_OPTIONS = [
   "Main Hospital",
@@ -47,6 +51,64 @@ const DEFAULT_FORM_DATA = {
 };
 
 function FacilityManagement() {
+  const { facility: authFacility, project: authProject } = useAuth();
+
+  // Detect current active project
+  const currentProject = useMemo(() => {
+    // 1. Direct project from useAuth
+    if (authProject?.id || authProject?.name) {
+      const matched = projects.find(
+        (p) =>
+          p.id === authProject.id ||
+          p.name?.toLowerCase() === authProject.name?.toLowerCase(),
+      );
+      if (matched) return matched;
+      return authProject;
+    }
+
+    // 2. Saved in localStorage
+    try {
+      const stored = localStorage.getItem("currentProject");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.id || parsed?.name) {
+          const matched = projects.find(
+            (p) =>
+              p.id === parsed.id ||
+              p.name?.toLowerCase() === parsed.name?.toLowerCase(),
+          );
+          if (matched) return matched;
+          return parsed;
+        }
+      }
+    } catch {
+      // fallback
+    }
+
+    // 3. Fallback from current facility's mother project
+    const activeFac =
+      authFacility ||
+      (() => {
+        try {
+          const facString = localStorage.getItem("currentFacility");
+          return facString ? JSON.parse(facString) : null;
+        } catch {
+          return null;
+        }
+      })();
+
+    if (activeFac) {
+      const parentProject = getProjectForFacility(activeFac, projects);
+      if (parentProject) return parentProject;
+    }
+
+    // 4. Default to first project
+    return projects[0] || { id: 1, name: "Taytay Healthcare Project" };
+  }, [authProject, authFacility]);
+
+  const currentProjectId = currentProject?.id || 1;
+  const currentProjectName = currentProject?.name || "Taytay Healthcare Project";
+
   const [facilityList, setFacilityList] = useState(initialFacilities);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("ALL");
@@ -54,31 +116,46 @@ function FacilityManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
+  // Facilities scoped exclusively to the current active project
+  const currentProjectFacilities = useMemo(() => {
+    return facilityList.filter((f) => {
+      const inProjectFacilityIds =
+        Array.isArray(currentProject?.facilityIds) &&
+        currentProject.facilityIds.includes(f.id);
+
+      const matchesProjectId =
+        Number(f.projectId) === Number(currentProjectId);
+
+      return inProjectFacilityIds || matchesProjectId;
+    });
+  }, [facilityList, currentProject, currentProjectId]);
+
   // Modal State
   const [modalMode, setModalMode] = useState(null); // 'add' | 'view' | 'edit' | 'delete' | null
   const [selectedFacility, setSelectedFacility] = useState(null);
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
   const [formErrors, setFormErrors] = useState({});
 
-  // Calculate 3 Total Metric Counts
-  const totalFacilities = facilityList.length;
+  // Calculate 3 Total Metric Counts for current project
+  const totalFacilities = currentProjectFacilities.length;
   const totalActive = useMemo(
-    () => facilityList.filter((f) => f.status === "Active").length,
-    [facilityList],
+    () => currentProjectFacilities.filter((f) => f.status === "Active").length,
+    [currentProjectFacilities],
   );
   const totalInactive = useMemo(
-    () => facilityList.filter((f) => f.status === "Inactive").length,
-    [facilityList],
+    () =>
+      currentProjectFacilities.filter((f) => f.status === "Inactive").length,
+    [currentProjectFacilities],
   );
 
   // Extract unique facility types for filter dropdown
   const facilityTypes = useMemo(() => {
-    return Array.from(new Set(facilityList.map((f) => f.type)));
-  }, [facilityList]);
+    return Array.from(new Set(currentProjectFacilities.map((f) => f.type)));
+  }, [currentProjectFacilities]);
 
-  // Filtered facilities based on search, type, and status
+  // Filtered facilities based on search, type, and status for the current project
   const filteredFacilities = useMemo(() => {
-    return facilityList.filter((facility) => {
+    return currentProjectFacilities.filter((facility) => {
       const matchesSearch =
         facility.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         facility.facilityCode
@@ -100,7 +177,7 @@ function FacilityManagement() {
 
       return matchesSearch && matchesType && matchesStatus;
     });
-  }, [facilityList, searchQuery, selectedType, selectedStatus]);
+  }, [currentProjectFacilities, searchQuery, selectedType, selectedStatus]);
 
   // Pagination calculation
   const totalPages = Math.ceil(filteredFacilities.length / itemsPerPage) || 1;
@@ -258,6 +335,7 @@ function FacilityManagement() {
         phone: formData.phone.trim() || "+63 2 0000 0000",
         address: formData.address.trim() || "Metro Manila, Philippines",
         status: formData.status,
+        projectId: currentProjectId,
         createdAt: new Date().toISOString().split("T")[0],
       };
       setFacilityList((prev) => [newFacility, ...prev]);
@@ -275,6 +353,7 @@ function FacilityManagement() {
                 phone: formData.phone.trim(),
                 address: formData.address.trim(),
                 status: formData.status,
+                projectId: f.projectId || currentProjectId,
               }
             : f,
         ),
@@ -304,11 +383,19 @@ function FacilityManagement() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            Facility Management
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+              Facility Management
+            </h1>
+            {/* Project Scope Indicator */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-xs font-semibold">
+              <Layers className="w-3.5 h-3.5" />
+              <span>Project: {currentProjectName}</span>
+            </div>
+          </div>
           <p className="text-sm text-gray-500 mt-1">
-            Manage hospital branches, clinics, and pharmaceutical storage hubs
+            Manage hospital branches, clinics, and pharmaceutical storage hubs for{" "}
+            <span className="font-semibold text-gray-700">{currentProjectName}</span>
           </p>
         </div>
         <button
@@ -560,7 +647,7 @@ function FacilityManagement() {
                     <Hospital className="w-8 h-8 mx-auto mb-2 text-gray-300" />
                     <p className="text-sm font-medium">No facilities found</p>
                     <p className="text-xs text-gray-400 mt-1">
-                      Try adjusting your search query or filter criteria
+                      No facilities found for {currentProjectName}. Try adjusting your search query or filter criteria.
                     </p>
                   </td>
                 </tr>
@@ -593,6 +680,12 @@ function FacilityManagement() {
         size="lg"
       >
         <form onSubmit={handleSaveFacility} className="space-y-4">
+          {/* Project Affiliation Banner */}
+          <div className="flex items-center gap-2 p-2.5 bg-purple-50 border border-purple-100 rounded-xl text-xs text-purple-700 font-semibold">
+            <Layers className="w-4 h-4 shrink-0" />
+            <span>Mother Project: {currentProjectName}</span>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Facility Name */}
             <div className="sm:col-span-2">
