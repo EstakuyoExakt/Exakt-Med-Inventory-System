@@ -29,10 +29,29 @@ import Modal from "../../components/common/modal";
 import RoleGuard from "../../components/guard/roleGuard";
 import { ROLES } from "../../config/roles";
 
-// Mock Data
+// Mock Data & Facilities
 import { requestedOrders as initialOrders } from "../../data/orders";
+import { facilities } from "../../data/facility";
+import useAuth from "../../hooks/useAuth";
 
 function RequestedOrders() {
+  const { facility } = useAuth();
+
+  // Automatically detect current active facility
+  const currentFacilityName = useMemo(() => {
+    if (facility?.name) return facility.name;
+    try {
+      const stored = localStorage.getItem("currentFacility");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.name) return parsed.name;
+      }
+    } catch {
+      // fallback
+    }
+    return facilities[0]?.name || "Exakt Central General Hospital";
+  }, [facility]);
+
   const [orders, setOrders] = useState(initialOrders);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -40,26 +59,37 @@ function RequestedOrders() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
+  // Filter orders that reference the current active facility
+  const currentFacilityOrders = useMemo(() => {
+    return orders.filter(
+      (o) => (o.targetFacility || facilities[0]?.name) === currentFacilityName,
+    );
+  }, [orders, currentFacilityName]);
+
   // Modals state
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [modalMode, setModalMode] = useState(null); // 'view' | 'approve' | 'reject' | null
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
 
-  // KPI Metrics Calculation
+  // KPI Metrics Calculation for Current Facility
   const metrics = useMemo(() => {
-    const total = orders.length;
-    const pending = orders.filter(
+    const total = currentFacilityOrders.length;
+    const pending = currentFacilityOrders.filter(
       (o) => o.status === "Pending Approval",
     ).length;
-    const approved = orders.filter((o) => o.status === "Approved").length;
-    const rejected = orders.filter((o) => o.status === "Rejected").length;
+    const approved = currentFacilityOrders.filter(
+      (o) => o.status === "Approved",
+    ).length;
+    const rejected = currentFacilityOrders.filter(
+      (o) => o.status === "Rejected",
+    ).length;
     return { total, pending, approved, rejected };
-  }, [orders]);
+  }, [currentFacilityOrders]);
 
   // Filtering Logic
   const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
+    return currentFacilityOrders.filter((order) => {
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         order.orderNumber.toLowerCase().includes(q) ||
@@ -77,7 +107,7 @@ function RequestedOrders() {
 
       return matchesSearch && matchesStatus && matchesPriority;
     });
-  }, [orders, searchQuery, statusFilter, priorityFilter]);
+  }, [currentFacilityOrders, searchQuery, statusFilter, priorityFilter]);
 
   // Pagination Logic
   const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
@@ -206,12 +236,22 @@ function RequestedOrders() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            Requested Purchase Orders
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+              Requested Purchase Orders
+            </h1>
+            {/* Active Facility Indicator */}
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs font-bold text-blue-700">
+              <Building2 className="w-3.5 h-3.5" />
+              <span>{currentFacilityName}</span>
+            </span>
+          </div>
           <p className="text-sm text-gray-500 mt-1">
             Review, track, and manage all medication purchase order requisitions
-            submitted by the Procurement Officer
+            for{" "}
+            <span className="font-semibold text-gray-700">
+              {currentFacilityName}
+            </span>
           </p>
         </div>
       </div>
@@ -318,7 +358,9 @@ function RequestedOrders() {
               onChange={handleStatusChange}
               className="input py-2 text-xs w-full sm:w-44"
             >
-              <option value="ALL">All Statuses ({orders.length})</option>
+              <option value="ALL">
+                All Statuses ({currentFacilityOrders.length})
+              </option>
               <option value="Pending Approval">
                 Pending Approval ({metrics.pending})
               </option>
@@ -512,6 +554,8 @@ function RequestedOrders() {
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
+              totalItems={filteredOrders.length}
+              itemsPerPage={itemsPerPage}
               onPageChange={setCurrentPage}
             />
           </div>

@@ -10,6 +10,9 @@ import {
   Eye,
   Trash2,
   Sliders,
+  Pencil,
+  ArrowRightLeft,
+  Building2,
 } from "lucide-react";
 
 // Common Components
@@ -25,8 +28,14 @@ import {
   PACKAGING_UNITS,
 } from "../../data/skuManagement";
 import { medicines, MEDICINE_TYPES } from "../../data/medicine";
-import { FORM_CODES, DEFAULT_FORM_DATA } from "../../utils/constants";
+import { facilities } from "../../data/facility";
+import {
+  FORM_CODES,
+  DEFAULT_FORM_DATA,
+  ADJUSTMENT_REASONS,
+} from "../../utils/constants";
 import { getStockStatus } from "../../utils/helpers";
+import useAuth from "../../hooks/useAuth";
 
 const extractPackSize = (packagingUnit) => {
   const match = packagingUnit ? packagingUnit.match(/\b(\d+)\b/) : null;
@@ -50,6 +59,23 @@ const generateSkuCode = (brandOrGeneric, dosage, form, packagingUnit) => {
 };
 
 function SkuManagement() {
+  const { facility } = useAuth();
+
+  // Automatically detect current active facility
+  const currentFacilityName = useMemo(() => {
+    if (facility?.name) return facility.name;
+    try {
+      const stored = localStorage.getItem("currentFacility");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.name) return parsed.name;
+      }
+    } catch {
+      // fallback
+    }
+    return facilities[0]?.name || "Exakt Central General Hospital";
+  }, [facility]);
+
   const [skuList, setSkuList] = useState(initialSkus);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("ALL");
@@ -57,37 +83,58 @@ function SkuManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
-  // Modal State
-  const [modalMode, setModalMode] = useState(null); // 'add' | 'view' | 'edit' | 'delete' | null
+  // Modal State: 'add' | 'view' | 'edit' | 'delete' | 'adjust' | 'transfer' | null
+  const [modalMode, setModalMode] = useState(null);
   const [selectedSku, setSelectedSku] = useState(null);
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
   const [formErrors, setFormErrors] = useState({});
 
-  // Calculate Metrics
-  const totalSkus = skuList.length;
+  // Batch Management Action Form States in SKU Management
+  const [adjustFormData, setAdjustFormData] = useState({
+    type: "ADD", // 'ADD' | 'SUBTRACT' | 'SET'
+    amount: 10,
+    reason: ADJUSTMENT_REASONS[0],
+    notes: "",
+  });
+
+  const [transferFormData, setTransferFormData] = useState({
+    targetLocation: facilities[1]?.name || "Exakt Northside Medical Wing",
+    transferQuantity: 10,
+    notes: "",
+  });
+
+  // Filter SKUs that reference the current active facility
+  const currentFacilitySkus = useMemo(() => {
+    return skuList.filter(
+      (s) => (s.facility || facilities[0]?.name) === currentFacilityName,
+    );
+  }, [skuList, currentFacilityName]);
+
+  // Calculate Metrics for Current Facility
+  const totalSkus = currentFacilitySkus.length;
 
   const optimalCount = useMemo(
-    () => skuList.filter((s) => s.currentStock > s.reorderLevel).length,
-    [skuList],
+    () => currentFacilitySkus.filter((s) => s.currentStock > s.reorderLevel).length,
+    [currentFacilitySkus],
   );
 
   const reorderCount = useMemo(
     () =>
-      skuList.filter(
+      currentFacilitySkus.filter(
         (s) =>
           s.currentStock <= s.reorderLevel && s.currentStock > s.minimumLevel,
       ).length,
-    [skuList],
+    [currentFacilitySkus],
   );
 
   const criticalCount = useMemo(
-    () => skuList.filter((s) => s.currentStock <= s.minimumLevel).length,
-    [skuList],
+    () => currentFacilitySkus.filter((s) => s.currentStock <= s.minimumLevel).length,
+    [currentFacilitySkus],
   );
 
-  // Filtered SKUs
+  // Filtered SKUs for Current Facility
   const filteredSkus = useMemo(() => {
-    return skuList.filter((item) => {
+    return currentFacilitySkus.filter((item) => {
       const matchesSearch =
         item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.brandName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -111,7 +158,7 @@ function SkuManagement() {
 
       return matchesSearch && matchesType && matchesStock;
     });
-  }, [skuList, searchQuery, selectedType, selectedStockFilter]);
+  }, [currentFacilitySkus, searchQuery, selectedType, selectedStockFilter]);
 
   // Pagination calculation
   const totalPages = Math.ceil(filteredSkus.length / itemsPerPage) || 1;
@@ -222,6 +269,35 @@ function SkuManagement() {
     setModalMode("delete");
   };
 
+  // --- BATCH MANAGEMENT ACTION OPENERS ---
+
+  const handleOpenAdjustModal = (skuItem) => {
+    setSelectedSku(skuItem);
+    setAdjustFormData({
+      type: "ADD",
+      amount: 10,
+      reason: ADJUSTMENT_REASONS[0],
+      notes: "",
+    });
+    setFormErrors({});
+    setModalMode("adjust");
+  };
+
+  const handleOpenTransferModal = (skuItem) => {
+    setSelectedSku(skuItem);
+    const availableFacilities = facilities.filter(
+      (f) => f.name !== currentFacilityName,
+    );
+    setTransferFormData({
+      targetLocation:
+        availableFacilities[0]?.name || "Exakt Northside Medical Wing",
+      transferQuantity: Math.min(50, skuItem.currentStock || 10),
+      notes: "",
+    });
+    setFormErrors({});
+    setModalMode("transfer");
+  };
+
   const handleCloseModal = () => {
     setModalMode(null);
     setSelectedSku(null);
@@ -236,7 +312,6 @@ function SkuManagement() {
     setFormData((prev) => {
       const updated = { ...prev, [name]: finalValue };
 
-      // If dosageForm or packagingUnit changes in add mode, update SKU code suggestion
       if (
         (name === "dosageForm" || name === "packagingUnit") &&
         modalMode === "add" &&
@@ -269,13 +344,13 @@ function SkuManagement() {
     if (!formData.sku.trim()) {
       errors.sku = "SKU code is required.";
     } else {
-      const skuExists = skuList.some(
+      const skuExists = currentFacilitySkus.some(
         (s) =>
           s.sku.toLowerCase() === formData.sku.trim().toLowerCase() &&
           (!selectedSku || s.id !== selectedSku.id),
       );
       if (skuExists) {
-        errors.sku = "This SKU code already exists in the system.";
+        errors.sku = `SKU code already exists in ${currentFacilityName}.`;
       }
     }
 
@@ -325,6 +400,7 @@ function SkuManagement() {
         reorderLevel: Number(formData.reorderLevel),
         maximumLevel: Number(formData.maximumLevel),
         currentStock: 0,
+        facility: currentFacilityName, // Link to current facility
         status: formData.status || "Active",
         createdAt: new Date().toISOString().split("T")[0],
       };
@@ -364,17 +440,130 @@ function SkuManagement() {
     handleCloseModal();
   };
 
+  // Submit Stock Adjustment Action
+  const handleSaveStockAdjustment = (e) => {
+    e.preventDefault();
+    if (!selectedSku) return;
+
+    const errors = {};
+    const amt = Number(adjustFormData.amount);
+
+    if (isNaN(amt) || amt < 0) {
+      errors.amount = "Please enter a valid non-negative quantity.";
+    } else if (
+      adjustFormData.type === "SUBTRACT" &&
+      amt > selectedSku.currentStock
+    ) {
+      errors.amount = `Cannot deduct more than available current stock (${selectedSku.currentStock}).`;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    setSkuList((prev) =>
+      prev.map((s) => {
+        if (s.id === selectedSku.id) {
+          let newStock = s.currentStock;
+          if (adjustFormData.type === "ADD") {
+            newStock += amt;
+          } else if (adjustFormData.type === "SUBTRACT") {
+            newStock = Math.max(0, newStock - amt);
+          } else if (adjustFormData.type === "SET") {
+            newStock = amt;
+          }
+          return { ...s, currentStock: newStock };
+        }
+        return s;
+      }),
+    );
+
+    handleCloseModal();
+  };
+
+  // Submit Transfer Stock Action
+  const handleSaveTransferStock = (e) => {
+    e.preventDefault();
+    if (!selectedSku) return;
+
+    const errors = {};
+    const transferQty = Number(transferFormData.transferQuantity);
+
+    if (!transferFormData.targetLocation) {
+      errors.targetLocation = "Please select a destination facility.";
+    } else if (transferFormData.targetLocation === currentFacilityName) {
+      errors.targetLocation = "Destination facility cannot be the same as origin.";
+    }
+
+    if (isNaN(transferQty) || transferQty <= 0) {
+      errors.transferQuantity = "Transfer quantity must be greater than 0.";
+    } else if (transferQty > selectedSku.currentStock) {
+      errors.transferQuantity = `Cannot transfer more than available stock (${selectedSku.currentStock}).`;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    // Deduct stock from origin SKU and add/create in destination facility
+    setSkuList((prev) => {
+      // 1. Deduct from origin SKU
+      const updated = prev.map((s) =>
+        s.id === selectedSku.id
+          ? { ...s, currentStock: Math.max(0, s.currentStock - transferQty) }
+          : s,
+      );
+
+      // 2. Check if target facility already has this SKU code
+      const targetExistingIndex = updated.findIndex(
+        (s) =>
+          s.sku === selectedSku.sku &&
+          s.facility === transferFormData.targetLocation,
+      );
+
+      if (targetExistingIndex !== -1) {
+        updated[targetExistingIndex] = {
+          ...updated[targetExistingIndex],
+          currentStock:
+            updated[targetExistingIndex].currentStock + transferQty,
+        };
+      } else {
+        // Create new SKU entry in target facility with transferred stock
+        updated.push({
+          ...selectedSku,
+          id: Date.now(),
+          facility: transferFormData.targetLocation,
+          currentStock: transferQty,
+          createdAt: new Date().toISOString().split("T")[0],
+        });
+      }
+
+      return updated;
+    });
+
+    handleCloseModal();
+  };
+
   return (
     <div className="w-full max-w-full space-y-6">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            SKU & Threshold Management
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+              SKU & Stock Management
+            </h1>
+            {/* Active Facility Indicator */}
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs font-bold text-blue-700">
+              <Building2 className="w-3.5 h-3.5" />
+              <span>{currentFacilityName}</span>
+            </span>
+          </div>
           <p className="text-sm text-gray-500 mt-1">
-            Create stock-keeping units from the medicine library and calibrate
-            inventory thresholds
+            Displaying stock-keeping units, threshold calibration, and inventory
+            levels for <span className="font-semibold text-gray-700">{currentFacilityName}</span>
           </p>
         </div>
         <button
@@ -387,20 +576,20 @@ function SkuManagement() {
         </button>
       </div>
 
-      {/* 4 Metric KPI Cards */}
+      {/* 4 Metric KPI Cards for Current Facility */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total SKUs */}
         <Card className="p-5">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Total SKUs
+                Facility SKUs
               </p>
               <h3 className="text-2xl font-bold text-gray-900 mt-1">
                 {totalSkus}
               </h3>
-              <span className="inline-block text-[11px] font-medium text-blue-600 mt-1">
-                Registered stock units
+              <span className="inline-block text-[11px] font-medium text-blue-600 mt-1 truncate max-w-44">
+                At {currentFacilityName}
               </span>
             </div>
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
@@ -534,7 +723,7 @@ function SkuManagement() {
                   Thresholds (Min / Reorder / Max)
                 </th>
                 <th scope="col" className="px-6 py-3.5 text-right">
-                  Actions
+                  Management Actions
                 </th>
               </tr>
             </thead>
@@ -663,9 +852,10 @@ function SkuManagement() {
                         </div>
                       </td>
 
-                      {/* Actions */}
+                      {/* Management Actions Group */}
                       <td className="px-6 py-4 whitespace-nowrap text-right text-xs">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* 1. View SKU Details */}
                           <button
                             type="button"
                             onClick={() => handleOpenViewModal(item)}
@@ -675,15 +865,41 @@ function SkuManagement() {
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
+
+                          {/* 2. Stock Adjustment (Batch Action) */}
                           <button
                             type="button"
-                            onClick={() => handleOpenEditModal(item)}
+                            onClick={() => handleOpenAdjustModal(item)}
                             className="btn-secondary p-1.5 text-gray-600 hover:text-amber-600 hover:border-amber-300"
-                            title="Adjust Levels & Edit SKU"
-                            aria-label="Adjust Levels & Edit SKU"
+                            title="Stock Adjustment (Count / Write-off)"
+                            aria-label="Stock Adjustment"
                           >
                             <Sliders className="w-3.5 h-3.5" />
                           </button>
+
+                          {/* 3. Transfer Stock to Facility (Batch Action) */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenTransferModal(item)}
+                            className="btn-secondary p-1.5 text-gray-600 hover:text-purple-600 hover:border-purple-300"
+                            title="Transfer Stock to Another Facility"
+                            aria-label="Transfer Stock"
+                          >
+                            <ArrowRightLeft className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* 4. Edit SKU & Thresholds */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(item)}
+                            className="btn-secondary p-1.5 text-gray-600 hover:text-emerald-600 hover:border-emerald-300"
+                            title="Edit SKU & Thresholds"
+                            aria-label="Edit SKU & Thresholds"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* 5. Delete SKU */}
                           <button
                             type="button"
                             onClick={() => handleOpenDeleteModal(item)}
@@ -705,9 +921,11 @@ function SkuManagement() {
                     className="px-6 py-12 text-center text-gray-400"
                   >
                     <Boxes className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm font-medium">No SKUs found</p>
+                    <p className="text-sm font-medium">
+                      No SKUs found for {currentFacilityName}
+                    </p>
                     <p className="text-xs text-gray-400 mt-1">
-                      Try adjusting your search query or filter thresholds
+                      Try adjusting your search query or creating a new SKU
                     </p>
                   </td>
                 </tr>
@@ -730,18 +948,33 @@ function SkuManagement() {
         )}
       </Card>
 
-      {/* --- ADD NEW SKU / ADJUST MODAL --- */}
+      {/* ======================================================== */}
+      {/* 1. ADD NEW SKU / EDIT THRESHOLDS MODAL                  */}
+      {/* ======================================================== */}
       <Modal
         isOpen={modalMode === "add" || modalMode === "edit"}
         onClose={handleCloseModal}
         title={
           modalMode === "add"
             ? "Create New SKU from Medicine Library"
-            : "Adjust SKU & Inventory Thresholds"
+            : "Edit SKU & Inventory Thresholds"
         }
         size="lg"
       >
         <form onSubmit={handleSaveSku} className="space-y-4">
+          {/* Facility Assignment Badge */}
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-blue-50/60 border border-blue-100 text-xs">
+            <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <span className="font-bold text-gray-900 block truncate">
+                Facility: {currentFacilityName}
+              </span>
+              <span className="text-[11px] text-blue-700 font-medium">
+                This SKU will be maintained in your current operating branch
+              </span>
+            </div>
+          </div>
+
           {/* Medicine Library Picker (Only active when adding) */}
           {modalMode === "add" && (
             <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-100">
@@ -970,7 +1203,332 @@ function SkuManagement() {
         </form>
       </Modal>
 
-      {/* --- VIEW SKU DETAILS MODAL --- */}
+      {/* ======================================================== */}
+      {/* 2. STOCK ADJUSTMENT MODAL                                */}
+      {/* ======================================================== */}
+      <Modal
+        isOpen={modalMode === "adjust" && Boolean(selectedSku)}
+        onClose={handleCloseModal}
+        title="Stock Adjustment Module"
+        size="md"
+      >
+        {selectedSku && (
+          <form onSubmit={handleSaveStockAdjustment} className="space-y-4">
+            {/* SKU Context Card */}
+            <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-between text-xs">
+              <div>
+                <span className="font-bold text-gray-900 text-sm">
+                  {selectedSku.brandName}
+                </span>
+                <p className="text-blue-700 font-mono font-bold mt-0.5">
+                  {selectedSku.sku}
+                </p>
+                <p className="text-gray-500 text-[11px]">
+                  {selectedSku.genericName} • {selectedSku.dosage}
+                </p>
+                <span className="inline-block mt-1 text-[10px] text-gray-400 font-medium">
+                  Facility: {selectedSku.facility || currentFacilityName}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-gray-400 block text-[11px]">
+                  Current Stock
+                </span>
+                <span className="text-xl font-bold text-gray-900">
+                  {selectedSku.currentStock}{" "}
+                  <span className="text-xs font-normal text-gray-500">
+                    units
+                  </span>
+                </span>
+              </div>
+            </div>
+
+            {/* Adjustment Operation Type */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
+                Adjustment Action <span className="text-red-500">*</span>
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAdjustFormData((prev) => ({ ...prev, type: "ADD" }))
+                  }
+                  className={`py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer ${
+                    adjustFormData.type === "ADD"
+                      ? "bg-emerald-50 border-emerald-500 text-emerald-700 ring-2 ring-emerald-500/20"
+                      : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  + Add Stock
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAdjustFormData((prev) => ({ ...prev, type: "SUBTRACT" }))
+                  }
+                  className={`py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer ${
+                    adjustFormData.type === "SUBTRACT"
+                      ? "bg-amber-50 border-amber-500 text-amber-700 ring-2 ring-amber-500/20"
+                      : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  - Deduct Stock
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAdjustFormData((prev) => ({ ...prev, type: "SET" }))
+                  }
+                  className={`py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer ${
+                    adjustFormData.type === "SET"
+                      ? "bg-blue-50 border-blue-500 text-blue-700 ring-2 ring-blue-500/20"
+                      : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  = Set Exact Qty
+                </button>
+              </div>
+            </div>
+
+            {/* Quantity Input */}
+            <div>
+              <label
+                htmlFor="sku-adjust-amount"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                {adjustFormData.type === "SET"
+                  ? "New Exact Total Quantity"
+                  : "Adjustment Amount (Units)"}{" "}
+                <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="sku-adjust-amount"
+                type="number"
+                min="0"
+                value={adjustFormData.amount}
+                onChange={(e) =>
+                  setAdjustFormData((prev) => ({
+                    ...prev,
+                    amount: e.target.value,
+                  }))
+                }
+                className="input"
+              />
+              {formErrors.amount && (
+                <p className="text-xs text-red-500 mt-1">{formErrors.amount}</p>
+              )}
+            </div>
+
+            {/* Adjustment Reason */}
+            <div>
+              <label
+                htmlFor="sku-adjust-reason"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Reason for Adjustment <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="sku-adjust-reason"
+                value={adjustFormData.reason}
+                onChange={(e) =>
+                  setAdjustFormData((prev) => ({
+                    ...prev,
+                    reason: e.target.value,
+                  }))
+                }
+                className="input"
+              >
+                {ADJUSTMENT_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label
+                htmlFor="sku-adjust-notes"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Audit Notes / Reference (Optional)
+              </label>
+              <input
+                id="sku-adjust-notes"
+                type="text"
+                value={adjustFormData.notes}
+                onChange={(e) =>
+                  setAdjustFormData((prev) => ({
+                    ...prev,
+                    notes: e.target.value,
+                  }))
+                }
+                placeholder="e.g. Approved physical inventory reconciliation"
+                className="input"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button type="submit" className="btn-primary">
+                <Sliders className="w-4 h-4" />
+                <span>Apply Stock Adjustment</span>
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* 3. TRANSFER STOCK MODAL                                  */}
+      {/* ======================================================== */}
+      <Modal
+        isOpen={modalMode === "transfer" && Boolean(selectedSku)}
+        onClose={handleCloseModal}
+        title="Transfer Stock between Facilities"
+        size="md"
+      >
+        {selectedSku && (
+          <form onSubmit={handleSaveTransferStock} className="space-y-4">
+            {/* Origin SKU Card */}
+            <div className="p-3.5 rounded-xl bg-purple-50/50 border border-purple-100 text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-purple-900 text-sm">
+                  {selectedSku.brandName}
+                </span>
+                <span className="font-bold text-gray-900">
+                  {selectedSku.currentStock} units available
+                </span>
+              </div>
+              <p className="text-purple-700 font-mono font-bold">
+                {selectedSku.sku}
+              </p>
+              <p className="text-gray-500">
+                {selectedSku.genericName} • {selectedSku.dosage} ({selectedSku.packagingUnit})
+              </p>
+              <p className="text-purple-800 font-semibold flex items-center gap-1 pt-1">
+                <Building2 className="w-3.5 h-3.5 text-purple-600" /> Origin Facility:{" "}
+                {selectedSku.facility || currentFacilityName}
+              </p>
+            </div>
+
+            {/* Target Destination Facility */}
+            <div>
+              <label
+                htmlFor="sku-transfer-target"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Destination Facility / Branch <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="sku-transfer-target"
+                value={transferFormData.targetLocation}
+                onChange={(e) =>
+                  setTransferFormData((prev) => ({
+                    ...prev,
+                    targetLocation: e.target.value,
+                  }))
+                }
+                className="input"
+              >
+                {facilities
+                  .filter((f) => f.name !== currentFacilityName)
+                  .map((f) => (
+                    <option key={f.id} value={f.name}>
+                      {f.name} ({f.type})
+                    </option>
+                  ))}
+              </select>
+              {formErrors.targetLocation && (
+                <p className="text-xs text-red-500 mt-1">
+                  {formErrors.targetLocation}
+                </p>
+              )}
+            </div>
+
+            {/* Quantity to Transfer */}
+            <div>
+              <label
+                htmlFor="sku-transfer-qty"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Quantity to Transfer <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="sku-transfer-qty"
+                type="number"
+                min="1"
+                max={selectedSku.currentStock}
+                value={transferFormData.transferQuantity}
+                onChange={(e) =>
+                  setTransferFormData((prev) => ({
+                    ...prev,
+                    transferQuantity: Number(e.target.value),
+                  }))
+                }
+                className="input"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">
+                Max transferable from current stock: {selectedSku.currentStock} units
+              </p>
+              {formErrors.transferQuantity && (
+                <p className="text-xs text-red-500 mt-1">
+                  {formErrors.transferQuantity}
+                </p>
+              )}
+            </div>
+
+            {/* Transfer Notes */}
+            <div>
+              <label
+                htmlFor="sku-transfer-notes"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Transfer Reference / Waybill (Optional)
+              </label>
+              <input
+                id="sku-transfer-notes"
+                type="text"
+                value={transferFormData.notes}
+                onChange={(e) =>
+                  setTransferFormData((prev) => ({
+                    ...prev,
+                    notes: e.target.value,
+                  }))
+                }
+                placeholder="e.g. TRF-2026-0089 — Branch replenishment"
+                className="input"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button type="submit" className="btn-primary">
+                <ArrowRightLeft className="w-4 h-4" />
+                <span>Execute Transfer</span>
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* 4. VIEW SKU DETAILS MODAL                                */}
+      {/* ======================================================== */}
       <Modal
         isOpen={modalMode === "view" && Boolean(selectedSku)}
         onClose={handleCloseModal}
@@ -1003,6 +1561,11 @@ function SkuManagement() {
                   <span className="text-xs text-gray-400">•</span>
                   <span className="text-xs text-gray-600 font-medium">
                     {selectedSku.dosageForm} ({selectedSku.packagingUnit})
+                  </span>
+                  <span className="text-xs text-gray-400">•</span>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                    <Building2 className="w-3 h-3" />
+                    {selectedSku.facility || currentFacilityName}
                   </span>
                 </div>
               </div>
@@ -1084,18 +1647,28 @@ function SkuManagement() {
               </button>
               <button
                 type="button"
+                onClick={() => handleOpenAdjustModal(selectedSku)}
+                className="btn-secondary text-xs text-amber-700 hover:text-amber-800"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Adjust Stock</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => handleOpenEditModal(selectedSku)}
                 className="btn-primary text-xs"
               >
-                <Sliders className="w-3.5 h-3.5" />
-                <span>Adjust Thresholds</span>
+                <Pencil className="w-3.5 h-3.5" />
+                <span>Edit Thresholds</span>
               </button>
             </div>
           </div>
         )}
       </Modal>
 
-      {/* --- DELETE SKU CONFIRMATION MODAL --- */}
+      {/* ======================================================== */}
+      {/* 5. DELETE SKU CONFIRMATION MODAL                         */}
+      {/* ======================================================== */}
       <Modal
         isOpen={modalMode === "delete" && Boolean(selectedSku)}
         onClose={handleCloseModal}
@@ -1115,7 +1688,11 @@ function SkuManagement() {
                   <span className="font-bold font-mono">{selectedSku.sku}</span>{" "}
                   (
                   <span className="font-semibold">{selectedSku.brandName}</span>
-                  ) and its calibrated thresholds.
+                  ) from{" "}
+                  <span className="font-bold">
+                    {selectedSku.facility || currentFacilityName}
+                  </span>
+                  .
                 </p>
               </div>
             </div>

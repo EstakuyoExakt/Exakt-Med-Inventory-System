@@ -27,17 +27,36 @@ import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 import useRole from "../../hooks/useRole";
+import useAuth from "../../hooks/useAuth";
 import { ROLES } from "../../config/roles";
 
-// Mock Data
+// Mock Data & Facilities
 import {
   auditLogs as initialLogs,
   AUDIT_MODULES,
   AUDIT_SEVERITIES,
 } from "../../data/auditLogs";
+import { facilities } from "../../data/facility";
 
 function AuditLogs() {
   const { role, isAdmin } = useRole();
+  const { facility } = useAuth();
+
+  // Automatically detect current active facility
+  const currentFacilityName = useMemo(() => {
+    if (facility?.name) return facility.name;
+    try {
+      const stored = localStorage.getItem("currentFacility");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.name) return parsed.name;
+      }
+    } catch {
+      // fallback
+    }
+    return facilities[0]?.name || "Exakt Central General Hospital";
+  }, [facility]);
+
   const [logs] = useState(initialLogs);
 
   // Filter States
@@ -51,32 +70,37 @@ function AuditLogs() {
   const [selectedLog, setSelectedLog] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // 1. Role Scoped Logs: Filter logs accessible to the current logged-in user's role
-  const roleScopedLogs = useMemo(() => {
+  // 1. Facility & Role Scoped Logs: Filter logs accessible to the current logged-in user's role and active facility
+  const scopedLogs = useMemo(() => {
     if (!role) return [];
-    if (isAdmin) return logs; // Admin sees all logs
-    return logs.filter((item) => item.visibleRoles?.includes(role));
-  }, [logs, role, isAdmin]);
+    return logs.filter((item) => {
+      const matchesFacility =
+        (item.facility || facilities[0]?.name) === currentFacilityName;
+      if (!matchesFacility) return false;
+      if (isAdmin) return true; // Admin sees all logs within the facility
+      return item.visibleRoles?.includes(role);
+    });
+  }, [logs, role, isAdmin, currentFacilityName]);
 
-  // 2. KPI Metrics based on role-scoped logs
+  // 2. KPI Metrics based on facility & role-scoped logs
   const metrics = useMemo(() => {
-    const total = roleScopedLogs.length;
-    const critical = roleScopedLogs.filter(
+    const total = scopedLogs.length;
+    const critical = scopedLogs.filter(
       (l) => l.severity === "critical",
     ).length;
-    const warning = roleScopedLogs.filter(
+    const warning = scopedLogs.filter(
       (l) => l.severity === "warning",
     ).length;
-    const success = roleScopedLogs.filter(
+    const success = scopedLogs.filter(
       (l) => l.severity === "success",
     ).length;
-    const info = roleScopedLogs.filter((l) => l.severity === "info").length;
+    const info = scopedLogs.filter((l) => l.severity === "info").length;
     return { total, critical, warning, success, info };
-  }, [roleScopedLogs]);
+  }, [scopedLogs]);
 
   // 3. User Query & Dropdown Filters
   const filteredLogs = useMemo(() => {
-    return roleScopedLogs.filter((log) => {
+    return scopedLogs.filter((log) => {
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         log.id.toLowerCase().includes(q) ||
@@ -96,7 +120,7 @@ function AuditLogs() {
 
       return matchesSearch && matchesModule && matchesSeverity;
     });
-  }, [roleScopedLogs, searchQuery, selectedModule, selectedSeverity]);
+  }, [scopedLogs, searchQuery, selectedModule, selectedSeverity]);
 
   // 4. Pagination
   const totalPages = Math.ceil(filteredLogs.length / itemsPerPage) || 1;
@@ -218,7 +242,7 @@ function AuditLogs() {
     link.setAttribute("href", encodedUri);
     link.setAttribute(
       "download",
-      `exakt_med_audit_logs_${new Date().toISOString().split("T")[0]}.csv`,
+      `exakt_med_audit_logs_${currentFacilityName.replace(/\s+/g, "_").toLowerCase()}_${new Date().toISOString().split("T")[0]}.csv`,
     );
     document.body.appendChild(link);
     link.click();
@@ -230,13 +254,20 @@ function AuditLogs() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2.5">
-            <History className="w-7 h-7 text-blue-600" />
-            <span>Audit & Compliance Logs</span>
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2.5">
+              <History className="w-7 h-7 text-blue-600" />
+              <span>Audit & Compliance Logs</span>
+            </h1>
+            {/* Active Facility Indicator */}
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs font-bold text-blue-700">
+              <Building2 className="w-3.5 h-3.5" />
+              <span>{currentFacilityName}</span>
+            </span>
+          </div>
           <p className="text-sm text-gray-500 mt-1">
             Immutable chronological record of inventory transactions, catalog
-            modifications, approvals, and security events
+            modifications, approvals, and security events for <span className="font-semibold text-gray-700">{currentFacilityName}</span>
           </p>
         </div>
 
@@ -266,7 +297,9 @@ function AuditLogs() {
                 {metrics.total}
               </h3>
               <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 mt-1">
-                {isAdmin ? "Universal System Logs" : `Scoped to ${role}`}
+                {isAdmin
+                  ? `Universal Logs for ${currentFacilityName}`
+                  : `Scoped to ${role} (${currentFacilityName})`}
               </span>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100 shadow-xs">
@@ -522,6 +555,8 @@ function AuditLogs() {
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
+              totalItems={filteredLogs.length}
+              itemsPerPage={itemsPerPage}
               onPageChange={setCurrentPage}
             />
           </div>

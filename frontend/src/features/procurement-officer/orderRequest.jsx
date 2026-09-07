@@ -33,14 +33,39 @@ import { suppliers } from "../../data/supplier";
 import { facilities } from "../../data/facility";
 import { MEDICINE_TYPES } from "../../data/medicine";
 import { getStockStatus } from "../../utils/helpers";
+import useAuth from "../../hooks/useAuth";
 
 function OrderRequest() {
+  const { facility } = useAuth();
+
+  // Automatically detect current active facility
+  const currentFacilityName = useMemo(() => {
+    if (facility?.name) return facility.name;
+    try {
+      const stored = localStorage.getItem("currentFacility");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.name) return parsed.name;
+      }
+    } catch {
+      // fallback
+    }
+    return facilities[0]?.name || "Exakt Central General Hospital";
+  }, [facility]);
+
   const [skuList] = useState(initialSkus);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("ALL");
   const [selectedUrgency, setSelectedUrgency] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
+
+  // Filter SKUs that reference the current active facility
+  const currentFacilitySkus = useMemo(() => {
+    return skuList.filter(
+      (s) => (s.facility || facilities[0]?.name) === currentFacilityName,
+    );
+  }, [skuList, currentFacilityName]);
 
   // Multi-Selection State for Table Checkboxes
   const [selectedSkuIds, setSelectedSkuIds] = useState([]);
@@ -53,7 +78,7 @@ function OrderRequest() {
   // Multi-Item Order Form State
   const [orderForm, setOrderForm] = useState({
     supplierId: suppliers[0]?.id || 1,
-    targetFacility: facilities[0]?.name || "Exakt Central General Hospital",
+    targetFacility: currentFacilityName,
     priority: "Normal", // 'Urgent' | 'Normal'
     totalCost: "",
     notes: "",
@@ -64,19 +89,21 @@ function OrderRequest() {
   // Additional SKU Selector inside Modal
   const [skuToAdd, setSkuToAdd] = useState("");
 
-  // 1. Total Minimum SKUs (currentStock <= minimumLevel)
+  // 1. Total Minimum SKUs for Current Facility (currentStock <= minimumLevel)
   const totalMinimumSkus = useMemo(() => {
-    return skuList.filter((s) => s.currentStock <= s.minimumLevel).length;
-  }, [skuList]);
+    return currentFacilitySkus.filter((s) => s.currentStock <= s.minimumLevel)
+      .length;
+  }, [currentFacilitySkus]);
 
-  // 2. Total Needs Reorder SKUs (currentStock <= reorderLevel)
+  // 2. Total Needs Reorder SKUs for Current Facility (currentStock <= reorderLevel)
   const totalNeedsReorderSkus = useMemo(() => {
-    return skuList.filter((s) => s.currentStock <= s.reorderLevel).length;
-  }, [skuList]);
+    return currentFacilitySkus.filter((s) => s.currentStock <= s.reorderLevel)
+      .length;
+  }, [currentFacilitySkus]);
 
-  // Filtered List: Only display SKUs that need reordering (currentStock <= reorderLevel)
+  // Filtered List: Only display SKUs for current facility that need reordering (currentStock <= reorderLevel)
   const reorderSkus = useMemo(() => {
-    return skuList.filter((item) => {
+    return currentFacilitySkus.filter((item) => {
       const needsReorder = item.currentStock <= item.reorderLevel;
       if (!needsReorder) return false;
 
@@ -99,7 +126,7 @@ function OrderRequest() {
 
       return matchesSearch && matchesType && matchesUrgency;
     });
-  }, [skuList, searchQuery, selectedType, selectedUrgency]);
+  }, [currentFacilitySkus, searchQuery, selectedType, selectedUrgency]);
 
   // Pagination calculation
   const totalPages = Math.ceil(reorderSkus.length / itemsPerPage) || 1;
@@ -148,7 +175,7 @@ function OrderRequest() {
   };
 
   const handleSelectAllCritical = () => {
-    const criticalIds = skuList
+    const criticalIds = currentFacilitySkus
       .filter((s) => s.currentStock <= s.minimumLevel)
       .map((s) => s.id);
     setSelectedSkuIds(criticalIds);
@@ -183,12 +210,12 @@ function OrderRequest() {
     if (initialSkusToOrder.length > 0) {
       itemsToInclude = initialSkusToOrder.map(buildLineItem);
     } else if (selectedSkuIds.length > 0) {
-      const selectedObjList = skuList.filter((s) =>
+      const selectedObjList = currentFacilitySkus.filter((s) =>
         selectedSkuIds.includes(s.id),
       );
       itemsToInclude = selectedObjList.map(buildLineItem);
     } else if (reorderSkus.length > 0) {
-      // Default with the first 2 reorder SKUs if none selected
+      // Default with the first reorder SKU if none selected
       itemsToInclude = [buildLineItem(reorderSkus[0])];
     }
 
@@ -198,7 +225,7 @@ function OrderRequest() {
 
     setOrderForm({
       supplierId: suppliers[0]?.id || 1,
-      targetFacility: facilities[0]?.name || "Exakt Central General Hospital",
+      targetFacility: currentFacilityName,
       priority: hasCritical ? "Urgent" : "Normal",
       totalCost: "",
       notes: "",
@@ -229,7 +256,7 @@ function OrderRequest() {
   // Add Item to Order Form within the Modal
   const handleAddItemToForm = (skuCode) => {
     if (!skuCode) return;
-    const targetSku = skuList.find((s) => s.sku === skuCode);
+    const targetSku = currentFacilitySkus.find((s) => s.sku === skuCode);
     if (!targetSku) return;
 
     if (orderForm.items.some((i) => i.sku === targetSku.sku)) {
@@ -276,13 +303,13 @@ function OrderRequest() {
     );
   }, [orderForm.items]);
 
-  // Available SKUs that need restocking and haven't been added yet
+  // Available SKUs that need restocking in active facility and haven't been added yet
   const availableSkusToAdd = useMemo(() => {
     const addedSkus = new Set(orderForm.items.map((i) => i.sku));
-    return skuList.filter(
+    return currentFacilitySkus.filter(
       (s) => s.currentStock <= s.reorderLevel && !addedSkus.has(s.sku),
     );
-  }, [skuList, orderForm.items]);
+  }, [currentFacilitySkus, orderForm.items]);
 
   // Handle Form Submission
   const handleSubmitOrder = (e) => {
@@ -341,13 +368,23 @@ function OrderRequest() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2.5">
-            <PackagePlus className="w-7 h-7 text-blue-600" />
-            <span>Procurement Order Requests</span>
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2.5">
+              <PackagePlus className="w-7 h-7 text-blue-600" />
+              <span>Procurement Order Requests</span>
+            </h1>
+            {/* Active Facility Indicator */}
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs font-bold text-blue-700">
+              <Building2 className="w-3.5 h-3.5" />
+              <span>{currentFacilityName}</span>
+            </span>
+          </div>
           <p className="text-sm text-gray-500 mt-1">
-            Batch multiple restock items into a consolidated purchase order
-            requisition for suppliers
+            Batch restock items into a consolidated purchase order requisition
+            for{" "}
+            <span className="font-semibold text-gray-700">
+              {currentFacilityName}
+            </span>
           </p>
         </div>
 
@@ -714,7 +751,7 @@ function OrderRequest() {
       >
         <form onSubmit={handleSubmitOrder} className="space-y-4">
           {/* Supplier, Facility & Priority Header Controls */}
-          <div className="p-4 rounded-xl bg-gray-50 border border-gray-200/80 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div className="p-4 rounded-xl bg-gray-50 border border-gray-200/80 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             {/* Supplier Selection */}
             <div>
               <label
@@ -744,33 +781,6 @@ function OrderRequest() {
               </select>
             </div>
 
-            {/* Destination Facility */}
-            <div>
-              <label
-                htmlFor="order-facility"
-                className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1"
-              >
-                Destination Facility <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="order-facility"
-                value={orderForm.targetFacility}
-                onChange={(e) =>
-                  setOrderForm((prev) => ({
-                    ...prev,
-                    targetFacility: e.target.value,
-                  }))
-                }
-                className="input py-2 text-xs"
-              >
-                {facilities.map((f) => (
-                  <option key={f.id} value={f.name}>
-                    {f.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             {/* Requisition Priority */}
             <div>
               <label
@@ -793,6 +803,23 @@ function OrderRequest() {
                 <option value="Normal">Normal Standard Lead Time</option>
                 <option value="Urgent">Urgent Emergency Restock</option>
               </select>
+            </div>
+
+            {/* Destination Facility (Auto-detected based on active facility) */}
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="order-facility"
+                className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1"
+              >
+                Destination Facility
+              </label>
+              <div
+                id="order-facility"
+                className="flex items-center gap-2 px-3 py-2 bg-blue-50/70 border border-blue-200 rounded-lg text-xs font-semibold text-blue-900"
+              >
+                <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
+                <span className="truncate">{currentFacilityName}</span>
+              </div>
             </div>
           </div>
 
