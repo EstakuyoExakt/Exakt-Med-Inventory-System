@@ -10,6 +10,7 @@ export const users = [
     status: "Active",
     createdAt: "2025-01-10",
     phone: "+63 917 123 4567",
+    assignedFacilities: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
   },
   {
     id: 2,
@@ -21,6 +22,7 @@ export const users = [
     status: "Active",
     createdAt: "2025-01-22",
     phone: "+63 918 234 5678",
+    assignedFacilities: [1, 2, 3, 4, 5, 6, 7, 8],
   },
 
   // --- Pharmacist Managers ---
@@ -34,6 +36,7 @@ export const users = [
     status: "Active",
     createdAt: "2025-02-15",
     phone: "+63 919 345 6789",
+    assignedFacilities: [1, 2, 7],
   },
   {
     id: 4,
@@ -45,6 +48,7 @@ export const users = [
     status: "Active",
     createdAt: "2025-02-28",
     phone: "+63 920 456 7890",
+    assignedFacilities: [3, 4, 9],
   },
   {
     id: 5,
@@ -56,6 +60,7 @@ export const users = [
     status: "Inactive",
     createdAt: "2025-03-05",
     phone: "+63 921 567 8901",
+    assignedFacilities: [5, 6],
   },
 
   // --- Procurement Officers ---
@@ -69,6 +74,7 @@ export const users = [
     status: "Active",
     createdAt: "2025-03-20",
     phone: "+63 922 678 9012",
+    assignedFacilities: [1, 3, 5],
   },
   {
     id: 7,
@@ -80,6 +86,7 @@ export const users = [
     status: "Active",
     createdAt: "2025-04-12",
     phone: "+63 923 789 0123",
+    assignedFacilities: [2, 4, 8],
   },
   {
     id: 8,
@@ -91,6 +98,7 @@ export const users = [
     status: "Active",
     createdAt: "2025-04-18",
     phone: "+63 924 890 1234",
+    assignedFacilities: [3, 6, 7],
   },
   {
     id: 9,
@@ -102,5 +110,6 @@ export const users = [
     status: "Inactive",
     createdAt: "2025-05-02",
     phone: "+63 925 901 2345",
+    assignedFacilities: [10, 11],
   },
 ];

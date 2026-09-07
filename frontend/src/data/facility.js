@@ -10,6 +10,7 @@ export const facilities = [
     address: "E. Rodriguez Sr. Ave, Quezon City, Metro Manila",
     status: "Active",
     createdAt: "2024-10-15",
+    assignedUserIds: [1, 2, 3, 6],
   },
   {
     id: 2,
@@ -22,6 +23,7 @@ export const facilities = [
     address: "Mindanao Avenue, Novaliches, Quezon City",
     status: "Active",
     createdAt: "2024-11-20",
+    assignedUserIds: [1, 2, 3, 7],
   },
   {
     id: 3,
@@ -34,6 +36,7 @@ export const facilities = [
     address: "Veterans Center, Taguig City, Metro Manila",
     status: "Active",
     createdAt: "2024-12-01",
+    assignedUserIds: [1, 2, 4, 6, 8],
   },
   {
     id: 4,
@@ -46,6 +49,7 @@ export const facilities = [
     address: "Alabang-Zapote Road, Las Piñas City",
     status: "Active",
     createdAt: "2025-01-10",
+    assignedUserIds: [1, 2, 4, 7],
   },
   {
     id: 5,
@@ -58,6 +62,7 @@ export const facilities = [
     address: "Taft Avenue, Ermita, Manila",
     status: "Active",
     createdAt: "2025-01-25",
+    assignedUserIds: [1, 2, 5, 6],
   },
   {
     id: 6,
@@ -70,6 +75,7 @@ export const facilities = [
     address: "BGC 5th Avenue, Taguig City, Metro Manila",
     status: "Active",
     createdAt: "2025-02-05",
+    assignedUserIds: [1, 2, 5, 8],
   },
   {
     id: 7,
@@ -82,6 +88,7 @@ export const facilities = [
     address: "Commonwealth Avenue, Quezon City",
     status: "Active",
     createdAt: "2025-02-18",
+    assignedUserIds: [1, 2, 3, 8],
   },
   {
     id: 8,
@@ -94,6 +101,7 @@ export const facilities = [
     address: "Marcos Highway, Pasig City",
     status: "Active",
     createdAt: "2025-03-02",
+    assignedUserIds: [1, 2, 7],
   },
   {
     id: 9,
@@ -106,6 +114,7 @@ export const facilities = [
     address: "Roxas Boulevard, Pasay City",
     status: "Inactive",
     createdAt: "2025-03-12",
+    assignedUserIds: [1, 2, 4],
   },
   {
     id: 10,
@@ -118,6 +127,7 @@ export const facilities = [
     address: "Ortigas Avenue, San Juan City",
     status: "Active",
     createdAt: "2025-03-25",
+    assignedUserIds: [1, 2, 9],
   },
   {
     id: 11,
@@ -130,5 +140,6 @@ export const facilities = [
     address: "Shaw Boulevard, Mandaluyong City",
     status: "Inactive",
     createdAt: "2025-04-05",
+    assignedUserIds: [1, 2, 9],
   },
 ];

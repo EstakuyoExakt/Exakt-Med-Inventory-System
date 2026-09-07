@@ -1,19 +1,22 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Boxes, LogOut } from "lucide-react";
+import { Boxes, LogOut, Building2, ArrowLeftRight } from "lucide-react";
 import { NAVIGATION_ITEMS } from "../../config/navigation";
 import { ROLE_DETAILS } from "../../config/roles";
 
 function Sidebar() {
   const navigate = useNavigate();
 
-  // Retrieve authenticated user from localStorage
+  // Retrieve authenticated user & facility from localStorage
   const userString = localStorage.getItem("currentUser");
   const user = userString ? JSON.parse(userString) : null;
+
+  const facilityString = localStorage.getItem("currentFacility");
+  const facility = facilityString ? JSON.parse(facilityString) : null;
 
   // Filter navigation items based on user role
   const userRole = user?.role;
   const filteredNavItems = NAVIGATION_ITEMS.filter((item) =>
-    item.roles.includes(userRole)
+    item.roles.includes(userRole),
   );
 
   // Get role metadata (badge colors, display labels)
@@ -21,12 +24,17 @@ function Sidebar() {
 
   const handleLogout = () => {
     localStorage.removeItem("currentUser");
+    localStorage.removeItem("currentFacility");
     navigate("/");
   };
 
+  const handleSwitchFacility = () => {
+    navigate("/select-facility");
+  };
+
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 border-r border-gray-200 bg-white flex flex-col justify-between p-4 z-50">
-      <div className="flex flex-col gap-6">
+    <aside className="fixed left-0 top-0 h-screen w-64 border-r border-gray-200 bg-white flex flex-col justify-between p-4 z-50 overflow-y-auto">
+      <div className="flex flex-col gap-5">
         {/* Brand Header */}
         <div className="flex items-center gap-3 px-2 pt-2">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 shadow-inner">
@@ -52,12 +60,40 @@ function Sidebar() {
               </p>
               <span
                 className={`inline-block mt-0.5 px-2 py-0.5 text-[10px] font-medium rounded-md border ${
-                  roleInfo?.badgeColor || "bg-gray-100 text-gray-600 border-gray-200"
+                  roleInfo?.badgeColor ||
+                  "bg-gray-100 text-gray-600 border-gray-200"
                 }`}
               >
                 {roleInfo?.label || userRole || "Staff"}
               </span>
             </div>
+          </div>
+        )}
+
+        {/* Active Facility Widget */}
+        {facility && (
+          <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-blue-50/60 border border-blue-100/80 text-xs">
+            <div className="min-w-0 flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-700 shrink-0">
+                <Building2 className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">
+                  Active Facility
+                </p>
+                <p className="font-semibold text-gray-900 truncate text-xs">
+                  {facility.name}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleSwitchFacility}
+              className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-100/80 transition-colors shrink-0 cursor-pointer"
+              title="Switch Facility"
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
 

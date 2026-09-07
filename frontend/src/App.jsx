@@ -2,6 +2,7 @@ import { Route, Routes, useLocation, Navigate } from "react-router-dom";
 
 // Auth Pages
 import Login from "./features/authentication/login";
+import SelectFacility from "./features/authentication/selectFacility";
 import Unauthorized from "./features/authentication/unauthorized";
 
 // Admin Pages
@@ -31,7 +32,9 @@ import { ROLES } from "./config/roles";
 function App() {
   const location = useLocation();
   const isAuthPage =
-    location.pathname === "/" || location.pathname === "/unauthorized";
+    location.pathname === "/" ||
+    location.pathname === "/unauthorized" ||
+    location.pathname === "/select-facility";
 
   return (
     <div className="flex min-h-screen bg-gray-100">
@@ -47,6 +50,7 @@ function App() {
         <Routes>
           {/* Public / Auth Routes */}
           <Route path="/" element={<Login />} />
+          <Route path="/select-facility" element={<SelectFacility />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
 
           {/* Admin Protected Routes */}

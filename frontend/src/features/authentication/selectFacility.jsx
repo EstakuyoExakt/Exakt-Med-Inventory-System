@@ -1,0 +1,361 @@
+import { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Building2,
+  MapPin,
+  Phone,
+  Mail,
+  User,
+  ArrowRight,
+  LogOut,
+  Boxes,
+  CheckCircle2,
+  Warehouse,
+  Hospital,
+  Stethoscope,
+  ShieldAlert,
+  Sparkles,
+  Loader2,
+} from "lucide-react";
+
+// Common Components
+import Card from "../../components/common/card";
+import SearchBar from "../../components/common/searchBar";
+
+// Data & Hooks
+import { facilities as allFacilities } from "../../data/facility";
+import { ROLE_DETAILS } from "../../config/roles";
+import useAuth from "../../hooks/useAuth";
+
+function SelectFacility() {
+  const navigate = useNavigate();
+  const { user, selectFacility, logout, isAuthenticated } = useAuth();
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedFacilityId, setSelectedFacilityId] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // If not logged in, redirect back to login
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      navigate("/", { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
+
+  // Retrieve existing current facility from storage if any
+  const currentSavedFacility = useMemo(() => {
+    try {
+      const facString = localStorage.getItem("currentFacility");
+      return facString ? JSON.parse(facString) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Filter facilities assigned to the user
+  const userAssignedFacilities = useMemo(() => {
+    if (!user) return [];
+
+    // Admins have access to all facilities or their assigned list
+    if (user.role === "Admin") {
+      if (user.assignedFacilities && user.assignedFacilities.length > 0) {
+        return allFacilities.filter((f) =>
+          user.assignedFacilities.includes(f.id),
+        );
+      }
+      return allFacilities;
+    }
+
+    // Filter by assignedFacilities array on user OR assignedUserIds on facility
+    return allFacilities.filter((facility) => {
+      const inUserList = user.assignedFacilities?.includes(facility.id);
+      const inFacilityList = facility.assignedUserIds?.includes(user.id);
+      return inUserList || inFacilityList;
+    });
+  }, [user]);
+
+  // Filtered facilities based on search query
+  const filteredFacilities = useMemo(() => {
+    return userAssignedFacilities.filter((facility) => {
+      const query = searchQuery.toLowerCase().trim();
+      if (!query) return true;
+      return (
+        facility.name.toLowerCase().includes(query) ||
+        facility.facilityCode.toLowerCase().includes(query) ||
+        facility.address.toLowerCase().includes(query) ||
+        facility.contactPerson.toLowerCase().includes(query)
+      );
+    });
+  }, [userAssignedFacilities, searchQuery]);
+
+  const handleSelect = (facility) => {
+    if (facility.status !== "Active") return;
+    setSelectedFacilityId(facility.id);
+    setIsSubmitting(true);
+
+    setTimeout(() => {
+      selectFacility(facility);
+    }, 400);
+  };
+
+  const getFacilityIcon = (type) => {
+    switch (type) {
+      case "Central Warehouse":
+      case "Cold Storage Facility":
+        return <Warehouse className="w-5 h-5 text-amber-600" />;
+      case "Main Hospital":
+      case "Branch Hospital":
+      case "Specialty Hospital":
+        return <Hospital className="w-5 h-5 text-blue-600" />;
+      case "Emergency Center":
+        return <ShieldAlert className="w-5 h-5 text-red-600" />;
+      default:
+        return <Stethoscope className="w-5 h-5 text-emerald-600" />;
+    }
+  };
+
+  const roleInfo = user?.role ? ROLE_DETAILS[user.role] : null;
+
+  if (!user) return null;
+
+  return (
+    <div className="w-full min-h-screen bg-gray-50 flex flex-col justify-between py-6 px-4 sm:px-6 lg:px-8">
+      {/* Top Header Navigation */}
+      <header className="max-w-6xl w-full mx-auto flex items-center justify-between pb-6 border-b border-gray-200">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-500/20">
+            <Boxes className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-base font-bold text-gray-900 leading-tight">
+              Exakt Med Inventory
+            </h1>
+            <p className="text-xs text-gray-500">Multi-Facility Portal</p>
+          </div>
+        </div>
+
+        {/* User Profile & Sign Out */}
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-2.5 px-3 py-1.5 bg-white rounded-xl border border-gray-200 shadow-xs">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-700 text-xs font-bold">
+              {user.name ? user.name.charAt(0).toUpperCase() : "U"}
+            </div>
+            <div className="text-left">
+              <p className="text-xs font-bold text-gray-900 leading-none">
+                {user.name}
+              </p>
+              <span
+                className={`inline-block mt-0.5 px-1.5 py-0.2 text-[10px] font-semibold rounded ${
+                  roleInfo?.badgeColor ||
+                  "bg-gray-100 text-gray-700 border border-gray-200"
+                }`}
+              >
+                {roleInfo?.label || user.role}
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={logout}
+            className="btn-secondary text-xs px-3 py-2 text-gray-600 hover:text-red-600 hover:border-red-200"
+            title="Sign out of account"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Sign Out</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Main Container */}
+      <main className="max-w-6xl w-full mx-auto my-8 space-y-8 flex-1">
+        {/* Hero Welcome Banner */}
+        <div className="text-center max-w-2xl mx-auto space-y-2 animate-slide-up">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Assigned Healthcare Facilities</span>
+          </div>
+          <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">
+            Select Your Operating Facility
+          </h2>
+          <p className="text-sm text-gray-500">
+            Welcome back, <span className="font-semibold text-gray-800">{user.name}</span>.
+            Please choose an assigned hospital branch or medical warehouse to access your workspace.
+          </p>
+        </div>
+
+        {/* Search Bar Card */}
+        <Card className="p-4 shadow-sm animate-slide-up-1">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <SearchBar
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onClear={() => setSearchQuery("")}
+              placeholder="Search facility by name, code, or city..."
+              className="relative w-full sm:w-96"
+            />
+
+            {/* Total Facility Count */}
+            <div className="text-xs font-medium text-gray-500 self-start sm:self-center">
+              Showing <span className="font-bold text-gray-900">{filteredFacilities.length}</span> of{" "}
+              <span className="font-bold text-gray-900">{userAssignedFacilities.length}</span> assigned branches
+            </div>
+          </div>
+        </Card>
+
+        {/* Facilities Grid */}
+        {filteredFacilities.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 animate-slide-up-2">
+            {filteredFacilities.map((facility) => {
+              const isActive = facility.status === "Active";
+              const isSelected = selectedFacilityId === facility.id;
+              const isCurrentlyActiveInSession =
+                currentSavedFacility?.id === facility.id;
+
+              return (
+                <div
+                  key={facility.id}
+                  onClick={() => isActive && handleSelect(facility)}
+                  className={`group relative bg-white rounded-2xl border p-5 transition-all duration-200 flex flex-col justify-between ${
+                    isActive
+                      ? "hover:border-blue-500 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer border-gray-200"
+                      : "opacity-60 bg-gray-50/80 border-gray-200 cursor-not-allowed"
+                  } ${isSelected ? "ring-2 ring-blue-600 border-blue-600 bg-blue-50/20" : ""}`}
+                >
+                  <div>
+                    {/* Top Facility Header Row */}
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-50 border border-gray-100 group-hover:bg-blue-50 group-hover:border-blue-100 transition-colors">
+                          {getFacilityIcon(facility.type)}
+                        </div>
+                        <div>
+                          <span className="font-mono text-[11px] font-bold text-gray-500 uppercase bg-gray-100 px-2 py-0.5 rounded">
+                            {facility.facilityCode}
+                          </span>
+                          <p className="text-[11px] font-semibold text-blue-600 mt-0.5">
+                            {facility.type}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Status Badges */}
+                      <div className="flex flex-col items-end gap-1">
+                        <span
+                          className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                            isActive
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-red-50 text-red-600 border border-red-200"
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              isActive ? "bg-emerald-500" : "bg-red-400"
+                            }`}
+                          />
+                          {facility.status}
+                        </span>
+
+                        {isCurrentlyActiveInSession && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-md">
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                            Current Session
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Facility Name */}
+                    <h3 className="text-base font-bold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
+                      {facility.name}
+                    </h3>
+
+                    {/* Address */}
+                    <div className="flex items-start gap-1.5 text-xs text-gray-500 mt-2.5">
+                      <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
+                      <span className="line-clamp-2">{facility.address}</span>
+                    </div>
+
+                    {/* Contact Person Details */}
+                    <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5 text-xs text-gray-500">
+                      <div className="flex items-center gap-2">
+                        <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <span className="truncate font-medium text-gray-700">
+                          {facility.contactPerson}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <span className="truncate">{facility.phone}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <span className="truncate">{facility.email}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Selection Button */}
+                  <div className="mt-4 pt-3 border-t border-gray-100">
+                    <button
+                      type="button"
+                      disabled={!isActive || isSubmitting}
+                      className={`w-full py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                        isActive
+                          ? "bg-gray-100 text-gray-800 group-hover:bg-blue-600 group-hover:text-white group-hover:shadow-md group-hover:shadow-blue-500/20"
+                          : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      }`}
+                    >
+                      {isSelected && isSubmitting ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Entering Facility...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>{isActive ? "Select Facility" : "Facility Inactive"}</span>
+                          {isActive && (
+                            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                          )}
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* Empty State */
+          <Card className="max-w-md mx-auto p-12 text-center space-y-3 animate-slide-up-2">
+            <Building2 className="w-10 h-10 text-gray-300 mx-auto" />
+            <h3 className="text-base font-bold text-gray-900">
+              No Facilities Found
+            </h3>
+            <p className="text-xs text-gray-500">
+              {searchQuery
+                ? "No assigned facilities match your search query."
+                : "No assigned facilities are currently linked to your user account."}
+            </p>
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="btn-secondary text-xs mt-2"
+              >
+                Clear Search
+              </button>
+            )}
+          </Card>
+        )}
+      </main>
+
+      {/* Footer */}
+      <footer className="text-center text-xs text-gray-400 pt-6 border-t border-gray-200 max-w-6xl w-full mx-auto">
+        <p>Exakt Med Multi-Facility Inventory Management System &copy; 2026-2027</p>
+      </footer>
+    </div>
+  );
+}
+
+export default SelectFacility;
