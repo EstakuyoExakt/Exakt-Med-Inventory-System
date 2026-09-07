@@ -29,6 +29,10 @@ import { users as initialUsers } from "../../data/user";
 import { facilities } from "../../data/facility";
 import { ROLES, ROLE_DETAILS } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
+import {
+  canEditUser as checkCanEditUser,
+  canDeleteUser as checkCanDeleteUser,
+} from "../../utils/helpers";
 
 const DEFAULT_FORM_DATA = {
   name: "",
@@ -41,7 +45,7 @@ const DEFAULT_FORM_DATA = {
 };
 
 function UserManagement() {
-  const { facility: authFacility } = useAuth();
+  const { facility: authFacility, user: currentUser } = useAuth();
 
   // Automatically detect current active facility
   const currentFacility = useMemo(() => {
@@ -173,6 +177,10 @@ function UserManagement() {
     setCurrentPage(1);
   };
 
+  // Permission helpers imported from utils/helpers bound to currentUser
+  const canEditUser = (targetUser) => checkCanEditUser(targetUser, currentUser);
+  const canDeleteUser = (targetUser) => checkCanDeleteUser(targetUser);
+
   // Modal Open Handlers
   const handleOpenAddModal = () => {
     setFormData(DEFAULT_FORM_DATA);
@@ -187,6 +195,7 @@ function UserManagement() {
   };
 
   const handleOpenEditModal = (user) => {
+    if (!canEditUser(user)) return;
     setSelectedUser(user);
     setFormData({
       name: user.name || "",
@@ -202,6 +211,7 @@ function UserManagement() {
   };
 
   const handleOpenDeleteModal = (user) => {
+    if (!canDeleteUser(user)) return;
     setSelectedUser(user);
     setModalMode("delete");
   };
@@ -289,6 +299,7 @@ function UserManagement() {
       };
       setUserList((prev) => [newUser, ...prev]);
     } else if (modalMode === "edit" && selectedUser) {
+      if (!canEditUser(selectedUser)) return;
       setUserList((prev) =>
         prev.map((u) =>
           u.id === selectedUser.id
@@ -314,7 +325,7 @@ function UserManagement() {
 
   // Delete User Confirmation
   const handleConfirmDelete = () => {
-    if (!selectedUser) return;
+    if (!selectedUser || !canDeleteUser(selectedUser)) return;
 
     setUserList((prev) => prev.filter((u) => u.id !== selectedUser.id));
 
@@ -588,24 +599,35 @@ function UserManagement() {
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditModal(user)}
-                            className="btn-secondary p-1.5 text-gray-600 hover:text-amber-600 hover:border-amber-300"
-                            title="Edit User"
-                            aria-label="Edit User"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenDeleteModal(user)}
-                            className="btn-danger p-1.5"
-                            title="Delete User"
-                            aria-label="Delete User"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {canEditUser(user) ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(user)}
+                              className="btn-secondary p-1.5 text-gray-600 hover:text-amber-600 hover:border-amber-300"
+                              title="Edit User"
+                              aria-label="Edit User"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <span
+                              className="p-1.5 rounded-lg border border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed inline-flex items-center justify-center"
+                              title="Administrator accounts cannot be edited by other admins"
+                            >
+                              <Lock className="w-3.5 h-3.5" />
+                            </span>
+                          )}
+                          {canDeleteUser(user) && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDeleteModal(user)}
+                              className="btn-danger p-1.5"
+                              title="Delete User"
+                              aria-label="Delete User"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -950,22 +972,34 @@ function UserManagement() {
             </div>
 
             {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={handleCloseModal}
-                className="btn-secondary text-xs"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={() => handleOpenEditModal(selectedUser)}
-                className="btn-primary text-xs"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-                <span>Edit User</span>
-              </button>
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+              <div>
+                {!canEditUser(selectedUser) && (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500 font-medium bg-gray-50 px-2.5 py-1 rounded-md border border-gray-200/60">
+                    <Lock className="w-3 h-3 text-gray-400" />
+                    Admin accounts cannot be edited by other admins
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="btn-secondary text-xs"
+                >
+                  Close
+                </button>
+                {canEditUser(selectedUser) && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditModal(selectedUser)}
+                    className="btn-primary text-xs"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span>Edit User</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}

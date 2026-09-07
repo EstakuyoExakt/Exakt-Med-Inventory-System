@@ -121,3 +121,24 @@ export const getProjectForFacility = (facility, projectList = projects) => {
   );
 };
 
+// Helper to prevent admin users from editing other admin accounts
+export const canEditUser = (targetUser, currentUser) => {
+  if (!targetUser) return false;
+  const isTargetAdmin =
+    targetUser.role === ROLES.ADMIN || targetUser.role === "Admin";
+  if (isTargetAdmin && targetUser.id !== currentUser?.id) {
+    return false;
+  }
+  return true;
+};
+
+// Helper to prevent admin users from deleting admin accounts
+export const canDeleteUser = (targetUser) => {
+  if (!targetUser) return false;
+  const isTargetAdmin =
+    targetUser.role === ROLES.ADMIN || targetUser.role === "Admin";
+  if (isTargetAdmin) {
+    return false;
+  }
+  return true;
+};
