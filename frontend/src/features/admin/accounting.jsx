@@ -20,6 +20,7 @@ import {
   Receipt,
   Wallet,
   Pill,
+  User,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -30,38 +31,92 @@ import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 
-// Data Imports
+// Data Imports & Auth Hook
 import { requestedOrders as initialOrders } from "../../data/orders";
 import { suppliers } from "../../data/supplier";
 import { facilities } from "../../data/facility";
+import useAuth from "../../hooks/useAuth";
 
 function Accounting() {
+  const { facility: authFacility } = useAuth();
+
+  // Automatically detect current active facility
+  const currentFacility = useMemo(() => {
+    if (authFacility?.id || authFacility?.name) {
+      const matched = facilities.find(
+        (f) =>
+          f.id === authFacility.id ||
+          f.name?.toLowerCase() === authFacility.name?.toLowerCase(),
+      );
+      if (matched) return matched;
+      return authFacility;
+    }
+    try {
+      const stored = localStorage.getItem("currentFacility");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.id || parsed?.name) {
+          const matched = facilities.find(
+            (f) =>
+              f.id === parsed.id ||
+              f.name?.toLowerCase() === parsed.name?.toLowerCase(),
+          );
+          if (matched) return matched;
+          return parsed;
+        }
+      }
+    } catch {
+      // fallback
+    }
+    return facilities[0] || { id: 1, name: "Exakt Central General Hospital" };
+  }, [authFacility]);
+
+  const currentFacilityName =
+    currentFacility?.name || "Exakt Central General Hospital";
+  const currentFacilityId = currentFacility?.id || 1;
+
   const [orders] = useState(initialOrders);
+
+  // Filter orders that reference the current active facility
+  const currentFacilityOrders = useMemo(() => {
+    return orders.filter(
+      (o) =>
+        (o.targetFacility || "").toLowerCase() ===
+        currentFacilityName.toLowerCase(),
+    );
+  }, [orders, currentFacilityName]);
+
+  // Unique suppliers delivering to this active facility
+  const facilitySuppliers = useMemo(() => {
+    const set = new Set(
+      currentFacilityOrders.map((o) => o.supplierName).filter(Boolean),
+    );
+    return Array.from(set);
+  }, [currentFacilityOrders]);
 
   // Filters State
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedFacility, setSelectedFacility] = useState("ALL");
   const [selectedSupplier, setSelectedSupplier] = useState("ALL");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
-  // Facility Card Pagination State
-  const [facilityCurrentPage, setFacilityCurrentPage] = useState(1);
-  const facilityItemsPerPage = 5;
+  // Medication Spend Card Pagination State
+  const [medicationCurrentPage, setMedicationCurrentPage] = useState(1);
+  const medicationItemsPerPage = 4;
 
   // Modal State
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // 1. Financial Metrics Calculation
+  // 1. Financial Metrics Calculation (Facility Scoped)
   const metrics = useMemo(() => {
     let approvedSpend = 0;
     let pendingSpend = 0;
     let approvedCount = 0;
     let pendingCount = 0;
 
-    orders.forEach((o) => {
+    currentFacilityOrders.forEach((o) => {
       const cost = Number(o.estimatedCost || o.totalCost || 0);
       if (o.status === "Approved") {
         approvedSpend += cost;
@@ -74,7 +129,9 @@ function Accounting() {
 
     const totalRequisitionSpend = approvedSpend + pendingSpend;
     const avgOrderValue =
-      orders.length > 0 ? totalRequisitionSpend / orders.length : 0;
+      currentFacilityOrders.length > 0
+        ? totalRequisitionSpend / currentFacilityOrders.length
+        : 0;
 
     return {
       approvedSpend,
@@ -83,63 +140,58 @@ function Accounting() {
       approvedCount,
       pendingCount,
       avgOrderValue,
-      totalOrders: orders.length,
+      totalOrders: currentFacilityOrders.length,
     };
-  }, [orders]);
+  }, [currentFacilityOrders]);
 
-  // 2. Spend by Facility Breakdown
-  const facilitySpendBreakdown = useMemo(() => {
-    const facilityMap = {};
+  // 2. Spend by Medication Breakdown (Facility Scoped)
+  const medicationSpendBreakdown = useMemo(() => {
+    const medMap = {};
 
-    facilities.forEach((f) => {
-      facilityMap[f.name] = {
-        name: f.name,
-        type: f.type,
-        approvedSpend: 0,
-        pendingSpend: 0,
-        orderCount: 0,
-      };
-    });
-
-    orders.forEach((o) => {
+    currentFacilityOrders.forEach((o) => {
       const cost = Number(o.estimatedCost || o.totalCost || 0);
-      if (!facilityMap[o.targetFacility]) {
-        facilityMap[o.targetFacility] = {
-          name: o.targetFacility,
-          type: "Branch",
+      const key = o.brandName || o.genericName || o.sku;
+      if (!medMap[key]) {
+        medMap[key] = {
+          name: key,
+          brandName: o.brandName,
+          genericName: o.genericName,
+          sku: o.sku,
           approvedSpend: 0,
           pendingSpend: 0,
+          totalSpend: 0,
           orderCount: 0,
         };
       }
 
+      medMap[key].totalSpend += cost;
       if (o.status === "Approved") {
-        facilityMap[o.targetFacility].approvedSpend += cost;
+        medMap[key].approvedSpend += cost;
       } else if (o.status === "Pending Approval") {
-        facilityMap[o.targetFacility].pendingSpend += cost;
+        medMap[key].pendingSpend += cost;
       }
-      facilityMap[o.targetFacility].orderCount += 1;
+      medMap[key].orderCount += 1;
     });
 
-    return Object.values(facilityMap);
-  }, [orders]);
+    return Object.values(medMap).sort((a, b) => b.totalSpend - a.totalSpend);
+  }, [currentFacilityOrders]);
 
-  // Paginated Facilities for Analytics Card
-  const facilityTotalPages =
-    Math.ceil(facilitySpendBreakdown.length / facilityItemsPerPage) || 1;
-  const paginatedFacilities = useMemo(() => {
-    const startIndex = (facilityCurrentPage - 1) * facilityItemsPerPage;
-    return facilitySpendBreakdown.slice(
+  // Paginated Medications for Analytics Card
+  const medicationTotalPages =
+    Math.ceil(medicationSpendBreakdown.length / medicationItemsPerPage) || 1;
+  const paginatedMedications = useMemo(() => {
+    const startIndex = (medicationCurrentPage - 1) * medicationItemsPerPage;
+    return medicationSpendBreakdown.slice(
       startIndex,
-      startIndex + facilityItemsPerPage,
+      startIndex + medicationItemsPerPage,
     );
-  }, [facilitySpendBreakdown, facilityCurrentPage, facilityItemsPerPage]);
+  }, [medicationSpendBreakdown, medicationCurrentPage, medicationItemsPerPage]);
 
-  // 3. Top Supplier Accounts Payable Breakdown
+  // 3. Top Supplier Accounts Payable Breakdown (Facility Scoped)
   const supplierSpendBreakdown = useMemo(() => {
     const supplierMap = {};
 
-    orders.forEach((o) => {
+    currentFacilityOrders.forEach((o) => {
       const cost = Number(o.estimatedCost || o.totalCost || 0);
       if (!supplierMap[o.supplierName]) {
         supplierMap[o.supplierName] = {
@@ -159,11 +211,11 @@ function Accounting() {
     return Object.values(supplierMap).sort(
       (a, b) => b.totalSpend - a.totalSpend,
     );
-  }, [orders]);
+  }, [currentFacilityOrders]);
 
-  // 4. Filtered Ledger Orders
+  // 4. Filtered Ledger Orders (Facility Scoped)
   const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
+    return currentFacilityOrders.filter((order) => {
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         order.orderNumber.toLowerCase().includes(q) ||
@@ -174,20 +226,15 @@ function Accounting() {
         order.targetFacility.toLowerCase().includes(q) ||
         order.requestedBy.toLowerCase().includes(q);
 
-      const matchesFacility =
-        selectedFacility === "ALL" || order.targetFacility === selectedFacility;
-
       const matchesSupplier =
         selectedSupplier === "ALL" || order.supplierName === selectedSupplier;
 
       const matchesStatus =
         selectedStatus === "ALL" || order.status === selectedStatus;
 
-      return (
-        matchesSearch && matchesFacility && matchesSupplier && matchesStatus
-      );
+      return matchesSearch && matchesSupplier && matchesStatus;
     });
-  }, [orders, searchQuery, selectedFacility, selectedSupplier, selectedStatus]);
+  }, [currentFacilityOrders, searchQuery, selectedSupplier, selectedStatus]);
 
   // 5. Pagination Logic
   const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
@@ -257,9 +304,12 @@ function Accounting() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
+    const facilitySlug = currentFacilityName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_");
     link.setAttribute(
       "download",
-      `exakt_financial_ledger_${new Date().toISOString().split("T")[0]}.csv`,
+      `exakt_financial_ledger_${facilitySlug}_${new Date().toISOString().split("T")[0]}.csv`,
     );
     document.body.appendChild(link);
     link.click();
@@ -271,13 +321,22 @@ function Accounting() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2.5">
-            <DollarSign className="w-7 h-7 text-emerald-600" />
-            <span>Accounting & Procurement Spend</span>
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2.5">
+              <span>Accounting & Procurement Spend</span>
+            </h1>
+            {/* Facility Scope Indicator */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold">
+              <Building2 className="w-3.5 h-3.5" />
+              <span>{currentFacilityName}</span>
+            </div>
+          </div>
           <p className="text-sm text-gray-500 mt-1">
-            Financial ledger, purchase commitments, vendor accounts payable, and
-            facility budget allocation
+            Financial ledger, purchase commitments, and vendor accounts payable
+            for{" "}
+            <span className="font-semibold text-gray-700">
+              {currentFacilityName}
+            </span>
           </p>
         </div>
 
@@ -381,90 +440,97 @@ function Accounting() {
 
       {/* Spend Analytics: 2-Column Analytics Section */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Spend by Facility Breakdown */}
+        {/* Left Column: Spend by Medication Breakdown */}
         <Card className="lg:col-span-6 p-5 border border-gray-200 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-gray-100">
               <div>
                 <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-blue-600" />
-                  <span>Expenditure by Destination Facility</span>
+                  <Pill className="w-4 h-4 text-blue-600" />
+                  <span>Medication Expenditure Ranking</span>
                 </h3>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Procurement cost distribution across hospital network
+                  Procurement cost distribution by medication for{" "}
+                  {currentFacilityName}
                 </p>
               </div>
             </div>
 
             <div className="space-y-4 pt-4 min-h-48">
-              {paginatedFacilities.map((facility) => {
-                const totalFacilitySpend =
-                  facility.approvedSpend + facility.pendingSpend;
-                const percentage =
-                  metrics.totalRequisitionSpend > 0
-                    ? Math.round(
-                        (totalFacilitySpend / metrics.totalRequisitionSpend) *
-                          100,
-                      )
-                    : 0;
+              {paginatedMedications.length > 0 ? (
+                paginatedMedications.map((med) => {
+                  const percentage =
+                    metrics.totalRequisitionSpend > 0
+                      ? Math.round(
+                          (med.totalSpend / metrics.totalRequisitionSpend) *
+                            100,
+                        )
+                      : 0;
 
-                return (
-                  <div key={facility.name} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <div>
-                        <span className="font-semibold text-gray-800">
-                          {facility.name}
-                        </span>
-                        <span className="text-[11px] text-gray-400 ml-1.5">
-                          ({facility.orderCount} orders)
-                        </span>
+                  return (
+                    <div key={med.name} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <div>
+                          <span className="font-semibold text-gray-800">
+                            {med.brandName || med.name}
+                          </span>
+                          <span className="text-[11px] text-gray-400 ml-1.5">
+                            ({med.genericName} • {med.orderCount}{" "}
+                            {med.orderCount === 1 ? "order" : "orders"})
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-mono font-bold text-gray-900">
+                            {formatCurrency(med.totalSpend)}
+                          </span>
+                          <span className="text-[11px] text-gray-500 font-semibold ml-1.5">
+                            ({percentage}%)
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <span className="font-mono font-bold text-gray-900">
-                          {formatCurrency(totalFacilitySpend)}
-                        </span>
-                        <span className="text-[11px] text-gray-500 font-semibold ml-1.5">
-                          ({percentage}%)
-                        </span>
+
+                      {/* Progress Bar */}
+                      <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden flex">
+                        <div
+                          className="bg-emerald-500 h-full transition-all"
+                          style={{
+                            width: `${
+                              metrics.totalRequisitionSpend > 0
+                                ? (med.approvedSpend /
+                                    metrics.totalRequisitionSpend) *
+                                  100
+                                : 0
+                            }%`,
+                          }}
+                          title={`Approved: ${formatCurrency(
+                            med.approvedSpend,
+                          )}`}
+                        />
+                        <div
+                          className="bg-amber-400 h-full transition-all"
+                          style={{
+                            width: `${
+                              metrics.totalRequisitionSpend > 0
+                                ? (med.pendingSpend /
+                                    metrics.totalRequisitionSpend) *
+                                  100
+                                : 0
+                            }%`,
+                          }}
+                          title={`Pending: ${formatCurrency(med.pendingSpend)}`}
+                        />
                       </div>
                     </div>
-
-                    {/* Progress Bar */}
-                    <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden flex">
-                      <div
-                        className="bg-emerald-500 h-full transition-all"
-                        style={{
-                          width: `${
-                            metrics.totalRequisitionSpend > 0
-                              ? (facility.approvedSpend /
-                                  metrics.totalRequisitionSpend) *
-                                100
-                              : 0
-                          }%`,
-                        }}
-                        title={`Approved: ${formatCurrency(
-                          facility.approvedSpend,
-                        )}`}
-                      />
-                      <div
-                        className="bg-amber-400 h-full transition-all"
-                        style={{
-                          width: `${
-                            metrics.totalRequisitionSpend > 0
-                              ? (facility.pendingSpend /
-                                  metrics.totalRequisitionSpend) *
-                                100
-                              : 0
-                          }%`,
-                        }}
-                        title={`Pending: ${formatCurrency(
-                          facility.pendingSpend,
-                        )}`}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              ) : (
+                <div className="flex flex-col items-center justify-center py-10 text-center text-gray-400">
+                  <Pill className="w-8 h-8 mb-2 text-gray-300" />
+                  <p className="text-xs font-semibold text-gray-500">
+                    No medication spend recorded for this facility
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -480,32 +546,32 @@ function Accounting() {
               </span>
             </div>
 
-            {facilityTotalPages > 1 && (
+            {medicationTotalPages > 1 && (
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() =>
-                    setFacilityCurrentPage((prev) => Math.max(1, prev - 1))
+                    setMedicationCurrentPage((prev) => Math.max(1, prev - 1))
                   }
-                  disabled={facilityCurrentPage === 1}
+                  disabled={medicationCurrentPage === 1}
                   className="btn-secondary py-1 px-2 text-xs"
-                  aria-label="Previous facility page"
+                  aria-label="Previous medication page"
                 >
                   <ChevronLeft className="w-3 h-3" />
                 </button>
                 <span className="text-xs font-semibold text-gray-700 px-1">
-                  Page {facilityCurrentPage} of {facilityTotalPages}
+                  Page {medicationCurrentPage} of {medicationTotalPages}
                 </span>
                 <button
                   type="button"
                   onClick={() =>
-                    setFacilityCurrentPage((prev) =>
-                      Math.min(facilityTotalPages, prev + 1),
+                    setMedicationCurrentPage((prev) =>
+                      Math.min(medicationTotalPages, prev + 1),
                     )
                   }
-                  disabled={facilityCurrentPage === facilityTotalPages}
+                  disabled={medicationCurrentPage === medicationTotalPages}
                   className="btn-secondary py-1 px-2 text-xs"
-                  aria-label="Next facility page"
+                  aria-label="Next medication page"
                 >
                   <ChevronRight className="w-3 h-3" />
                 </button>
@@ -524,41 +590,55 @@ function Accounting() {
                   <span>Vendor Accounts & Spend Ranking</span>
                 </h3>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Consolidated expenditure per pharmaceutical supplier
+                  Consolidated expenditure per pharmaceutical supplier for{" "}
+                  {currentFacilityName}
                 </p>
               </div>
             </div>
 
             <div className="divide-y divide-gray-100 pt-1">
-              {supplierSpendBreakdown.slice(0, 4).map((supplier, idx) => (
-                <div
-                  key={supplier.name}
-                  className="py-3 flex items-center justify-between gap-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-600 shrink-0">
-                      #{idx + 1}
-                    </span>
-                    <div>
-                      <h4 className="text-xs font-bold text-gray-900">
-                        {supplier.name}
-                      </h4>
-                      <p className="text-[11px] text-gray-500">
-                        {supplier.orderCount} Purchase Orders Placed
-                      </p>
+              {supplierSpendBreakdown.length > 0 ? (
+                supplierSpendBreakdown.slice(0, 4).map((supplier, idx) => (
+                  <div
+                    key={supplier.name}
+                    className="py-3 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-600 shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <div>
+                        <h4 className="text-xs font-bold text-gray-900">
+                          {supplier.name}
+                        </h4>
+                        <p className="text-[11px] text-gray-500">
+                          {supplier.orderCount}{" "}
+                          {supplier.orderCount === 1
+                            ? "Purchase Order"
+                            : "Purchase Orders"}{" "}
+                          Placed
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="text-right">
-                    <div className="font-mono font-bold text-sm text-gray-900">
-                      {formatCurrency(supplier.totalSpend)}
+                    <div className="text-right">
+                      <div className="font-mono font-bold text-sm text-gray-900">
+                        {formatCurrency(supplier.totalSpend)}
+                      </div>
+                      <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
+                        Approved: {formatCurrency(supplier.approvedSpend)}
+                      </span>
                     </div>
-                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
-                      Approved: {formatCurrency(supplier.approvedSpend)}
-                    </span>
                   </div>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center py-10 text-center text-gray-400">
+                  <Truck className="w-8 h-8 mb-2 text-gray-300" />
+                  <p className="text-xs font-semibold text-gray-500">
+                    No vendor transactions for this facility
+                  </p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
@@ -583,24 +663,24 @@ function Accounting() {
                 setSearchQuery("");
                 setCurrentPage(1);
               }}
-              placeholder="Search PO #, SKU, drug, vendor, facility..."
+              placeholder="Search PO #, SKU, drug, vendor, notes..."
             />
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Facility Filter */}
+            {/* Supplier Filter */}
             <select
-              value={selectedFacility}
+              value={selectedSupplier}
               onChange={(e) => {
-                setSelectedFacility(e.target.value);
+                setSelectedSupplier(e.target.value);
                 setCurrentPage(1);
               }}
-              className="input py-2 text-xs w-full sm:w-44"
+              className="input py-2 text-xs w-full sm:w-48"
             >
-              <option value="ALL">All Facilities</option>
-              {facilities.map((f) => (
-                <option key={f.id} value={f.name}>
-                  {f.name}
+              <option value="ALL">All Suppliers / Vendors</option>
+              {facilitySuppliers.map((supplierName) => (
+                <option key={supplierName} value={supplierName}>
+                  {supplierName}
                 </option>
               ))}
             </select>
@@ -634,7 +714,7 @@ function Accounting() {
                   Medication & SKU
                 </th>
                 <th scope="col" className="px-6 py-3.5">
-                  Vendor & Destination
+                  Vendor & Requester
                 </th>
                 <th scope="col" className="px-6 py-3.5 text-right">
                   Total Amount (₱)
@@ -683,7 +763,7 @@ function Accounting() {
                         </div>
                       </td>
 
-                      {/* Vendor & Destination */}
+                      {/* Vendor & Requester */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-800">
                           <Truck className="w-3.5 h-3.5 text-gray-400 shrink-0" />
@@ -692,9 +772,9 @@ function Accounting() {
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
-                          <Building2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                          <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                           <span className="truncate max-w-40">
-                            {order.targetFacility}
+                            {order.requestedBy}
                           </span>
                         </div>
                       </td>
@@ -763,7 +843,8 @@ function Accounting() {
                       No purchase order ledger records found
                     </p>
                     <p className="text-xs text-gray-400 mt-1">
-                      Try adjusting your search query or facility filter.
+                      No financial records found for {currentFacilityName}. Try
+                      adjusting your search query or status filter.
                     </p>
                   </td>
                 </tr>
