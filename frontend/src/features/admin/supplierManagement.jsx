@@ -25,6 +25,8 @@ import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 
 import { suppliers as initialSuppliers } from "../../data/supplier";
+import { facilities } from "../../data/facility";
+import useAuth from "../../hooks/useAuth";
 
 const PAYMENT_TERMS_OPTIONS = [
   "Net 15",
@@ -44,15 +46,44 @@ const DEFAULT_FORM_DATA = {
   address: "",
   paymentTerms: "Net 30",
   status: "Active",
-  totalBatchesSupplied: 0,
 };
 
 function SupplierManagement() {
+  const { facility } = useAuth();
+
+  // Automatically detect current active facility
+  const currentFacilityName = useMemo(() => {
+    if (facility?.name) return facility.name;
+    try {
+      const stored = localStorage.getItem("currentFacility");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.name) return parsed.name;
+      }
+    } catch {
+      // fallback
+    }
+    return facilities[0]?.name || "Exakt Central General Hospital";
+  }, [facility]);
+
   const [supplierList, setSupplierList] = useState(initialSuppliers);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
+
+  // Filter suppliers that service/belong to the current active facility
+  const currentFacilitySuppliers = useMemo(() => {
+    return supplierList.filter((s) => {
+      if (s.facilities && Array.isArray(s.facilities)) {
+        return s.facilities.includes(currentFacilityName);
+      }
+      return (
+        (s.primaryFacility || s.facility || facilities[0]?.name) ===
+        currentFacilityName
+      );
+    });
+  }, [supplierList, currentFacilityName]);
 
   // Modal State
   const [modalMode, setModalMode] = useState(null); // 'add' | 'view' | 'edit' | 'delete' | null
@@ -60,20 +91,20 @@ function SupplierManagement() {
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
   const [formErrors, setFormErrors] = useState({});
 
-  // Calculate 3 Total Metric Counts
-  const totalSuppliers = supplierList.length;
+  // Calculate 3 Total Metric Counts for Active Facility
+  const totalSuppliers = currentFacilitySuppliers.length;
   const totalActive = useMemo(
-    () => supplierList.filter((s) => s.status === "Active").length,
-    [supplierList],
+    () => currentFacilitySuppliers.filter((s) => s.status === "Active").length,
+    [currentFacilitySuppliers],
   );
   const totalInactive = useMemo(
-    () => supplierList.filter((s) => s.status !== "Active").length,
-    [supplierList],
+    () => currentFacilitySuppliers.filter((s) => s.status !== "Active").length,
+    [currentFacilitySuppliers],
   );
 
-  // Filtered suppliers based on search query and status
+  // Filtered suppliers based on search query, status, and active facility
   const filteredSuppliers = useMemo(() => {
-    return supplierList.filter((supplier) => {
+    return currentFacilitySuppliers.filter((supplier) => {
       const matchesSearch =
         supplier.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         supplier.supplierCode
@@ -91,7 +122,7 @@ function SupplierManagement() {
 
       return matchesSearch && matchesStatus;
     });
-  }, [supplierList, searchQuery, selectedStatus]);
+  }, [currentFacilitySuppliers, searchQuery, selectedStatus]);
 
   // Pagination calculation
   const totalPages = Math.ceil(filteredSuppliers.length / itemsPerPage) || 1;
@@ -150,7 +181,6 @@ function SupplierManagement() {
       address: supplier.address || "",
       paymentTerms: supplier.paymentTerms || "Net 30",
       status: supplier.status || "Active",
-      totalBatchesSupplied: supplier.totalBatchesSupplied ?? 0,
     });
     setFormErrors({});
     setModalMode("edit");
@@ -245,7 +275,9 @@ function SupplierManagement() {
         address: formData.address.trim() || "Metro Manila, Philippines",
         paymentTerms: formData.paymentTerms,
         status: formData.status,
-        totalBatchesSupplied: Number(formData.totalBatchesSupplied) || 0,
+        totalBatchesSupplied: 0,
+        primaryFacility: currentFacilityName,
+        facilities: [currentFacilityName],
         createdAt: new Date().toISOString().split("T")[0],
       };
       setSupplierList((prev) => [newSupplier, ...prev]);
@@ -264,7 +296,7 @@ function SupplierManagement() {
                 paymentTerms: formData.paymentTerms,
                 status: formData.status,
                 totalBatchesSupplied:
-                  Number(formData.totalBatchesSupplied) || 0,
+                  selectedSupplier.totalBatchesSupplied ?? 0,
               }
             : s,
         ),
@@ -294,11 +326,18 @@ function SupplierManagement() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            Supplier Management
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+              Supplier Management
+            </h1>
+            {/* Active Facility Indicator */}
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs font-bold text-blue-700">
+              <Building2 className="w-3.5 h-3.5" />
+              <span>{currentFacilityName}</span>
+            </span>
+          </div>
           <p className="text-sm text-gray-500 mt-1">
-            Manage pharmaceutical vendors, distributors, and delivery terms
+            Manage pharmaceutical vendors, distributors, and delivery terms for <span className="font-semibold text-gray-700">{currentFacilityName}</span>
           </p>
         </div>
         <button
@@ -757,28 +796,6 @@ function SupplierManagement() {
               </select>
             </div>
 
-            {/* Total Batches Supplied */}
-            <div>
-              <label
-                htmlFor="supplier-batches"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Total Batches Supplied
-              </label>
-              <div className="relative">
-                <input
-                  id="supplier-batches"
-                  type="number"
-                  min="0"
-                  name="totalBatchesSupplied"
-                  value={formData.totalBatchesSupplied}
-                  onChange={handleInputChange}
-                  className="input pl-10"
-                />
-                <Package className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-            </div>
-
             {/* Business Address */}
             <div className="sm:col-span-2">
               <label
@@ -941,6 +958,31 @@ function SupplierManagement() {
                 </p>
               </div>
             </div>
+
+            {/* Serviced Facilities Section */}
+            {selectedSupplier.facilities && selectedSupplier.facilities.length > 0 && (
+              <div className="p-3 rounded-lg border border-gray-100 bg-gray-50/70 space-y-1.5 text-xs">
+                <span className="text-gray-500 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Serviced Facilities ({selectedSupplier.facilities.length})</span>
+                </span>
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {selectedSupplier.facilities.map((facName) => (
+                    <span
+                      key={facName}
+                      className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ${
+                        facName === currentFacilityName
+                          ? "bg-blue-50 text-blue-700 border-blue-200 font-semibold"
+                          : "bg-white text-gray-700 border-gray-200"
+                      }`}
+                    >
+                      {facName}
+                      {facName === currentFacilityName && " (Active)"}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Modal Actions */}
             <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">

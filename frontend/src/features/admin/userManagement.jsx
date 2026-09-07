@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Calendar,
   Lock,
+  Building2,
   User as UserIcon,
 } from "lucide-react";
 
@@ -25,7 +26,9 @@ import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 
 import { users as initialUsers } from "../../data/user";
+import { facilities } from "../../data/facility";
 import { ROLES, ROLE_DETAILS } from "../../config/roles";
+import useAuth from "../../hooks/useAuth";
 
 const DEFAULT_FORM_DATA = {
   name: "",
@@ -38,6 +41,43 @@ const DEFAULT_FORM_DATA = {
 };
 
 function UserManagement() {
+  const { facility: authFacility } = useAuth();
+
+  // Automatically detect current active facility
+  const currentFacility = useMemo(() => {
+    if (authFacility?.id || authFacility?.name) {
+      const matched = facilities.find(
+        (f) =>
+          f.id === authFacility.id ||
+          f.name?.toLowerCase() === authFacility.name?.toLowerCase(),
+      );
+      if (matched) return matched;
+      return authFacility;
+    }
+    try {
+      const stored = localStorage.getItem("currentFacility");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.id || parsed?.name) {
+          const matched = facilities.find(
+            (f) =>
+              f.id === parsed.id ||
+              f.name?.toLowerCase() === parsed.name?.toLowerCase(),
+          );
+          if (matched) return matched;
+          return parsed;
+        }
+      }
+    } catch {
+      // fallback
+    }
+    return facilities[0] || { id: 1, name: "Exakt Central General Hospital" };
+  }, [authFacility]);
+
+  const currentFacilityName =
+    currentFacility?.name || "Exakt Central General Hospital";
+  const currentFacilityId = currentFacility?.id || 1;
+
   const [userList, setUserList] = useState(initialUsers);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRole, setSelectedRole] = useState("ALL");
@@ -45,30 +85,52 @@ function UserManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
+  // Filter users that are assigned to the current active facility
+  const currentFacilityUsers = useMemo(() => {
+    const activeFac = facilities.find(
+      (f) => f.id === currentFacilityId || f.name === currentFacilityName,
+    );
+
+    return userList.filter((u) => {
+      const inUserAssigned =
+        Array.isArray(u.assignedFacilities) &&
+        u.assignedFacilities.includes(currentFacilityId);
+
+      const inFacilityAssigned =
+        activeFac &&
+        Array.isArray(activeFac.assignedUserIds) &&
+        activeFac.assignedUserIds.includes(u.id);
+
+      return inUserAssigned || inFacilityAssigned;
+    });
+  }, [userList, currentFacilityId, currentFacilityName]);
+
   // Modal State
   const [modalMode, setModalMode] = useState(null); // 'add' | 'view' | 'edit' | 'delete' | null
   const [selectedUser, setSelectedUser] = useState(null);
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
   const [formErrors, setFormErrors] = useState({});
 
-  // Calculate totals for each role
-  const totalUsers = userList.length;
+  // Calculate totals for each role for the current active facility
+  const totalUsers = currentFacilityUsers.length;
   const totalAdmins = useMemo(
-    () => userList.filter((u) => u.role === ROLES.ADMIN).length,
-    [userList],
+    () => currentFacilityUsers.filter((u) => u.role === ROLES.ADMIN).length,
+    [currentFacilityUsers],
   );
   const totalPharmacists = useMemo(
-    () => userList.filter((u) => u.role === ROLES.PHARMACIST).length,
-    [userList],
+    () =>
+      currentFacilityUsers.filter((u) => u.role === ROLES.PHARMACIST).length,
+    [currentFacilityUsers],
   );
   const totalProcurements = useMemo(
-    () => userList.filter((u) => u.role === ROLES.PROCUREMENT).length,
-    [userList],
+    () =>
+      currentFacilityUsers.filter((u) => u.role === ROLES.PROCUREMENT).length,
+    [currentFacilityUsers],
   );
 
-  // Filtered users based on search, role, and status
+  // Filtered users based on search, role, status, and active facility
   const filteredUsers = useMemo(() => {
-    return userList.filter((user) => {
+    return currentFacilityUsers.filter((user) => {
       const matchesSearch =
         user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -81,7 +143,7 @@ function UserManagement() {
 
       return matchesSearch && matchesRole && matchesStatus;
     });
-  }, [userList, searchQuery, selectedRole, selectedStatus]);
+  }, [currentFacilityUsers, searchQuery, selectedRole, selectedStatus]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
@@ -217,6 +279,7 @@ function UserManagement() {
         role: formData.role,
         status: formData.status,
         password: formData.password || "exaktpassword",
+        assignedFacilities: [currentFacilityId],
         createdAt: new Date().toISOString().split("T")[0],
       };
       setUserList((prev) => [newUser, ...prev]);
@@ -233,6 +296,8 @@ function UserManagement() {
                 role: formData.role,
                 status: formData.status,
                 password: formData.password || u.password,
+                assignedFacilities:
+                  u.assignedFacilities || [currentFacilityId],
               }
             : u,
         ),
@@ -261,11 +326,18 @@ function UserManagement() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            User Management
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+              User Management
+            </h1>
+            {/* Active Facility Indicator */}
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs font-bold text-blue-700">
+              <Building2 className="w-3.5 h-3.5" />
+              <span>{currentFacilityName}</span>
+            </span>
+          </div>
           <p className="text-sm text-gray-500 mt-1">
-            Manage system access, roles, and staff account permissions
+            Manage system users, access roles, and credentials for <span className="font-semibold text-gray-700">{currentFacilityName}</span>
           </p>
         </div>
         <button

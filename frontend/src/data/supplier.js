@@ -11,6 +11,13 @@ export const suppliers = [
     paymentTerms: "Net 30",
     totalBatchesSupplied: 142,
     createdAt: "2024-11-10",
+    primaryFacility: "Exakt Central General Hospital",
+    facilities: [
+      "Exakt Central General Hospital",
+      "Exakt Northside Medical Wing",
+      "Exakt Central Pharma Warehouse",
+      "Exakt Emergency & Trauma Center",
+    ],
   },
   {
     id: 2,
@@ -24,6 +31,13 @@ export const suppliers = [
     paymentTerms: "Net 60",
     totalBatchesSupplied: 215,
     createdAt: "2024-12-05",
+    primaryFacility: "Exakt Central Pharma Warehouse",
+    facilities: [
+      "Exakt Central General Hospital",
+      "Exakt Central Pharma Warehouse",
+      "Exakt Oncology & Specialty Care",
+      "Exakt Westside Storage Hub",
+    ],
   },
   {
     id: 3,
@@ -37,6 +51,12 @@ export const suppliers = [
     paymentTerms: "Net 30",
     totalBatchesSupplied: 89,
     createdAt: "2025-01-12",
+    primaryFacility: "Exakt Northside Medical Wing",
+    facilities: [
+      "Exakt Northside Medical Wing",
+      "Exakt Southside Community Clinic",
+      "Exakt Eastside Specialty Clinic",
+    ],
   },
   {
     id: 4,
@@ -50,6 +70,12 @@ export const suppliers = [
     paymentTerms: "Net 15",
     totalBatchesSupplied: 64,
     createdAt: "2025-01-20",
+    primaryFacility: "Exakt Emergency & Trauma Center",
+    facilities: [
+      "Exakt Central General Hospital",
+      "Exakt Emergency & Trauma Center",
+      "Exakt Diagnostic & Lab Center",
+    ],
   },
   {
     id: 5,
@@ -63,6 +89,12 @@ export const suppliers = [
     paymentTerms: "Net 45",
     totalBatchesSupplied: 110,
     createdAt: "2025-02-02",
+    primaryFacility: "Exakt Oncology & Specialty Care",
+    facilities: [
+      "Exakt Central General Hospital",
+      "Exakt Oncology & Specialty Care",
+      "Exakt Pediatric Care Pavilion",
+    ],
   },
   {
     id: 6,
@@ -76,6 +108,12 @@ export const suppliers = [
     paymentTerms: "Net 30",
     totalBatchesSupplied: 95,
     createdAt: "2025-02-14",
+    primaryFacility: "Exakt Central General Hospital",
+    facilities: [
+      "Exakt Central General Hospital",
+      "Exakt Eastside Specialty Clinic",
+      "Exakt Southside Community Clinic",
+    ],
   },
   {
     id: 7,
@@ -89,6 +127,12 @@ export const suppliers = [
     paymentTerms: "Net 30",
     totalBatchesSupplied: 78,
     createdAt: "2025-02-25",
+    primaryFacility: "Exakt Central General Hospital",
+    facilities: [
+      "Exakt Central General Hospital",
+      "Exakt Emergency & Trauma Center",
+      "Exakt Central Pharma Warehouse",
+    ],
   },
   {
     id: 8,
@@ -102,6 +146,12 @@ export const suppliers = [
     paymentTerms: "Net 60",
     totalBatchesSupplied: 135,
     createdAt: "2025-03-01",
+    primaryFacility: "Exakt Northside Medical Wing",
+    facilities: [
+      "Exakt Central General Hospital",
+      "Exakt Northside Medical Wing",
+      "Exakt Oncology & Specialty Care",
+    ],
   },
   {
     id: 9,
@@ -115,6 +165,11 @@ export const suppliers = [
     paymentTerms: "COD",
     totalBatchesSupplied: 24,
     createdAt: "2025-03-10",
+    primaryFacility: "Exakt Southside Community Clinic",
+    facilities: [
+      "Exakt Southside Community Clinic",
+      "Exakt Annex Medical Dispensary",
+    ],
   },
   {
     id: 10,
@@ -128,6 +183,11 @@ export const suppliers = [
     paymentTerms: "Net 30",
     totalBatchesSupplied: 43,
     createdAt: "2025-03-18",
+    primaryFacility: "Exakt Diagnostic & Lab Center",
+    facilities: [
+      "Exakt Diagnostic & Lab Center",
+      "Exakt Central General Hospital",
+    ],
   },
   {
     id: 11,
@@ -141,6 +201,12 @@ export const suppliers = [
     paymentTerms: "Net 45",
     totalBatchesSupplied: 88,
     createdAt: "2025-04-02",
+    primaryFacility: "Exakt Central General Hospital",
+    facilities: [
+      "Exakt Central General Hospital",
+      "Exakt Northside Medical Wing",
+      "Exakt Pediatric Care Pavilion",
+    ],
   },
   {
     id: 12,
@@ -154,5 +220,10 @@ export const suppliers = [
     paymentTerms: "Net 15",
     totalBatchesSupplied: 8,
     createdAt: "2025-04-15",
+    primaryFacility: "Exakt Westside Storage Hub",
+    facilities: [
+      "Exakt Westside Storage Hub",
+      "Exakt Annex Medical Dispensary",
+    ],
   },
 ];
