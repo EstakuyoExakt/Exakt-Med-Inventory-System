@@ -86,3 +86,38 @@ export const getStockStatus = (sku) => {
     dotColor: "bg-emerald-500",
   };
 };
+
+import { projects } from "../data/projects";
+
+// Helper to get a project by ID
+export const getProjectById = (projectId, projectList = projects) => {
+  return projectList.find((p) => p.id === Number(projectId)) || null;
+};
+
+// Helper to get all facilities belonging to a project
+export const getFacilitiesByProjectId = (
+  projectId,
+  facilityList = [],
+  projectList = projects,
+) => {
+  const project = getProjectById(projectId, projectList);
+  if (!project) return [];
+  return facilityList.filter(
+    (f) =>
+      project.facilityIds?.includes(f.id) ||
+      f.projectId === Number(projectId),
+  );
+};
+
+// Helper to get the parent project for a specific facility
+export const getProjectForFacility = (facility, projectList = projects) => {
+  if (!facility) return null;
+  return (
+    projectList.find(
+      (p) =>
+        p.id === facility.projectId ||
+        (Array.isArray(p.facilityIds) && p.facilityIds.includes(facility.id)),
+    ) || null
+  );
+};
+

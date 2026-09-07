@@ -11,6 +11,7 @@ export const facilities = [
     status: "Active",
     createdAt: "2024-10-15",
     assignedUserIds: [1, 2, 3, 6],
+    projectId: 2, // Quezon City Medical Network
   },
   {
     id: 2,
@@ -24,6 +25,7 @@ export const facilities = [
     status: "Active",
     createdAt: "2024-11-20",
     assignedUserIds: [1, 2, 3, 7],
+    projectId: 2, // Quezon City Medical Network
   },
   {
     id: 3,
@@ -37,6 +39,7 @@ export const facilities = [
     status: "Active",
     createdAt: "2024-12-01",
     assignedUserIds: [1, 2, 4, 6, 8],
+    projectId: 3, // Taguig & East Medical Consortium
   },
   {
     id: 4,
@@ -50,6 +53,7 @@ export const facilities = [
     status: "Active",
     createdAt: "2025-01-10",
     assignedUserIds: [1, 2, 4, 7],
+    projectId: 4, // South Manila & Coastal Health Initiative
   },
   {
     id: 5,
@@ -63,6 +67,7 @@ export const facilities = [
     status: "Active",
     createdAt: "2025-01-25",
     assignedUserIds: [1, 2, 5, 6],
+    projectId: 4, // South Manila & Coastal Health Initiative
   },
   {
     id: 6,
@@ -76,6 +81,7 @@ export const facilities = [
     status: "Active",
     createdAt: "2025-02-05",
     assignedUserIds: [1, 2, 5, 8],
+    projectId: 3, // Taguig & East Medical Consortium
   },
   {
     id: 7,
@@ -89,6 +95,7 @@ export const facilities = [
     status: "Active",
     createdAt: "2025-02-18",
     assignedUserIds: [1, 2, 3, 8],
+    projectId: 2, // Quezon City Medical Network
   },
   {
     id: 8,
@@ -102,6 +109,7 @@ export const facilities = [
     status: "Active",
     createdAt: "2025-03-02",
     assignedUserIds: [1, 2, 7],
+    projectId: 3, // Taguig & East Medical Consortium
   },
   {
     id: 9,
@@ -115,6 +123,7 @@ export const facilities = [
     status: "Inactive",
     createdAt: "2025-03-12",
     assignedUserIds: [1, 2, 4],
+    projectId: 4, // South Manila & Coastal Health Initiative
   },
   {
     id: 10,
@@ -128,6 +137,7 @@ export const facilities = [
     status: "Active",
     createdAt: "2025-03-25",
     assignedUserIds: [1, 2, 9],
+    projectId: 5, // Central Metro Pediatric & Community Care
   },
   {
     id: 11,
@@ -141,5 +151,48 @@ export const facilities = [
     status: "Inactive",
     createdAt: "2025-04-05",
     assignedUserIds: [1, 2, 9],
+    projectId: 5, // Central Metro Pediatric & Community Care
+  },
+  {
+    id: 12,
+    facilityCode: "FAC-012",
+    name: "Taytay Community Clinic 1",
+    type: "Outpatient Clinic",
+    contactPerson: "Dr. Lilian Bautista",
+    email: "taytay.clinic1@exaktmed.com",
+    phone: "+63 2 8658 1122",
+    address: "Manila East Road, San Juan, Taytay, Rizal",
+    status: "Active",
+    createdAt: "2025-04-12",
+    assignedUserIds: [1, 2, 4],
+    projectId: 1, // Taytay Healthcare Project
+  },
+  {
+    id: 13,
+    facilityCode: "FAC-013",
+    name: "Taytay Rural Health Clinic 2",
+    type: "Outpatient Clinic",
+    contactPerson: "Dr. Ernesto Dela Paz",
+    email: "taytay.clinic2@exaktmed.com",
+    phone: "+63 2 8658 3344",
+    address: "Rizal Avenue, Dolores, Taytay, Rizal",
+    status: "Active",
+    createdAt: "2025-04-20",
+    assignedUserIds: [1, 2, 7],
+    projectId: 1, // Taytay Healthcare Project
+  },
+  {
+    id: 14,
+    facilityCode: "FAC-014",
+    name: "Taytay Emergency & Maternity Care",
+    type: "Emergency Center",
+    contactPerson: "Dr. Katrina San Jose",
+    email: "taytay.maternity@exaktmed.com",
+    phone: "+63 2 8658 5566",
+    address: "Highway 2000, San Isidro, Taytay, Rizal",
+    status: "Active",
+    createdAt: "2025-05-02",
+    assignedUserIds: [1, 2, 6],
+    projectId: 1, // Taytay Healthcare Project
   },
 ];

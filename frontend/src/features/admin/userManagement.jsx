@@ -101,7 +101,12 @@ function UserManagement() {
         Array.isArray(activeFac.assignedUserIds) &&
         activeFac.assignedUserIds.includes(u.id);
 
-      return inUserAssigned || inFacilityAssigned;
+      const inProjectAssigned =
+        Array.isArray(u.assignedProjects) &&
+        activeFac?.projectId &&
+        u.assignedProjects.includes(activeFac.projectId);
+
+      return inUserAssigned || inFacilityAssigned || inProjectAssigned;
     });
   }, [userList, currentFacilityId, currentFacilityName]);
 

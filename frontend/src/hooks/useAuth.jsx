@@ -23,13 +23,34 @@ export function useAuth() {
     }
   });
 
+  const [project, setProject] = useState(() => {
+    try {
+      const projString = localStorage.getItem("currentProject");
+      return projString ? JSON.parse(projString) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const isAuthenticated = Boolean(user);
 
   const login = (userData) => {
     localStorage.setItem("currentUser", JSON.stringify(userData));
     setUser(userData);
-    // Redirect to facility selection after login
-    navigate("/select-facility", { replace: true });
+    // Admins redirect to project selection first, other roles to facility selection
+    if (userData?.role === "Admin") {
+      navigate("/select-project", { replace: true });
+    } else {
+      navigate("/select-facility", { replace: true });
+    }
+  };
+
+  const selectProject = (projectData, navigateToFacility = true) => {
+    localStorage.setItem("currentProject", JSON.stringify(projectData));
+    setProject(projectData);
+    if (navigateToFacility) {
+      navigate("/select-facility", { replace: true });
+    }
   };
 
   const selectFacility = (facilityData) => {
@@ -42,16 +63,20 @@ export function useAuth() {
   const logout = () => {
     localStorage.removeItem("currentUser");
     localStorage.removeItem("currentFacility");
+    localStorage.removeItem("currentProject");
     setUser(null);
     setFacility(null);
+    setProject(null);
     navigate("/", { replace: true });
   };
 
   return {
     user,
     facility,
+    project,
     isAuthenticated,
     login,
+    selectProject,
     selectFacility,
     logout,
   };

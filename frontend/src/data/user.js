@@ -10,7 +10,7 @@ export const users = [
     status: "Active",
     createdAt: "2025-01-10",
     phone: "+63 917 123 4567",
-    assignedFacilities: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    assignedProjects: [1, 2, 3, 4, 5],
   },
   {
     id: 2,
@@ -22,7 +22,7 @@ export const users = [
     status: "Active",
     createdAt: "2025-01-22",
     phone: "+63 918 234 5678",
-    assignedFacilities: [1, 2, 3, 4, 5, 6, 7, 8],
+    assignedProjects: [1, 2, 3],
   },
 
   // --- Pharmacist Managers ---
