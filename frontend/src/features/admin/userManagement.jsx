@@ -96,6 +96,11 @@ function UserManagement() {
     );
 
     return userList.filter((u) => {
+      // Super Admin has global access to all facilities
+      if (u.role === ROLES.SUPER_ADMIN || u.role === "Super Admin") {
+        return true;
+      }
+
       const inUserAssigned =
         Array.isArray(u.assignedFacilities) &&
         u.assignedFacilities.includes(currentFacilityId);
@@ -123,7 +128,14 @@ function UserManagement() {
   // Calculate totals for each role for the current active facility
   const totalUsers = currentFacilityUsers.length;
   const totalAdmins = useMemo(
-    () => currentFacilityUsers.filter((u) => u.role === ROLES.ADMIN).length,
+    () =>
+      currentFacilityUsers.filter(
+        (u) =>
+          u.role === ROLES.ADMIN ||
+          u.role === ROLES.SUPER_ADMIN ||
+          u.role === "Admin" ||
+          u.role === "Super Admin",
+      ).length,
     [currentFacilityUsers],
   );
   const totalPharmacists = useMemo(
@@ -179,7 +191,7 @@ function UserManagement() {
 
   // Permission helpers imported from utils/helpers bound to currentUser
   const canEditUser = (targetUser) => checkCanEditUser(targetUser, currentUser);
-  const canDeleteUser = (targetUser) => checkCanDeleteUser(targetUser);
+  const canDeleteUser = (targetUser) => checkCanDeleteUser(targetUser, currentUser);
 
   // Modal Open Handlers
   const handleOpenAddModal = () => {
@@ -473,6 +485,7 @@ function UserManagement() {
               className="input py-2 text-xs w-full sm:w-44"
             >
               <option value="ALL">All Roles</option>
+              <option value={ROLES.SUPER_ADMIN}>Super Admin</option>
               <option value={ROLES.ADMIN}>Admin</option>
               <option value={ROLES.PHARMACIST}>Pharmacist Manager</option>
               <option value={ROLES.PROCUREMENT}>Procurement Officer</option>
@@ -612,7 +625,12 @@ function UserManagement() {
                           ) : (
                             <span
                               className="p-1.5 rounded-lg border border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed inline-flex items-center justify-center"
-                              title="Administrator accounts cannot be edited by other admins"
+                              title={
+                                user.role === ROLES.SUPER_ADMIN ||
+                                user.role === "Super Admin"
+                                  ? "Super Administrator accounts cannot be edited by other users"
+                                  : "Administrator accounts cannot be edited by other admins"
+                              }
                             >
                               <Lock className="w-3.5 h-3.5" />
                             </span>
@@ -796,6 +814,10 @@ function UserManagement() {
                 onChange={handleInputChange}
                 className="input"
               >
+                {(currentUser?.role === ROLES.SUPER_ADMIN ||
+                  currentUser?.role === "Super Admin") && (
+                  <option value={ROLES.SUPER_ADMIN}>Super Admin</option>
+                )}
                 <option value={ROLES.ADMIN}>Admin</option>
                 <option value={ROLES.PHARMACIST}>Pharmacist Manager</option>
                 <option value={ROLES.PROCUREMENT}>Procurement Officer</option>
@@ -977,7 +999,10 @@ function UserManagement() {
                 {!canEditUser(selectedUser) && (
                   <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500 font-medium bg-gray-50 px-2.5 py-1 rounded-md border border-gray-200/60">
                     <Lock className="w-3 h-3 text-gray-400" />
-                    Admin accounts cannot be edited by other admins
+                    {selectedUser.role === ROLES.SUPER_ADMIN ||
+                    selectedUser.role === "Super Admin"
+                      ? "Super Admin accounts are protected from external edits"
+                      : "Admin accounts cannot be edited by other admins"}
                   </span>
                 )}
               </div>

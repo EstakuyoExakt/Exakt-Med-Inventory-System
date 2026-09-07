@@ -57,7 +57,11 @@ function App() {
           <Route path="/unauthorized" element={<Unauthorized />} />
 
           {/* Admin Protected Routes */}
-          <Route element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]} />}>
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.SUPER_ADMIN]} />
+            }
+          >
             <Route path="/admin/users" element={<UserManagement />} />
             <Route path="/admin/suppliers" element={<SupplierManagement />} />
             <Route path="/admin/facilities" element={<FacilityManagement />} />

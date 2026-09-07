@@ -121,24 +121,69 @@ export const getProjectForFacility = (facility, projectList = projects) => {
   );
 };
 
-// Helper to prevent admin users from editing other admin accounts
+// Helper to prevent unauthorized user editing:
+// - Super Admin can edit all roles EXCEPT other super admins (can edit themselves)
+// - Admin cannot edit Super Admins, and cannot edit other Admins (can edit themselves)
 export const canEditUser = (targetUser, currentUser) => {
-  if (!targetUser) return false;
+  if (!targetUser || !currentUser) return false;
+
+  const isCurrentSuperAdmin =
+    currentUser.role === ROLES.SUPER_ADMIN || currentUser.role === "Super Admin";
+  const isTargetSuperAdmin =
+    targetUser.role === ROLES.SUPER_ADMIN || targetUser.role === "Super Admin";
   const isTargetAdmin =
     targetUser.role === ROLES.ADMIN || targetUser.role === "Admin";
-  if (isTargetAdmin && targetUser.id !== currentUser?.id) {
+
+  // Super Admin: can edit all roles except other Super Admins
+  if (isCurrentSuperAdmin) {
+    if (isTargetSuperAdmin && targetUser.id !== currentUser.id) {
+      return false;
+    }
+    return true;
+  }
+
+  // Regular Admin: cannot edit Super Admins
+  if (isTargetSuperAdmin) {
     return false;
   }
+
+  // Regular Admin: cannot edit other Admins
+  if (isTargetAdmin && targetUser.id !== currentUser.id) {
+    return false;
+  }
+
   return true;
 };
 
-// Helper to prevent admin users from deleting admin accounts
-export const canDeleteUser = (targetUser) => {
+// Helper to prevent unauthorized user deletion:
+// - Super Admins can NEVER be deleted by anyone (including themselves or other super admins)
+// - Super Admin can delete all other accounts (Admins, Pharmacists, Procurements)
+// - Regular Admin cannot delete any Admin accounts
+export const canDeleteUser = (targetUser, currentUser) => {
   if (!targetUser) return false;
+
+  const isCurrentSuperAdmin =
+    currentUser?.role === ROLES.SUPER_ADMIN || currentUser?.role === "Super Admin";
+  const isTargetSuperAdmin =
+    targetUser.role === ROLES.SUPER_ADMIN || targetUser.role === "Super Admin";
   const isTargetAdmin =
     targetUser.role === ROLES.ADMIN || targetUser.role === "Admin";
+
+  // Super Admin accounts can never be deleted
+  if (isTargetSuperAdmin) {
+    return false;
+  }
+
+  // Super Admin can delete all non-super-admin users
+  if (isCurrentSuperAdmin) {
+    return true;
+  }
+
+  // Regular Admin cannot delete any Admin account
   if (isTargetAdmin) {
     return false;
   }
+
   return true;
 };
+

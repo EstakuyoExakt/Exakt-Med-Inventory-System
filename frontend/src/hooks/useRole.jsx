@@ -9,7 +9,13 @@ export function useRole() {
   const roleDetails = role ? ROLE_DETAILS[role] : null;
 
   // Boolean helper flags
-  const isAdmin = role === ROLES.ADMIN;
+  const isSuperAdmin =
+    role === ROLES.SUPER_ADMIN || role === "Super Admin";
+  const isAdmin =
+    role === ROLES.ADMIN ||
+    role === "Admin" ||
+    role === ROLES.SUPER_ADMIN ||
+    role === "Super Admin";
   const isPharmacist = role === ROLES.PHARMACIST;
   const isProcurement = role === ROLES.PROCUREMENT;
 
@@ -33,6 +39,7 @@ export function useRole() {
     role,
     roleDetails,
     isAuthenticated,
+    isSuperAdmin,
     isAdmin,
     isPharmacist,
     isProcurement,

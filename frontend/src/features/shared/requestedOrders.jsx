@@ -493,8 +493,8 @@ function RequestedOrders() {
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* 2. Admin Protected Approval & Denial Actions */}
-                          <RoleGuard allowedRoles={[ROLES.ADMIN]}>
+                          {/* 2. Admin & Super Admin Protected Approval & Denial Actions */}
+                          <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.SUPER_ADMIN]}>
                             {order.status === "Pending Approval" && (
                               <>
                                 {/* Approve Button */}

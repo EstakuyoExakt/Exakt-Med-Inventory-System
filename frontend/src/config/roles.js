@@ -1,14 +1,22 @@
 export const ROLES = {
+  SUPER_ADMIN: "Super Admin",
   ADMIN: "Admin",
   PHARMACIST: "Pharmacist Manager",
   PROCUREMENT: "Procurement Officer",
 };
 
 export const ROLE_DETAILS = {
+  [ROLES.SUPER_ADMIN]: {
+    label: "Super Administrator",
+    description:
+      "Enterprise system access, all projects & facilities, user & facility management",
+    badgeColor: "bg-indigo-100 text-indigo-700 border-indigo-200",
+    defaultRoute: "/admin/users",
+  },
   [ROLES.ADMIN]: {
     label: "Administrator",
     description:
-      "Full system access, user management, facility & supplier settings",
+      "Facility system access, user management, and supplier settings",
     badgeColor: "bg-purple-100 text-purple-700 border-purple-200",
     defaultRoute: "/admin/users",
   },

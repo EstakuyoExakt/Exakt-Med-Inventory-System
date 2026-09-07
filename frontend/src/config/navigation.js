@@ -18,37 +18,37 @@ export const NAVIGATION_ITEMS = [
     title: "User Management",
     path: "/admin/users",
     icon: Users,
-    roles: [ROLES.ADMIN],
+    roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
   },
   {
     title: "Supplier Management",
     path: "/admin/suppliers",
     icon: Truck,
-    roles: [ROLES.ADMIN],
+    roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
   },
   {
     title: "Facility Management",
     path: "/admin/facilities",
     icon: Building2,
-    roles: [ROLES.ADMIN],
+    roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
   },
   {
     title: "Requested Orders",
     path: "/admin/requested-orders",
     icon: ClipboardCheck,
-    roles: [ROLES.ADMIN],
+    roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
   },
   {
     title: "Accounting",
     path: "/admin/accounting",
     icon: DollarSign,
-    roles: [ROLES.ADMIN],
+    roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
   },
   {
     title: "Audit Logs",
     path: "/admin/audit-logs",
     icon: History,
-    roles: [ROLES.ADMIN],
+    roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
   },
 
   // --- Pharmacist Routes ---

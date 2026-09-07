@@ -21,7 +21,7 @@ import SearchBar from "../../components/common/searchBar";
 // Data & Hooks
 import { projects as allProjects } from "../../data/projects";
 import { facilities as allFacilities } from "../../data/facility";
-import { ROLE_DETAILS } from "../../config/roles";
+import { ROLE_DETAILS, ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
 
 function SelectProject() {
@@ -45,8 +45,14 @@ function SelectProject() {
       return;
     }
 
-    // Only Admin accounts use project selection; other roles go to facility selection
-    if (user.role !== "Admin") {
+    // Only Admin and Super Admin accounts use project selection; other roles go to facility selection
+    const isAdminOrSuperAdmin =
+      user.role === "Admin" ||
+      user.role === "Super Admin" ||
+      user.role === ROLES.ADMIN ||
+      user.role === ROLES.SUPER_ADMIN;
+
+    if (!isAdminOrSuperAdmin) {
       navigate("/select-facility", { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
@@ -62,9 +68,16 @@ function SelectProject() {
     }
   }, [sessionProject]);
 
-  // Filter projects assigned to this Admin
+  // Filter projects assigned to this User
   const userAssignedProjects = useMemo(() => {
     if (!user) return [];
+
+    // Super Admin has access to all projects even if not explicitly assigned
+    const isSuperAdmin =
+      user.role === "Super Admin" || user.role === ROLES.SUPER_ADMIN;
+    if (isSuperAdmin) {
+      return allProjects;
+    }
 
     if (
       Array.isArray(user.assignedProjects) &&
@@ -115,7 +128,13 @@ function SelectProject() {
 
   const roleInfo = user?.role ? ROLE_DETAILS[user.role] : null;
 
-  if (!user || user.role !== "Admin") return null;
+  const isAdminOrSuperAdmin =
+    user?.role === "Admin" ||
+    user?.role === "Super Admin" ||
+    user?.role === ROLES.ADMIN ||
+    user?.role === ROLES.SUPER_ADMIN;
+
+  if (!user || !isAdminOrSuperAdmin) return null;
 
   return (
     <div className="w-full min-h-screen bg-gray-50 flex flex-col justify-between py-6 px-4 sm:px-6 lg:px-8">

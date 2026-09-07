@@ -22,10 +22,12 @@ import Card from "../../components/common/card";
 import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
+import RoleGuard from "../../components/guard/roleGuard";
 
 import { facilities as initialFacilities } from "../../data/facility";
 import { projects } from "../../data/projects";
 import { getProjectForFacility } from "../../utils/helpers";
+import { ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
 
 const FACILITY_TYPE_OPTIONS = [
@@ -51,7 +53,15 @@ const DEFAULT_FORM_DATA = {
 };
 
 function FacilityManagement() {
-  const { facility: authFacility, project: authProject } = useAuth();
+  const {
+    facility: authFacility,
+    project: authProject,
+    user: currentUser,
+  } = useAuth();
+
+  const isSuperAdmin =
+    currentUser?.role === ROLES.SUPER_ADMIN ||
+    currentUser?.role === "Super Admin";
 
   // Detect current active project
   const currentProject = useMemo(() => {
@@ -216,6 +226,7 @@ function FacilityManagement() {
 
   // Modal Open Handlers
   const handleOpenAddModal = () => {
+    if (!isSuperAdmin) return;
     setFormData({
       ...DEFAULT_FORM_DATA,
       facilityCode: generateNextFacilityCode(),
@@ -231,6 +242,7 @@ function FacilityManagement() {
   };
 
   const handleOpenEditModal = (facility) => {
+    if (!isSuperAdmin) return;
     setSelectedFacility(facility);
     setFormData({
       name: facility.name || "",
@@ -247,6 +259,7 @@ function FacilityManagement() {
   };
 
   const handleOpenDeleteModal = (facility) => {
+    if (!isSuperAdmin) return;
     setSelectedFacility(facility);
     setModalMode("delete");
   };
@@ -322,7 +335,7 @@ function FacilityManagement() {
   // Save (Add or Edit) Facility
   const handleSaveFacility = (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    if (!isSuperAdmin || !validateForm()) return;
 
     if (modalMode === "add") {
       const newFacility = {
@@ -365,7 +378,7 @@ function FacilityManagement() {
 
   // Delete Facility Confirmation
   const handleConfirmDelete = () => {
-    if (!selectedFacility) return;
+    if (!isSuperAdmin || !selectedFacility) return;
 
     setFacilityList((prev) =>
       prev.filter((f) => f.id !== selectedFacility.id),
@@ -398,14 +411,16 @@ function FacilityManagement() {
             <span className="font-semibold text-gray-700">{currentProjectName}</span>
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleOpenAddModal}
-          className="btn-primary self-start sm:self-auto shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add New Facility</span>
-        </button>
+        <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN]}>
+          <button
+            type="button"
+            onClick={handleOpenAddModal}
+            className="btn-primary self-start sm:self-auto shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add New Facility</span>
+          </button>
+        </RoleGuard>
       </div>
 
       {/* 3 Total Cards */}
@@ -616,24 +631,26 @@ function FacilityManagement() {
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditModal(facility)}
-                          className="btn-secondary p-1.5 text-gray-600 hover:text-amber-600 hover:border-amber-300"
-                          title="Edit Facility"
-                          aria-label="Edit Facility"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenDeleteModal(facility)}
-                          className="btn-danger p-1.5"
-                          title="Delete Facility"
-                          aria-label="Delete Facility"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN]}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(facility)}
+                            className="btn-secondary p-1.5 text-gray-600 hover:text-amber-600 hover:border-amber-300"
+                            title="Edit Facility"
+                            aria-label="Edit Facility"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDeleteModal(facility)}
+                            className="btn-danger p-1.5"
+                            title="Delete Facility"
+                            aria-label="Delete Facility"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </RoleGuard>
                       </div>
                     </td>
                   </tr>
@@ -1023,14 +1040,16 @@ function FacilityManagement() {
               >
                 Close
               </button>
-              <button
-                type="button"
-                onClick={() => handleOpenEditModal(selectedFacility)}
-                className="btn-primary text-xs"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-                <span>Edit Facility</span>
-              </button>
+              <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN]}>
+                <button
+                  type="button"
+                  onClick={() => handleOpenEditModal(selectedFacility)}
+                  className="btn-primary text-xs"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>Edit Facility</span>
+                </button>
+              </RoleGuard>
             </div>
           </div>
         )}

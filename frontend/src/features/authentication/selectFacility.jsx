@@ -26,7 +26,7 @@ import SearchBar from "../../components/common/searchBar";
 
 // Data & Hooks
 import { facilities as allFacilities } from "../../data/facility";
-import { ROLE_DETAILS } from "../../config/roles";
+import { ROLE_DETAILS, ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
 
 function SelectFacility() {
@@ -69,8 +69,20 @@ function SelectFacility() {
   const userAssignedFacilities = useMemo(() => {
     if (!user) return [];
 
+    // Super Admins: access to all facilities, scoped by selected project if one is active
+    if (user.role === "Super Admin" || user.role === ROLES.SUPER_ADMIN) {
+      if (currentSavedProject) {
+        return allFacilities.filter(
+          (f) =>
+            currentSavedProject.facilityIds?.includes(f.id) ||
+            f.projectId === Number(currentSavedProject.id),
+        );
+      }
+      return allFacilities;
+    }
+
     // Admins: if a project is selected, show facilities in that project; otherwise all in their assigned projects
-    if (user.role === "Admin") {
+    if (user.role === "Admin" || user.role === ROLES.ADMIN) {
       if (currentSavedProject) {
         return allFacilities.filter(
           (f) =>
@@ -215,8 +227,12 @@ function SelectFacility() {
             access your workspace.
           </p>
 
-          {/* Admin Mother Project indicator and switcher */}
-          {user.role === "Admin" && currentSavedProject && (
+          {/* Admin & Super Admin Mother Project indicator and switcher */}
+          {(user.role === "Admin" ||
+            user.role === "Super Admin" ||
+            user.role === ROLES.ADMIN ||
+            user.role === ROLES.SUPER_ADMIN) &&
+            currentSavedProject && (
             <div className="pt-2 flex items-center justify-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 border border-purple-200 text-purple-700 text-xs font-semibold rounded-lg">
                 <Layers className="w-3.5 h-3.5" />

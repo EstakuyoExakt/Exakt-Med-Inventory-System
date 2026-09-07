@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getRedirectPathForRole } from "../utils/helpers";
+import { ROLES } from "../config/roles";
 
 export function useAuth() {
   const navigate = useNavigate();
@@ -37,8 +38,13 @@ export function useAuth() {
   const login = (userData) => {
     localStorage.setItem("currentUser", JSON.stringify(userData));
     setUser(userData);
-    // Admins redirect to project selection first, other roles to facility selection
-    if (userData?.role === "Admin") {
+    // Admins and Super Admins redirect to project selection first, other roles to facility selection
+    if (
+      userData?.role === "Admin" ||
+      userData?.role === "Super Admin" ||
+      userData?.role === ROLES.SUPER_ADMIN ||
+      userData?.role === ROLES.ADMIN
+    ) {
       navigate("/select-project", { replace: true });
     } else {
       navigate("/select-facility", { replace: true });

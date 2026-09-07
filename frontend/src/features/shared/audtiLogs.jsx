@@ -192,6 +192,8 @@ function AuditLogs() {
   // Role Badge Formatter
   const getUserRoleBadge = (userRole) => {
     switch (userRole) {
+      case ROLES.SUPER_ADMIN:
+        return "bg-indigo-50 text-indigo-700 border-indigo-200";
       case ROLES.ADMIN:
         return "bg-purple-50 text-purple-700 border-purple-200";
       case ROLES.PHARMACIST:

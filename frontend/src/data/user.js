@@ -1,4 +1,18 @@
 export const users = [
+  // --- Super Admin Accounts ---
+  {
+    id: 100,
+    name: "Eleanor Vance (Super Admin)",
+    username: "superadmin",
+    password: "exaktpassword",
+    email: "eleanor.vance@exaktmed.com",
+    role: "Super Admin",
+    status: "Active",
+    createdAt: "2025-01-01",
+    phone: "+63 917 999 8888",
+    assignedProjects: [],
+  },
+
   // --- Admin Accounts ---
   {
     id: 1,
