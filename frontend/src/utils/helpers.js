@@ -187,3 +187,122 @@ export const canDeleteUser = (targetUser, currentUser) => {
   return true;
 };
 
+// Helper to get all administrator accounts
+export const getAllAdminAccounts = (userList = []) => {
+  if (!Array.isArray(userList)) return [];
+  return userList.filter((u) => u.role === "Admin" || u.role === ROLES.ADMIN);
+};
+
+// Helper to get admins assigned to a specific project
+export const getAdminsForProject = (projectId, userList = []) => {
+  if (!Array.isArray(userList)) return [];
+  const targetId = Number(projectId);
+  return userList.filter(
+    (u) =>
+      (u.role === "Admin" || u.role === ROLES.ADMIN) &&
+      Array.isArray(u.assignedProjects) &&
+      (u.assignedProjects.includes(projectId) ||
+        u.assignedProjects.includes(targetId)),
+  );
+};
+
+// Helper to filter projects assigned to a user (Super Admin gets all, Admin gets assigned)
+export const getUserAssignedProjects = (
+  user,
+  projectList = [],
+  userList = [],
+) => {
+  if (!user) return [];
+
+  // Super Admin has access to all projects even if not explicitly assigned
+  const isSuperAdmin =
+    user.role === "Super Admin" || user.role === ROLES.SUPER_ADMIN;
+  if (isSuperAdmin) {
+    return projectList;
+  }
+
+  const currentActiveUser = userList.find((u) => u.id === user.id) || user;
+
+  if (
+    Array.isArray(currentActiveUser.assignedProjects) &&
+    currentActiveUser.assignedProjects.length > 0
+  ) {
+    return projectList.filter(
+      (p) =>
+        currentActiveUser.assignedProjects.includes(p.id) ||
+        currentActiveUser.assignedProjects.includes(Number(p.id)),
+    );
+  }
+
+  // Fallback: If no assignedProjects specified, give access to all projects
+  return projectList;
+};
+
+// Helper to filter projects based on search query (matches project name, code, or child facilities)
+export const filterProjectsByQuery = (
+  projects = [],
+  query = "",
+  facilityList = [],
+) => {
+  const normalizedQuery = (query || "").toLowerCase().trim();
+  if (!normalizedQuery) return projects;
+
+  return projects.filter((proj) => {
+    const nameMatch = proj.name?.toLowerCase().includes(normalizedQuery);
+    const codeMatch = (proj.projectCode || `PRJ-00${proj.id}`)
+      .toLowerCase()
+      .includes(normalizedQuery);
+
+    const childFacilities = facilityList.filter(
+      (f) =>
+        proj.facilityIds?.includes(f.id) || f.projectId === Number(proj.id),
+    );
+    const facilityMatch = childFacilities.some(
+      (f) =>
+        f.name.toLowerCase().includes(normalizedQuery) ||
+        f.facilityCode.toLowerCase().includes(normalizedQuery),
+    );
+
+    return nameMatch || codeMatch || facilityMatch;
+  });
+};
+
+// Helper to validate the Create Administrator form
+export const validateAdminAccountForm = (formData, userList = []) => {
+  const errors = {};
+  if (!formData.name?.trim()) {
+    errors.name = "Full name is required.";
+  }
+
+  if (!formData.username?.trim()) {
+    errors.username = "Username is required.";
+  } else {
+    const usernameExists = userList.some(
+      (u) =>
+        u.username?.toLowerCase() === formData.username.trim().toLowerCase(),
+    );
+    if (usernameExists) {
+      errors.username = "Username is already taken.";
+    }
+  }
+
+  if (!formData.email?.trim()) {
+    errors.email = "Email address is required.";
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+    errors.email = "Please enter a valid email address.";
+  } else {
+    const emailExists = userList.some(
+      (u) => u.email?.toLowerCase() === formData.email.trim().toLowerCase(),
+    );
+    if (emailExists) {
+      errors.email = "Email address is already registered.";
+    }
+  }
+
+  if (!formData.password || formData.password.length < 6) {
+    errors.password = "Password must be at least 6 characters.";
+  }
+
+  return errors;
+};
+

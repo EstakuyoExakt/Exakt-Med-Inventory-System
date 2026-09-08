@@ -6,23 +6,21 @@ import {
   Phone,
   Mail,
   User,
-  ArrowRight,
-  LogOut,
-  Boxes,
   CheckCircle2,
   Warehouse,
   Hospital,
   Stethoscope,
   ShieldAlert,
   Sparkles,
-  Loader2,
   Layers,
   ArrowLeft,
 } from "lucide-react";
 
-// Common Components
-import Card from "../../components/common/card";
-import SearchBar from "../../components/common/searchBar";
+import PortalHeader from "./components/portalHeader";
+import PortalFooter from "./components/portalFooter";
+import PortalHeroBanner from "./components/portalHeroBanner";
+import PortalToolbar from "./components/portalToolbar";
+import EmptyState from "./components/emptyState";
 
 // Data & Hooks
 import { facilities as allFacilities } from "../../data/facility";
@@ -163,70 +161,24 @@ function SelectFacility() {
   return (
     <div className="w-full min-h-screen bg-gray-50 flex flex-col justify-between py-6 px-4 sm:px-6 lg:px-8">
       {/* Top Header Navigation */}
-      <header className="max-w-6xl w-full mx-auto flex items-center justify-between pb-6 border-b border-gray-200">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-500/20">
-            <Boxes className="h-5 w-5" />
-          </div>
-          <div>
-            <h1 className="text-base font-bold text-gray-900 leading-tight">
-              Exakt Med Inventory
-            </h1>
-            <p className="text-xs text-gray-500">Multi-Facility Portal</p>
-          </div>
-        </div>
-
-        {/* User Profile & Sign Out */}
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-2.5 px-3 py-1.5 bg-white rounded-xl border border-gray-200 shadow-xs">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-700 text-xs font-bold">
-              {user.name ? user.name.charAt(0).toUpperCase() : "U"}
-            </div>
-            <div className="text-left">
-              <p className="text-xs font-bold text-gray-900 leading-none">
-                {user.name}
-              </p>
-              <span
-                className={`inline-block mt-0.5 px-1.5 py-0.2 text-[10px] font-semibold rounded ${
-                  roleInfo?.badgeColor ||
-                  "bg-gray-100 text-gray-700 border border-gray-200"
-                }`}
-              >
-                {roleInfo?.label || user.role}
-              </span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={logout}
-            className="btn-secondary text-xs px-3 py-2 text-gray-600 hover:text-red-600 hover:border-red-200"
-            title="Sign out of account"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Sign Out</span>
-          </button>
-        </div>
-      </header>
+      <PortalHeader
+        user={user}
+        roleInfo={roleInfo}
+        subtitle="Multi-Facility Portal"
+        onLogout={logout}
+        badgeTheme="blue"
+      />
 
       {/* Main Container */}
       <main className="max-w-6xl w-full mx-auto my-8 space-y-8 flex-1">
         {/* Hero Welcome Banner */}
-        <div className="text-center max-w-2xl mx-auto space-y-2 animate-slide-up">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Assigned Healthcare Facilities</span>
-          </div>
-          <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">
-            Select Your Operating Facility
-          </h2>
-          <p className="text-sm text-gray-500">
-            Welcome back,{" "}
-            <span className="font-semibold text-gray-800">{user.name}</span>.
-            Please choose an assigned hospital branch or medical warehouse to
-            access your workspace.
-          </p>
-
+        <PortalHeroBanner
+          badgeText="Assigned Healthcare Facilities"
+          badgeIcon={Sparkles}
+          badgeTheme="blue"
+          title="Select Your Operating Facility"
+          description={`Welcome back, ${user.name}. Please choose an assigned hospital branch or medical warehouse to access your workspace.`}
+        >
           {/* Admin & Super Admin Mother Project indicator and switcher */}
           {(user.role === "Admin" ||
             user.role === "Super Admin" ||
@@ -244,40 +196,25 @@ function SelectFacility() {
               <button
                 type="button"
                 onClick={() => navigate("/select-project")}
-                className="inline-flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 font-semibold hover:underline"
+                className="inline-flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 font-semibold hover:underline cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 Switch Project
               </button>
             </div>
           )}
-        </div>
+        </PortalHeroBanner>
 
-        {/* Search Bar Card */}
-        <Card className="p-4 shadow-sm animate-slide-up-1">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <SearchBar
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onClear={() => setSearchQuery("")}
-              placeholder="Search facility by name, code, or city..."
-              className="relative w-full sm:w-96"
-            />
-
-            {/* Total Facility Count */}
-            <div className="text-xs font-medium text-gray-500 self-start sm:self-center">
-              Showing{" "}
-              <span className="font-bold text-gray-900">
-                {filteredFacilities.length}
-              </span>{" "}
-              of{" "}
-              <span className="font-bold text-gray-900">
-                {userAssignedFacilities.length}
-              </span>{" "}
-              assigned branches
-            </div>
-          </div>
-        </Card>
+        {/* Search Bar Toolbar */}
+        <PortalToolbar
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onClearSearch={() => setSearchQuery("")}
+          placeholder="Search facility by name, code, or city..."
+          showingCount={filteredFacilities.length}
+          totalCount={userAssignedFacilities.length}
+          itemLabel="assigned branches"
+        />
 
         {/* Facilities Grid */}
         {filteredFacilities.length > 0 ? (
@@ -405,35 +342,22 @@ function SelectFacility() {
           </div>
         ) : (
           /* Empty State */
-          <Card className="max-w-md mx-auto p-12 text-center space-y-3 animate-slide-up-2">
-            <Building2 className="w-10 h-10 text-gray-300 mx-auto" />
-            <h3 className="text-base font-bold text-gray-900">
-              No Facilities Found
-            </h3>
-            <p className="text-xs text-gray-500">
-              {searchQuery
+          <EmptyState
+            icon={Building2}
+            title="No Facilities Found"
+            description={
+              searchQuery
                 ? "No assigned facilities match your search query."
-                : "No assigned facilities are currently linked to your user account."}
-            </p>
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="btn-secondary text-xs mt-2"
-              >
-                Clear Search
-              </button>
-            )}
-          </Card>
+                : "No assigned facilities are currently linked to your user account."
+            }
+            actionText={searchQuery ? "Clear Search" : null}
+            onAction={searchQuery ? () => setSearchQuery("") : null}
+          />
         )}
       </main>
 
       {/* Footer */}
-      <footer className="text-center text-xs text-gray-400 pt-6 border-t border-gray-200 max-w-6xl w-full mx-auto">
-        <p>
-          Exakt Med Multi-Facility Inventory Management System &copy; 2026-2027
-        </p>
-      </footer>
+      <PortalFooter text="Exakt Med Multi-Facility Inventory Management System © 2026-2027" />
     </div>
   );
 }
