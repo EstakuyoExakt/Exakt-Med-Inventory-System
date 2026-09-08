@@ -18,6 +18,9 @@ import {
   Loader2,
   Plus,
   AlertCircle,
+  Pencil,
+  Trash2,
+  Check,
 } from "lucide-react";
 
 import PortalHeader from "./components/portalHeader";
@@ -45,6 +48,7 @@ function SelectFacility() {
     facility: currentSavedFacility,
     selectFacility,
     setProject,
+    setFacility,
     logout,
     isAuthenticated,
   } = useAuth();
@@ -61,6 +65,17 @@ function SelectFacility() {
   const [formData, setFormData] = useState(DEFAULT_FACILITY_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [addSuccessMsg, setAddSuccessMsg] = useState("");
+
+  // Modal & form state for editing a facility
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingFacility, setEditingFacility] = useState(null);
+  const [editFormData, setEditFormData] = useState(DEFAULT_FACILITY_FORM);
+  const [editFormErrors, setEditFormErrors] = useState({});
+  const [editSuccessMsg, setEditSuccessMsg] = useState("");
+
+  // Modal state for deleting a facility
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [facilityToDelete, setFacilityToDelete] = useState(null);
 
   // If not logged in, redirect back to login
   useEffect(() => {
@@ -276,11 +291,142 @@ function SelectFacility() {
       setProject(updatedProject);
     }
 
-    setAddSuccessMsg(`Facility "${newFacility.name}" added successfully!`);
+    setAddSuccessMsg(`Facility "${newFacility.name}" created successfully!`);
     setTimeout(() => {
       handleCloseAddModal();
       setAddSuccessMsg("");
     }, 700);
+  };
+
+  // --- EDIT FACILITY HANDLERS ---
+  const handleOpenEditModal = (fac) => {
+    if (!isSuperAdminOrAdmin) return;
+    setEditingFacility(fac);
+    setEditFormData({
+      name: fac.name || "",
+      facilityCode: fac.facilityCode || "",
+      type: fac.type || "Main Hospital",
+      contactPerson: fac.contactPerson || "",
+      email: fac.email || "",
+      phone: fac.phone || "",
+      address: fac.address || "",
+      status: fac.status || "Active",
+    });
+    setEditFormErrors({});
+    setEditSuccessMsg("");
+    setIsEditModalOpen(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setEditingFacility(null);
+    setEditFormErrors({});
+    setEditSuccessMsg("");
+  };
+
+  const handleEditInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditFormData((prev) => ({ ...prev, [name]: value }));
+    if (editFormErrors[name]) {
+      setEditFormErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+  };
+
+  const validateEditFacilityForm = () => {
+    const errors = {};
+    if (!editFormData.name?.trim()) {
+      errors.name = "Facility name is required.";
+    } else if (editFormData.name.trim().length < 3) {
+      errors.name = "Facility name must be at least 3 characters.";
+    }
+
+    if (!editFormData.contactPerson?.trim()) {
+      errors.contactPerson = "Contact person is required.";
+    }
+
+    if (!editFormData.email?.trim()) {
+      errors.email = "Email address is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editFormData.email.trim())) {
+      errors.email = "Please enter a valid email address.";
+    }
+
+    if (!editFormData.address?.trim()) {
+      errors.address = "Physical address is required.";
+    }
+
+    setEditFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleUpdateFacilitySubmit = (e) => {
+    e.preventDefault();
+    if (!isSuperAdminOrAdmin) return;
+    if (!validateEditFacilityForm()) return;
+
+    const updatedFacility = {
+      ...editingFacility,
+      name: editFormData.name.trim(),
+      facilityCode: editFormData.facilityCode.trim().toUpperCase(),
+      type: editFormData.type,
+      contactPerson: editFormData.contactPerson.trim(),
+      email: editFormData.email.trim(),
+      phone: editFormData.phone.trim(),
+      address: editFormData.address.trim(),
+      status: editFormData.status,
+    };
+
+    setFacilityList((prev) =>
+      prev.map((f) => (f.id === editingFacility.id ? updatedFacility : f)),
+    );
+
+    // If this facility is currently active in session, update session
+    if (currentSavedFacility?.id === editingFacility.id) {
+      setFacility(updatedFacility);
+    }
+
+    setEditSuccessMsg(`Facility "${updatedFacility.name}" updated successfully!`);
+    setTimeout(() => {
+      handleCloseEditModal();
+    }, 700);
+  };
+
+  // --- DELETE FACILITY HANDLERS ---
+  const handleOpenDeleteModal = (fac) => {
+    if (!isSuperAdminOrAdmin) return;
+    setFacilityToDelete(fac);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setIsDeleteModalOpen(false);
+    setFacilityToDelete(null);
+  };
+
+  const handleConfirmDeleteFacility = () => {
+    if (!isSuperAdminOrAdmin || !facilityToDelete) return;
+    const targetId = facilityToDelete.id;
+
+    // Remove from facility list
+    setFacilityList((prev) => prev.filter((f) => f.id !== targetId));
+
+    // Update active project facilityIds if linked
+    if (activeProject && Array.isArray(activeProject.facilityIds)) {
+      const updatedProject = {
+        ...activeProject,
+        facilityIds: activeProject.facilityIds.filter((id) => id !== targetId),
+      };
+      setProject(updatedProject);
+    }
+
+    // Clean up if it was the active facility in session
+    if (currentSavedFacility?.id === targetId) {
+      setFacility(null);
+    }
+    if (selectedFacilityId === targetId) {
+      setSelectedFacilityId(null);
+    }
+
+    handleCloseDeleteModal();
   };
 
   const roleInfo = user?.role ? ROLE_DETAILS[user.role] : null;
@@ -338,19 +484,17 @@ function SelectFacility() {
           totalCount={userAssignedFacilities.length}
           itemLabel="assigned branches"
         >
-          {projectHasNoFacilities && (
-            <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]}>
-              <button
-                type="button"
-                onClick={handleOpenAddModal}
-                className="btn-primary py-2 px-3.5 text-xs shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer"
-                title="Add a facility to this project"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add a Facility</span>
-              </button>
-            </RoleGuard>
-          )}
+          <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]}>
+            <button
+              type="button"
+              onClick={handleOpenAddModal}
+              className="btn-primary py-2 px-3.5 text-xs shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer"
+              title="Create New Facility"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create Facility</span>
+            </button>
+          </RoleGuard>
         </PortalToolbar>
 
         {/* Facilities Grid */}
@@ -389,22 +533,54 @@ function SelectFacility() {
                         </div>
                       </div>
 
-                      {/* Status Badges */}
-                      <div className="flex flex-col items-end gap-1">
-                        <span
-                          className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                            isActive
-                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                              : "bg-red-50 text-red-600 border border-red-200"
-                          }`}
-                        >
+                      {/* Status Badges & Admin Actions */}
+                      <div className="flex flex-col items-end gap-1.5">
+                        <div className="flex items-center gap-1.5">
                           <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              isActive ? "bg-emerald-500" : "bg-red-400"
+                            className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                              isActive
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : "bg-red-50 text-red-600 border border-red-200"
                             }`}
-                          />
-                          {facility.status}
-                        </span>
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                isActive ? "bg-emerald-500" : "bg-red-400"
+                              }`}
+                            />
+                            {facility.status}
+                          </span>
+
+                          {/* Super Admin & Admin CRUD Actions */}
+                          <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]}>
+                            <div className="flex items-center gap-0.5 bg-gray-50/90 p-0.5 rounded-lg border border-gray-100">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenEditModal(facility);
+                                }}
+                                className="p-1 text-gray-400 hover:text-amber-600 hover:bg-white rounded transition-all cursor-pointer hover:shadow-2xs"
+                                title="Edit Facility"
+                                aria-label="Edit Facility"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenDeleteModal(facility);
+                                }}
+                                className="p-1 text-gray-400 hover:text-red-600 hover:bg-white rounded transition-all cursor-pointer hover:shadow-2xs"
+                                title="Delete Facility"
+                                aria-label="Delete Facility"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </RoleGuard>
+                        </div>
 
                         {isCurrentlyActiveInSession && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-md">
@@ -490,20 +666,20 @@ function SelectFacility() {
               searchQuery
                 ? "No assigned facilities match your search query."
                 : projectHasNoFacilities && activeProject
-                  ? `The project "${activeProject.name}" currently contains no facilities. Add a facility to get started.`
+                  ? `The project "${activeProject.name}" currently contains no facilities. Create a facility to get started.`
                   : "No assigned facilities are currently linked to your user account."
             }
             actionText={
               searchQuery
                 ? "Clear Search"
-                : projectHasNoFacilities && isSuperAdminOrAdmin
-                  ? "Add a Facility"
+                : isSuperAdminOrAdmin
+                  ? "Create Facility"
                   : null
             }
             onAction={
               searchQuery
                 ? () => setSearchQuery("")
-                : projectHasNoFacilities && isSuperAdminOrAdmin
+                : isSuperAdminOrAdmin
                   ? handleOpenAddModal
                   : null
             }
@@ -518,7 +694,7 @@ function SelectFacility() {
       <Modal
         isOpen={isAddModalOpen}
         onClose={handleCloseAddModal}
-        title="Add New Facility"
+        title="Create New Facility"
         size="md"
       >
         <form onSubmit={handleCreateFacilitySubmit} className="space-y-4">
@@ -768,10 +944,284 @@ function SelectFacility() {
               className="btn-primary text-xs flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Add Facility</span>
+              <span>Create Facility</span>
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Super Admin & Admin Edit Facility Modal */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={handleCloseEditModal}
+        title={`Edit Facility - ${editingFacility?.name || ""}`}
+        size="md"
+      >
+        <form onSubmit={handleUpdateFacilitySubmit} className="space-y-4">
+          <div className="flex items-start gap-3 p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-xs text-amber-900">
+            <Pencil className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-amber-950">
+                Modify Facility Information
+              </p>
+              <p className="mt-0.5 text-amber-800">
+                Update operational branch details, contact points, or operating status.
+              </p>
+            </div>
+          </div>
+
+          {editSuccessMsg && (
+            <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl animate-fade-in">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+              <span className="font-semibold">{editSuccessMsg}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Facility Name */}
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="edit-fac-name"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Facility Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="edit-fac-name"
+                type="text"
+                name="name"
+                value={editFormData.name}
+                onChange={handleEditInputChange}
+                className={`input text-xs ${editFormErrors.name ? "border-red-500 focus:border-red-500 focus:ring-red-100" : ""}`}
+              />
+              {editFormErrors.name && (
+                <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {editFormErrors.name}
+                </p>
+              )}
+            </div>
+
+            {/* Facility Code */}
+            <div>
+              <label
+                htmlFor="edit-fac-code"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Facility Code
+              </label>
+              <input
+                id="edit-fac-code"
+                type="text"
+                name="facilityCode"
+                value={editFormData.facilityCode}
+                onChange={handleEditInputChange}
+                className="input text-xs font-mono uppercase bg-gray-50/80"
+              />
+            </div>
+
+            {/* Facility Type */}
+            <div>
+              <label
+                htmlFor="edit-fac-type"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Facility Type <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="edit-fac-type"
+                name="type"
+                value={editFormData.type}
+                onChange={handleEditInputChange}
+                className="input text-xs font-medium"
+              >
+                {FACILITY_TYPE_OPTIONS.map((typeOpt) => (
+                  <option key={typeOpt} value={typeOpt}>
+                    {typeOpt}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Contact Person */}
+            <div>
+              <label
+                htmlFor="edit-fac-contact"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Contact Person <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="edit-fac-contact"
+                type="text"
+                name="contactPerson"
+                value={editFormData.contactPerson}
+                onChange={handleEditInputChange}
+                className={`input text-xs ${editFormErrors.contactPerson ? "border-red-500" : ""}`}
+              />
+              {editFormErrors.contactPerson && (
+                <p className="text-[11px] text-red-500 mt-1">
+                  {editFormErrors.contactPerson}
+                </p>
+              )}
+            </div>
+
+            {/* Contact Email */}
+            <div>
+              <label
+                htmlFor="edit-fac-email"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Contact Email <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="edit-fac-email"
+                type="email"
+                name="email"
+                value={editFormData.email}
+                onChange={handleEditInputChange}
+                className={`input text-xs ${editFormErrors.email ? "border-red-500" : ""}`}
+              />
+              {editFormErrors.email && (
+                <p className="text-[11px] text-red-500 mt-1">
+                  {editFormErrors.email}
+                </p>
+              )}
+            </div>
+
+            {/* Contact Phone */}
+            <div>
+              <label
+                htmlFor="edit-fac-phone"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Phone Number
+              </label>
+              <input
+                id="edit-fac-phone"
+                type="text"
+                name="phone"
+                value={editFormData.phone}
+                onChange={handleEditInputChange}
+                className="input text-xs"
+              />
+            </div>
+
+            {/* Status */}
+            <div>
+              <label
+                htmlFor="edit-fac-status"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Operational Status
+              </label>
+              <select
+                id="edit-fac-status"
+                name="status"
+                value={editFormData.status}
+                onChange={handleEditInputChange}
+                className="input text-xs"
+              >
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+
+            {/* Address */}
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="edit-fac-address"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Physical Address <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  id="edit-fac-address"
+                  type="text"
+                  name="address"
+                  value={editFormData.address}
+                  onChange={handleEditInputChange}
+                  className={`input text-xs pl-8 ${editFormErrors.address ? "border-red-500" : ""}`}
+                />
+                <MapPin className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+              {editFormErrors.address && (
+                <p className="text-[11px] text-red-500 mt-1">
+                  {editFormErrors.address}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Modal Actions */}
+          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={handleCloseEditModal}
+              className="btn-secondary text-xs cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn-primary text-xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Save Changes</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Super Admin & Admin Delete Facility Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={handleCloseDeleteModal}
+        title="Delete Facility"
+        size="sm"
+      >
+        {facilityToDelete && (
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800">
+              <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold text-red-900 text-sm">
+                  Are you sure you want to delete this facility?
+                </p>
+                <p className="text-red-700">
+                  This will permanently delete{" "}
+                  <strong className="font-bold text-red-900">
+                    {facilityToDelete.name}
+                  </strong>{" "}
+                  (
+                  <span className="font-mono font-semibold">
+                    {facilityToDelete.facilityCode}
+                  </span>
+                  ) from this network. If it is currently selected in your active session, it will be unselected. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={handleCloseDeleteModal}
+                className="btn-secondary text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteFacility}
+                className="btn-danger text-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Facility</span>
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
