@@ -39,7 +39,15 @@ import {
 
 function SelectFacility() {
   const navigate = useNavigate();
-  const { user, project, selectFacility, logout, isAuthenticated } = useAuth();
+  const {
+    user,
+    project: activeProject,
+    facility: currentSavedFacility,
+    selectFacility,
+    setProject,
+    logout,
+    isAuthenticated,
+  } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFacilityId, setSelectedFacilityId] = useState(null);
@@ -60,33 +68,6 @@ function SelectFacility() {
       navigate("/", { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
-
-  // Retrieve existing current project from storage or props
-  const [activeProject, setActiveProject] = useState(() => {
-    if (project?.id) return project;
-    try {
-      const projString = localStorage.getItem("currentProject");
-      return projString ? JSON.parse(projString) : null;
-    } catch {
-      return null;
-    }
-  });
-
-  useEffect(() => {
-    if (project?.id) {
-      setActiveProject(project);
-    }
-  }, [project]);
-
-  // Retrieve existing current facility from storage if any
-  const currentSavedFacility = useMemo(() => {
-    try {
-      const facString = localStorage.getItem("currentFacility");
-      return facString ? JSON.parse(facString) : null;
-    } catch {
-      return null;
-    }
-  }, []);
 
   const isSuperAdminOrAdmin =
     user?.role === "Super Admin" ||
@@ -292,12 +273,7 @@ function SelectFacility() {
         ...activeProject,
         facilityIds: [...(activeProject.facilityIds || []), newFacId],
       };
-      setActiveProject(updatedProject);
-      try {
-        localStorage.setItem("currentProject", JSON.stringify(updatedProject));
-      } catch {
-        // Ignore storage errors
-      }
+      setProject(updatedProject);
     }
 
     setAddSuccessMsg(`Facility "${newFacility.name}" added successfully!`);

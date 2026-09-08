@@ -37,17 +37,9 @@ function SupplierManagement() {
 
   // Automatically detect current active facility
   const currentFacilityName = useMemo(() => {
-    if (facility?.name) return facility.name;
-    try {
-      const stored = localStorage.getItem("currentFacility");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.name) return parsed.name;
-      }
-    } catch {
-      // fallback
-    }
-    return facilities[0]?.name || "Exakt Central General Hospital";
+    return (
+      facility?.name || facilities[0]?.name || "Exakt Central General Hospital"
+    );
   }, [facility]);
 
   const [supplierList, setSupplierList] = useState(initialSuppliers);

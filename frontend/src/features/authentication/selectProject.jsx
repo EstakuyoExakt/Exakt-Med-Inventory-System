@@ -56,6 +56,7 @@ function SelectProject() {
     user,
     project: sessionProject,
     selectProject,
+    setProject,
     logout,
     isAuthenticated,
   } = useAuth();
@@ -125,16 +126,8 @@ function SelectProject() {
     }
   }, [isAuthenticated, user, navigate]);
 
-  // Retrieve existing current project from storage if any
-  const currentSavedProject = useMemo(() => {
-    if (sessionProject?.id) return sessionProject;
-    try {
-      const projString = localStorage.getItem("currentProject");
-      return projString ? JSON.parse(projString) : null;
-    } catch {
-      return null;
-    }
-  }, [sessionProject]);
+  // Retrieve existing current project from auth session
+  const currentSavedProject = sessionProject;
 
   // Filter projects assigned to this User
   const userAssignedProjects = useMemo(() => {
@@ -283,24 +276,13 @@ function SelectProject() {
       ),
     );
 
-    // Sync localStorage if currently active
-    try {
-      const stored = localStorage.getItem("currentProject");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.id === editingProject.id) {
-          localStorage.setItem(
-            "currentProject",
-            JSON.stringify({
-              ...parsed,
-              name: trimmed,
-              facilityIds: editSelectedFacilities,
-            }),
-          );
-        }
-      }
-    } catch {
-      // Ignore
+    // Sync active project if currently active
+    if (sessionProject?.id === editingProject.id) {
+      setProject({
+        ...sessionProject,
+        name: trimmed,
+        facilityIds: editSelectedFacilities,
+      });
     }
 
     handleCloseEditModal();
@@ -347,16 +329,8 @@ function SelectProject() {
     if (selectedProjectId === targetId) {
       setSelectedProjectId(null);
     }
-    try {
-      const stored = localStorage.getItem("currentProject");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.id === targetId) {
-          localStorage.removeItem("currentProject");
-        }
-      }
-    } catch {
-      // Ignore
+    if (sessionProject?.id === targetId) {
+      setProject(null);
     }
 
     handleCloseDeleteModal();

@@ -2,16 +2,11 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { Boxes, LogOut, Building2, ArrowLeftRight } from "lucide-react";
 import { NAVIGATION_ITEMS } from "../../config/navigation";
 import { ROLE_DETAILS } from "../../config/roles";
+import useAuth from "../../hooks/useAuth";
 
 function Sidebar() {
   const navigate = useNavigate();
-
-  // Retrieve authenticated user & facility from localStorage
-  const userString = localStorage.getItem("currentUser");
-  const user = userString ? JSON.parse(userString) : null;
-
-  const facilityString = localStorage.getItem("currentFacility");
-  const facility = facilityString ? JSON.parse(facilityString) : null;
+  const { user, facility, logout } = useAuth();
 
   // Filter navigation items based on user role
   const userRole = user?.role;
@@ -23,9 +18,7 @@ function Sidebar() {
   const roleInfo = userRole ? ROLE_DETAILS[userRole] : null;
 
   const handleLogout = () => {
-    localStorage.removeItem("currentUser");
-    localStorage.removeItem("currentFacility");
-    navigate("/");
+    logout();
   };
 
   const handleSwitchFacility = () => {

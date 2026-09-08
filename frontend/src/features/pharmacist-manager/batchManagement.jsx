@@ -35,19 +35,11 @@ import { requestedOrders } from "../../data/orders";
 function BatchManagement() {
   const { facility } = useAuth();
 
-  // Automatically detect current active facility from auth session / local storage
+  // Automatically detect current active facility from auth session
   const currentFacilityName = useMemo(() => {
-    if (facility?.name) return facility.name;
-    try {
-      const stored = localStorage.getItem("currentFacility");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.name) return parsed.name;
-      }
-    } catch {
-      // fallback
-    }
-    return facilities[0]?.name || "Exakt Central General Hospital";
+    return (
+      facility?.name || facilities[0]?.name || "Exakt Central General Hospital"
+    );
   }, [facility]);
 
   // Distribute initial lots across hospital facilities

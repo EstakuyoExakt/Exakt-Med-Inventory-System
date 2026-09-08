@@ -1,11 +1,11 @@
 import { Navigate, Outlet } from "react-router-dom";
+import useAuth from "../../hooks/useAuth";
 
 function ProtectedRoute({ allowedRoles }) {
-  const userString = localStorage.getItem("currentUser");
-  const user = userString ? JSON.parse(userString) : null;
+  const { user, isAuthenticated } = useAuth();
 
   // If not logged in, redirect to login page
-  if (!user) {
+  if (!isAuthenticated || !user) {
     return <Navigate to="/" replace />;
   }
 

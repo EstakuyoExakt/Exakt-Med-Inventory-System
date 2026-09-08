@@ -58,43 +58,13 @@ function FacilityManagement() {
       return authProject;
     }
 
-    // 2. Saved in localStorage
-    try {
-      const stored = localStorage.getItem("currentProject");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.id || parsed?.name) {
-          const matched = projects.find(
-            (p) =>
-              p.id === parsed.id ||
-              p.name?.toLowerCase() === parsed.name?.toLowerCase(),
-          );
-          if (matched) return matched;
-          return parsed;
-        }
-      }
-    } catch {
-      // fallback
-    }
-
-    // 3. Fallback from current facility's mother project
-    const activeFac =
-      authFacility ||
-      (() => {
-        try {
-          const facString = localStorage.getItem("currentFacility");
-          return facString ? JSON.parse(facString) : null;
-        } catch {
-          return null;
-        }
-      })();
-
-    if (activeFac) {
-      const parentProject = getProjectForFacility(activeFac, projects);
+    // 2. Fallback from current facility's mother project
+    if (authFacility) {
+      const parentProject = getProjectForFacility(authFacility, projects);
       if (parentProject) return parentProject;
     }
 
-    // 4. Default to first project
+    // 3. Default to first project
     return projects[0] || { id: 1, name: "Taytay Healthcare Project" };
   }, [authProject, authFacility]);
 

@@ -38,38 +38,21 @@ import { facilities } from "../../data/facility";
 import useAuth from "../../hooks/useAuth";
 
 function Accounting() {
-  const { facility: authFacility } = useAuth();
+  const { facility } = useAuth();
 
   // Automatically detect current active facility
   const currentFacility = useMemo(() => {
-    if (authFacility?.id || authFacility?.name) {
+    if (facility?.id || facility?.name) {
       const matched = facilities.find(
         (f) =>
-          f.id === authFacility.id ||
-          f.name?.toLowerCase() === authFacility.name?.toLowerCase(),
+          f.id === facility.id ||
+          f.name?.toLowerCase() === facility.name?.toLowerCase(),
       );
       if (matched) return matched;
-      return authFacility;
-    }
-    try {
-      const stored = localStorage.getItem("currentFacility");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.id || parsed?.name) {
-          const matched = facilities.find(
-            (f) =>
-              f.id === parsed.id ||
-              f.name?.toLowerCase() === parsed.name?.toLowerCase(),
-          );
-          if (matched) return matched;
-          return parsed;
-        }
-      }
-    } catch {
-      // fallback
+      return facility;
     }
     return facilities[0] || { id: 1, name: "Exakt Central General Hospital" };
-  }, [authFacility]);
+  }, [facility]);
 
   const currentFacilityName =
     currentFacility?.name || "Exakt Central General Hospital";
