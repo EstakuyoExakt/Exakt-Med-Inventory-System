@@ -1,4 +1,78 @@
+import { ROLES } from "../config/roles";
+
+// ==========================================
+// Administration & User Management
+// ==========================================
+export const DEFAULT_ADMIN_FORM = {
+  name: "",
+  username: "",
+  email: "",
+  phone: "",
+  password: "exaktpassword",
+  status: "Active",
+};
+
+export const DEFAULT_USER_FORM = {
+  name: "",
+  username: "",
+  email: "",
+  phone: "",
+  role: ROLES.PHARMACIST,
+  status: "Active",
+  password: "exaktpassword",
+};
+
+// ==========================================
+// Facility Management & Selection
+// ==========================================
+export const FACILITY_TYPE_OPTIONS = [
+  "Main Hospital",
+  "Branch Hospital",
+  "Central Warehouse",
+  "Outpatient Clinic",
+  "Emergency Center",
+  "Specialty Hospital",
+  "Diagnostic Center",
+  "Cold Storage Facility",
+];
+
+export const DEFAULT_FACILITY_FORM = {
+  name: "",
+  facilityCode: "",
+  type: "Main Hospital",
+  contactPerson: "",
+  email: "",
+  phone: "",
+  address: "",
+  status: "Active",
+};
+
+// ==========================================
+// Supplier Management
+// ==========================================
+export const PAYMENT_TERMS_OPTIONS = [
+  "Net 15",
+  "Net 30",
+  "Net 45",
+  "Net 60",
+  "COD",
+  "Advance Payment",
+];
+
+export const DEFAULT_SUPPLIER_FORM = {
+  name: "",
+  supplierCode: "",
+  contactPerson: "",
+  email: "",
+  phone: "",
+  address: "",
+  paymentTerms: "Net 30",
+  status: "Active",
+};
+
+// ==========================================
 // Batch Management
+// ==========================================
 export const ADJUSTMENT_REASONS = [
   "Physical Cycle Count Discrepancy",
   "Damaged Goods / Packaging Compromised",
@@ -28,7 +102,9 @@ export const DEFAULT_RECEIVE_BATCH = {
   location: "Exakt Central General Hospital",
 };
 
-// SKU Management
+// ==========================================
+// SKU Management & Stock Actions
+// ==========================================
 export const FORM_CODES = {
   Tablet: "TAB",
   Capsule: "CAP",
@@ -40,7 +116,7 @@ export const FORM_CODES = {
   Drops: "DRP",
 };
 
-export const DEFAULT_FORM_DATA = {
+export const DEFAULT_SKU_FORM_DATA = {
   medicineId: "",
   sku: "",
   brandName: "",
@@ -53,4 +129,29 @@ export const DEFAULT_FORM_DATA = {
   reorderLevel: 150,
   maximumLevel: 1000,
   status: "Active",
+};
+
+export const DEFAULT_STOCK_ADJUSTMENT = {
+  type: "ADD", // 'ADD' | 'SUBTRACT' | 'SET'
+  amount: 10,
+  reason: ADJUSTMENT_REASONS[0],
+  notes: "",
+};
+
+export const DEFAULT_STOCK_TRANSFER = {
+  targetLocation: "Exakt Northside Medical Wing",
+  transferQuantity: 10,
+  notes: "",
+};
+
+// ==========================================
+// Order Request / Procurement Management
+// ==========================================
+export const DEFAULT_ORDER_FORM = {
+  supplierId: 1,
+  targetFacility: "",
+  priority: "Normal", // 'Urgent' | 'Normal'
+  totalCost: "",
+  notes: "",
+  items: [],
 };

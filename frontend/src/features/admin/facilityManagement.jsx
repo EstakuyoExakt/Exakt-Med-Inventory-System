@@ -29,28 +29,10 @@ import { projects } from "../../data/projects";
 import { getProjectForFacility } from "../../utils/helpers";
 import { ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
-
-const FACILITY_TYPE_OPTIONS = [
-  "Main Hospital",
-  "Branch Hospital",
-  "Central Warehouse",
-  "Outpatient Clinic",
-  "Emergency Center",
-  "Specialty Hospital",
-  "Diagnostic Center",
-  "Cold Storage Facility",
-];
-
-const DEFAULT_FORM_DATA = {
-  name: "",
-  facilityCode: "",
-  type: "Main Hospital",
-  contactPerson: "",
-  email: "",
-  phone: "",
-  address: "",
-  status: "Active",
-};
+import {
+  FACILITY_TYPE_OPTIONS,
+  DEFAULT_FACILITY_FORM,
+} from "../../utils/constants";
 
 function FacilityManagement() {
   const {
@@ -143,7 +125,7 @@ function FacilityManagement() {
   // Modal State
   const [modalMode, setModalMode] = useState(null); // 'add' | 'view' | 'edit' | 'delete' | null
   const [selectedFacility, setSelectedFacility] = useState(null);
-  const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
+  const [formData, setFormData] = useState(DEFAULT_FACILITY_FORM);
   const [formErrors, setFormErrors] = useState({});
 
   // Calculate 3 Total Metric Counts for current project
@@ -228,7 +210,7 @@ function FacilityManagement() {
   const handleOpenAddModal = () => {
     if (!isSuperAdmin) return;
     setFormData({
-      ...DEFAULT_FORM_DATA,
+      ...DEFAULT_FACILITY_FORM,
       facilityCode: generateNextFacilityCode(),
     });
     setFormErrors({});

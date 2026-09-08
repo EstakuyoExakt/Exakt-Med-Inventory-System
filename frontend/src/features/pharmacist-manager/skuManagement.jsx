@@ -31,8 +31,9 @@ import { medicines, MEDICINE_TYPES } from "../../data/medicine";
 import { facilities } from "../../data/facility";
 import {
   FORM_CODES,
-  DEFAULT_FORM_DATA,
+  DEFAULT_SKU_FORM_DATA,
   ADJUSTMENT_REASONS,
+  DEFAULT_STOCK_ADJUSTMENT,
 } from "../../utils/constants";
 import { getStockStatus } from "../../utils/helpers";
 import useAuth from "../../hooks/useAuth";
@@ -86,16 +87,13 @@ function SkuManagement() {
   // Modal State: 'add' | 'view' | 'edit' | 'delete' | 'adjust' | 'transfer' | null
   const [modalMode, setModalMode] = useState(null);
   const [selectedSku, setSelectedSku] = useState(null);
-  const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
+  const [formData, setFormData] = useState(DEFAULT_SKU_FORM_DATA);
   const [formErrors, setFormErrors] = useState({});
 
   // Batch Management Action Form States in SKU Management
-  const [adjustFormData, setAdjustFormData] = useState({
-    type: "ADD", // 'ADD' | 'SUBTRACT' | 'SET'
-    amount: 10,
-    reason: ADJUSTMENT_REASONS[0],
-    notes: "",
-  });
+  const [adjustFormData, setAdjustFormData] = useState(
+    DEFAULT_STOCK_ADJUSTMENT,
+  );
 
   const [transferFormData, setTransferFormData] = useState({
     targetLocation: facilities[1]?.name || "Exakt Northside Medical Wing",
@@ -114,7 +112,8 @@ function SkuManagement() {
   const totalSkus = currentFacilitySkus.length;
 
   const optimalCount = useMemo(
-    () => currentFacilitySkus.filter((s) => s.currentStock > s.reorderLevel).length,
+    () =>
+      currentFacilitySkus.filter((s) => s.currentStock > s.reorderLevel).length,
     [currentFacilitySkus],
   );
 
@@ -128,7 +127,9 @@ function SkuManagement() {
   );
 
   const criticalCount = useMemo(
-    () => currentFacilitySkus.filter((s) => s.currentStock <= s.minimumLevel).length,
+    () =>
+      currentFacilitySkus.filter((s) => s.currentStock <= s.minimumLevel)
+        .length,
     [currentFacilitySkus],
   );
 
@@ -226,7 +227,7 @@ function SkuManagement() {
       : "AMOX500-CAP-100";
 
     setFormData({
-      ...DEFAULT_FORM_DATA,
+      ...DEFAULT_SKU_FORM_DATA,
       medicineId: defaultMed ? defaultMed.id : "",
       brandName: defaultMed ? defaultMed.brandName : "",
       genericName: defaultMed ? defaultMed.genericName : "",
@@ -273,12 +274,7 @@ function SkuManagement() {
 
   const handleOpenAdjustModal = (skuItem) => {
     setSelectedSku(skuItem);
-    setAdjustFormData({
-      type: "ADD",
-      amount: 10,
-      reason: ADJUSTMENT_REASONS[0],
-      notes: "",
-    });
+    setAdjustFormData(DEFAULT_STOCK_ADJUSTMENT);
     setFormErrors({});
     setModalMode("adjust");
   };
@@ -493,7 +489,8 @@ function SkuManagement() {
     if (!transferFormData.targetLocation) {
       errors.targetLocation = "Please select a destination facility.";
     } else if (transferFormData.targetLocation === currentFacilityName) {
-      errors.targetLocation = "Destination facility cannot be the same as origin.";
+      errors.targetLocation =
+        "Destination facility cannot be the same as origin.";
     }
 
     if (isNaN(transferQty) || transferQty <= 0) {
@@ -526,8 +523,7 @@ function SkuManagement() {
       if (targetExistingIndex !== -1) {
         updated[targetExistingIndex] = {
           ...updated[targetExistingIndex],
-          currentStock:
-            updated[targetExistingIndex].currentStock + transferQty,
+          currentStock: updated[targetExistingIndex].currentStock + transferQty,
         };
       } else {
         // Create new SKU entry in target facility with transferred stock
@@ -563,7 +559,10 @@ function SkuManagement() {
           </div>
           <p className="text-sm text-gray-500 mt-1">
             Displaying stock-keeping units, threshold calibration, and inventory
-            levels for <span className="font-semibold text-gray-700">{currentFacilityName}</span>
+            levels for{" "}
+            <span className="font-semibold text-gray-700">
+              {currentFacilityName}
+            </span>
           </p>
         </div>
         <button
@@ -1412,11 +1411,12 @@ function SkuManagement() {
                 {selectedSku.sku}
               </p>
               <p className="text-gray-500">
-                {selectedSku.genericName} • {selectedSku.dosage} ({selectedSku.packagingUnit})
+                {selectedSku.genericName} • {selectedSku.dosage} (
+                {selectedSku.packagingUnit})
               </p>
               <p className="text-purple-800 font-semibold flex items-center gap-1 pt-1">
-                <Building2 className="w-3.5 h-3.5 text-purple-600" /> Origin Facility:{" "}
-                {selectedSku.facility || currentFacilityName}
+                <Building2 className="w-3.5 h-3.5 text-purple-600" /> Origin
+                Facility: {selectedSku.facility || currentFacilityName}
               </p>
             </div>
 
@@ -1426,7 +1426,8 @@ function SkuManagement() {
                 htmlFor="sku-transfer-target"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
               >
-                Destination Facility / Branch <span className="text-red-500">*</span>
+                Destination Facility / Branch{" "}
+                <span className="text-red-500">*</span>
               </label>
               <select
                 id="sku-transfer-target"
@@ -1477,7 +1478,8 @@ function SkuManagement() {
                 className="input"
               />
               <p className="text-[11px] text-gray-400 mt-1">
-                Max transferable from current stock: {selectedSku.currentStock} units
+                Max transferable from current stock: {selectedSku.currentStock}{" "}
+                units
               </p>
               {formErrors.transferQuantity && (
                 <p className="text-xs text-red-500 mt-1">

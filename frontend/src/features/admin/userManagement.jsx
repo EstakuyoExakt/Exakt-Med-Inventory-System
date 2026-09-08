@@ -33,16 +33,7 @@ import {
   canEditUser as checkCanEditUser,
   canDeleteUser as checkCanDeleteUser,
 } from "../../utils/helpers";
-
-const DEFAULT_FORM_DATA = {
-  name: "",
-  username: "",
-  email: "",
-  phone: "",
-  role: ROLES.PHARMACIST,
-  status: "Active",
-  password: "exaktpassword",
-};
+import { DEFAULT_USER_FORM } from "../../utils/constants";
 
 function UserManagement() {
   const { facility: authFacility, user: currentUser } = useAuth();
@@ -122,7 +113,7 @@ function UserManagement() {
   // Modal State
   const [modalMode, setModalMode] = useState(null); // 'add' | 'view' | 'edit' | 'delete' | null
   const [selectedUser, setSelectedUser] = useState(null);
-  const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
+  const [formData, setFormData] = useState(DEFAULT_USER_FORM);
   const [formErrors, setFormErrors] = useState({});
 
   // Calculate totals for each role for the current active facility
@@ -195,7 +186,7 @@ function UserManagement() {
 
   // Modal Open Handlers
   const handleOpenAddModal = () => {
-    setFormData(DEFAULT_FORM_DATA);
+    setFormData(DEFAULT_USER_FORM);
     setFormErrors({});
     setSelectedUser(null);
     setModalMode("add");

@@ -16,6 +16,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Loader2,
+  Plus,
+  AlertCircle,
 } from "lucide-react";
 
 import PortalHeader from "./components/portalHeader";
@@ -23,11 +25,17 @@ import PortalFooter from "./components/portalFooter";
 import PortalHeroBanner from "./components/portalHeroBanner";
 import PortalToolbar from "./components/portalToolbar";
 import EmptyState from "./components/emptyState";
+import Modal from "../../components/common/modal";
+import RoleGuard from "../../components/guard/roleGuard";
 
 // Data & Hooks
 import { facilities as allFacilities } from "../../data/facility";
 import { ROLE_DETAILS, ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
+import {
+  FACILITY_TYPE_OPTIONS,
+  DEFAULT_FACILITY_FORM,
+} from "../../utils/constants";
 
 function SelectFacility() {
   const navigate = useNavigate();
@@ -37,6 +45,15 @@ function SelectFacility() {
   const [selectedFacilityId, setSelectedFacilityId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Facilities list state initialized with mock data
+  const [facilityList, setFacilityList] = useState(allFacilities);
+
+  // Modal state for adding a facility
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [formData, setFormData] = useState(DEFAULT_FACILITY_FORM);
+  const [formErrors, setFormErrors] = useState({});
+  const [addSuccessMsg, setAddSuccessMsg] = useState("");
+
   // If not logged in, redirect back to login
   useEffect(() => {
     if (!isAuthenticated || !user) {
@@ -44,14 +61,20 @@ function SelectFacility() {
     }
   }, [isAuthenticated, user, navigate]);
 
-  // Retrieve existing current project from storage if any
-  const currentSavedProject = useMemo(() => {
+  // Retrieve existing current project from storage or props
+  const [activeProject, setActiveProject] = useState(() => {
     if (project?.id) return project;
     try {
       const projString = localStorage.getItem("currentProject");
       return projString ? JSON.parse(projString) : null;
     } catch {
       return null;
+    }
+  });
+
+  useEffect(() => {
+    if (project?.id) {
+      setActiveProject(project);
     }
   }, [project]);
 
@@ -65,56 +88,64 @@ function SelectFacility() {
     }
   }, []);
 
-  // Filter facilities assigned to the user
+  const isSuperAdminOrAdmin =
+    user?.role === "Super Admin" ||
+    user?.role === ROLES.SUPER_ADMIN ||
+    user?.role === "Admin" ||
+    user?.role === ROLES.ADMIN;
+
+  // Filter facilities assigned to the user (and scoped by active project)
   const userAssignedFacilities = useMemo(() => {
     if (!user) return [];
 
     // Super Admins: access to all facilities, scoped by selected project if one is active
     if (user.role === "Super Admin" || user.role === ROLES.SUPER_ADMIN) {
-      if (currentSavedProject) {
-        return allFacilities.filter(
+      if (activeProject) {
+        return facilityList.filter(
           (f) =>
-            currentSavedProject.facilityIds?.includes(f.id) ||
-            f.projectId === Number(currentSavedProject.id),
+            activeProject.facilityIds?.includes(f.id) ||
+            f.projectId === Number(activeProject.id),
         );
       }
-      return allFacilities;
+      return facilityList;
     }
 
     // Admins: if a project is selected, show facilities in that project; otherwise all in their assigned projects
     if (user.role === "Admin" || user.role === ROLES.ADMIN) {
-      if (currentSavedProject) {
-        return allFacilities.filter(
+      if (activeProject) {
+        return facilityList.filter(
           (f) =>
-            currentSavedProject.facilityIds?.includes(f.id) ||
-            f.projectId === Number(currentSavedProject.id),
+            activeProject.facilityIds?.includes(f.id) ||
+            f.projectId === Number(activeProject.id),
         );
       }
       if (user.assignedProjects && user.assignedProjects.length > 0) {
-        return allFacilities.filter((f) =>
+        return facilityList.filter((f) =>
           user.assignedProjects.includes(f.projectId),
         );
       }
       if (user.assignedFacilities && user.assignedFacilities.length > 0) {
-        return allFacilities.filter((f) =>
+        return facilityList.filter((f) =>
           user.assignedFacilities.includes(f.id),
         );
       }
-      return allFacilities;
+      return facilityList;
     }
 
     // If user has an assignedFacilities list, treat it as the primary source of truth
     if (Array.isArray(user.assignedFacilities)) {
-      return allFacilities.filter((facility) =>
+      return facilityList.filter((facility) =>
         user.assignedFacilities.includes(facility.id),
       );
     }
 
     // Fallback: Filter by assignedUserIds on facility if user has no assignedFacilities defined
-    return allFacilities.filter((facility) =>
+    return facilityList.filter((facility) =>
       facility.assignedUserIds?.includes(user.id),
     );
-  }, [user, currentSavedProject]);
+  }, [user, activeProject, facilityList]);
+
+  const projectHasNoFacilities = userAssignedFacilities.length === 0;
 
   // Filtered facilities based on search query
   const filteredFacilities = useMemo(() => {
@@ -156,6 +187,126 @@ function SelectFacility() {
     }
   };
 
+  // Generate next facility code
+  const generateNextFacilityCode = () => {
+    const maxNum = facilityList.reduce((max, f) => {
+      const match = f.facilityCode?.match(/FAC-(\d+)/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        return num > max ? num : max;
+      }
+      return max;
+    }, 0);
+    return `FAC-${String(maxNum + 1).padStart(3, "0")}`;
+  };
+
+  // Modal Handlers
+  const handleOpenAddModal = () => {
+    if (!isSuperAdminOrAdmin) return;
+    setFormData({
+      ...DEFAULT_FACILITY_FORM,
+      facilityCode: generateNextFacilityCode(),
+    });
+    setFormErrors({});
+    setAddSuccessMsg("");
+    setIsAddModalOpen(true);
+  };
+
+  const handleCloseAddModal = () => {
+    setIsAddModalOpen(false);
+    setFormData(DEFAULT_FACILITY_FORM);
+    setFormErrors({});
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (formErrors[name]) {
+      setFormErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+  };
+
+  const validateFacilityForm = () => {
+    const errors = {};
+    if (!formData.name?.trim()) {
+      errors.name = "Facility name is required.";
+    } else if (formData.name.trim().length < 3) {
+      errors.name = "Facility name must be at least 3 characters.";
+    }
+
+    if (!formData.facilityCode?.trim()) {
+      errors.facilityCode = "Facility code is required.";
+    } else {
+      const codeExists = facilityList.some(
+        (f) =>
+          f.facilityCode?.toLowerCase() ===
+          formData.facilityCode.trim().toLowerCase(),
+      );
+      if (codeExists) {
+        errors.facilityCode = "Facility code already in use.";
+      }
+    }
+
+    if (!formData.contactPerson?.trim()) {
+      errors.contactPerson = "Contact person is required.";
+    }
+
+    if (!formData.email?.trim()) {
+      errors.email = "Email address is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      errors.email = "Please enter a valid email address.";
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleCreateFacilitySubmit = (e) => {
+    e.preventDefault();
+    if (!isSuperAdminOrAdmin) return;
+    if (!validateFacilityForm()) return;
+
+    const newFacId = Date.now();
+    const targetProjectId = activeProject ? Number(activeProject.id) : null;
+
+    const newFacility = {
+      id: newFacId,
+      facilityCode: formData.facilityCode.trim().toUpperCase(),
+      name: formData.name.trim(),
+      type: formData.type,
+      contactPerson: formData.contactPerson.trim(),
+      email: formData.email.trim(),
+      phone: formData.phone.trim() || "+63 2 8000 0000",
+      address: formData.address.trim() || "Metro Manila, Philippines",
+      status: formData.status || "Active",
+      createdAt: new Date().toISOString().split("T")[0],
+      assignedUserIds: user?.id ? [user.id] : [1],
+      projectId: targetProjectId,
+    };
+
+    setFacilityList((prev) => [newFacility, ...prev]);
+
+    // Update activeProject facilityIds in storage and in state
+    if (activeProject) {
+      const updatedProject = {
+        ...activeProject,
+        facilityIds: [...(activeProject.facilityIds || []), newFacId],
+      };
+      setActiveProject(updatedProject);
+      try {
+        localStorage.setItem("currentProject", JSON.stringify(updatedProject));
+      } catch {
+        // Ignore storage errors
+      }
+    }
+
+    setAddSuccessMsg(`Facility "${newFacility.name}" added successfully!`);
+    setTimeout(() => {
+      handleCloseAddModal();
+      setAddSuccessMsg("");
+    }, 700);
+  };
+
   const roleInfo = user?.role ? ROLE_DETAILS[user.role] : null;
 
   if (!user) return null;
@@ -182,18 +333,12 @@ function SelectFacility() {
           description={`Welcome back, ${user.name}. Please choose an assigned hospital branch or medical warehouse to access your workspace.`}
         >
           {/* Admin & Super Admin Mother Project indicator and switcher */}
-          {(user.role === "Admin" ||
-            user.role === "Super Admin" ||
-            user.role === ROLES.ADMIN ||
-            user.role === ROLES.SUPER_ADMIN) &&
-            currentSavedProject && (
+          {isSuperAdminOrAdmin && activeProject && (
             <div className="pt-2 flex items-center justify-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 border border-purple-200 text-purple-700 text-xs font-semibold rounded-lg">
                 <Layers className="w-3.5 h-3.5" />
                 Mother Project:{" "}
-                <strong className="font-bold">
-                  {currentSavedProject.name}
-                </strong>
+                <strong className="font-bold">{activeProject.name}</strong>
               </span>
               <button
                 type="button"
@@ -216,7 +361,21 @@ function SelectFacility() {
           showingCount={filteredFacilities.length}
           totalCount={userAssignedFacilities.length}
           itemLabel="assigned branches"
-        />
+        >
+          {projectHasNoFacilities && (
+            <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]}>
+              <button
+                type="button"
+                onClick={handleOpenAddModal}
+                className="btn-primary py-2 px-3.5 text-xs shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer"
+                title="Add a facility to this project"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add a Facility</span>
+              </button>
+            </RoleGuard>
+          )}
+        </PortalToolbar>
 
         {/* Facilities Grid */}
         {filteredFacilities.length > 0 ? (
@@ -346,20 +505,298 @@ function SelectFacility() {
           /* Empty State */
           <EmptyState
             icon={Building2}
-            title="No Facilities Found"
+            title={
+              projectHasNoFacilities && isSuperAdminOrAdmin
+                ? "No Facilities in Project"
+                : "No Facilities Found"
+            }
             description={
               searchQuery
                 ? "No assigned facilities match your search query."
-                : "No assigned facilities are currently linked to your user account."
+                : projectHasNoFacilities && activeProject
+                  ? `The project "${activeProject.name}" currently contains no facilities. Add a facility to get started.`
+                  : "No assigned facilities are currently linked to your user account."
             }
-            actionText={searchQuery ? "Clear Search" : null}
-            onAction={searchQuery ? () => setSearchQuery("") : null}
+            actionText={
+              searchQuery
+                ? "Clear Search"
+                : projectHasNoFacilities && isSuperAdminOrAdmin
+                  ? "Add a Facility"
+                  : null
+            }
+            onAction={
+              searchQuery
+                ? () => setSearchQuery("")
+                : projectHasNoFacilities && isSuperAdminOrAdmin
+                  ? handleOpenAddModal
+                  : null
+            }
           />
         )}
       </main>
 
       {/* Footer */}
       <PortalFooter text="Exakt Med Multi-Facility Inventory Management System © 2026-2027" />
+
+      {/* Super Admin & Admin Add Facility Modal */}
+      <Modal
+        isOpen={isAddModalOpen}
+        onClose={handleCloseAddModal}
+        title="Add New Facility"
+        size="md"
+      >
+        <form onSubmit={handleCreateFacilitySubmit} className="space-y-4">
+          <div className="flex items-start gap-3 p-3 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-blue-800">
+            <Building2 className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-blue-900">
+                {activeProject
+                  ? `Assigning to Project: ${activeProject.name}`
+                  : "New Facility Registration"}
+              </p>
+              <p className="mt-0.5 text-blue-700">
+                Register a new hospital branch, warehouse, or clinic under this
+                network.
+              </p>
+            </div>
+          </div>
+
+          {addSuccessMsg && (
+            <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+              <span className="font-semibold">{addSuccessMsg}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {/* Facility Name */}
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="fac-name"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Facility Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="fac-name"
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                placeholder="e.g. Exakt Central General Hospital"
+                className={`input text-xs ${
+                  formErrors.name ? "border-red-400 focus:border-red-500" : ""
+                }`}
+                autoFocus
+              />
+              {formErrors.name && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {formErrors.name}
+                </p>
+              )}
+            </div>
+
+            {/* Facility Code */}
+            <div>
+              <label
+                htmlFor="fac-code"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Facility Code <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="fac-code"
+                type="text"
+                name="facilityCode"
+                value={formData.facilityCode}
+                onChange={handleInputChange}
+                placeholder="FAC-001"
+                className={`input text-xs font-mono uppercase ${
+                  formErrors.facilityCode
+                    ? "border-red-400 focus:border-red-500"
+                    : ""
+                }`}
+              />
+              {formErrors.facilityCode && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {formErrors.facilityCode}
+                </p>
+              )}
+            </div>
+
+            {/* Facility Type */}
+            <div>
+              <label
+                htmlFor="fac-type"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Facility Type <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="fac-type"
+                name="type"
+                value={formData.type}
+                onChange={handleInputChange}
+                className="input text-xs"
+              >
+                {FACILITY_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Contact Person */}
+            <div>
+              <label
+                htmlFor="fac-contactPerson"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Contact Person <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  id="fac-contactPerson"
+                  type="text"
+                  name="contactPerson"
+                  value={formData.contactPerson}
+                  onChange={handleInputChange}
+                  placeholder="e.g. Dr. Jonathan Mendoza"
+                  className={`input text-xs pl-8 ${
+                    formErrors.contactPerson
+                      ? "border-red-400 focus:border-red-500"
+                      : ""
+                  }`}
+                />
+                <User className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+              {formErrors.contactPerson && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {formErrors.contactPerson}
+                </p>
+              )}
+            </div>
+
+            {/* Email */}
+            <div>
+              <label
+                htmlFor="fac-email"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Email Address <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  id="fac-email"
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  placeholder="admin@exaktmed.com"
+                  className={`input text-xs pl-8 ${
+                    formErrors.email
+                      ? "border-red-400 focus:border-red-500"
+                      : ""
+                  }`}
+                />
+                <Mail className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+              {formErrors.email && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {formErrors.email}
+                </p>
+              )}
+            </div>
+
+            {/* Phone */}
+            <div>
+              <label
+                htmlFor="fac-phone"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Phone / Hotline
+              </label>
+              <div className="relative">
+                <input
+                  id="fac-phone"
+                  type="text"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  placeholder="+63 2 8920 5000"
+                  className="input text-xs pl-8"
+                />
+                <Phone className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* Status */}
+            <div>
+              <label
+                htmlFor="fac-status"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Operational Status
+              </label>
+              <select
+                id="fac-status"
+                name="status"
+                value={formData.status}
+                onChange={handleInputChange}
+                className="input text-xs"
+              >
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+
+            {/* Address */}
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="fac-address"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Physical Address
+              </label>
+              <div className="relative">
+                <input
+                  id="fac-address"
+                  type="text"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleInputChange}
+                  placeholder="e.g. E. Rodriguez Sr. Ave, Quezon City, Metro Manila"
+                  className="input text-xs pl-8"
+                />
+                <MapPin className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            </div>
+          </div>
+
+          {/* Modal Actions */}
+          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={handleCloseAddModal}
+              className="btn-secondary text-xs cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn-primary text-xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Facility</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

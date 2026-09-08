@@ -33,6 +33,7 @@ import { suppliers } from "../../data/supplier";
 import { facilities } from "../../data/facility";
 import { MEDICINE_TYPES } from "../../data/medicine";
 import { getStockStatus } from "../../utils/helpers";
+import { DEFAULT_ORDER_FORM } from "../../utils/constants";
 import useAuth from "../../hooks/useAuth";
 
 function OrderRequest() {
@@ -77,12 +78,9 @@ function OrderRequest() {
 
   // Multi-Item Order Form State
   const [orderForm, setOrderForm] = useState({
+    ...DEFAULT_ORDER_FORM,
     supplierId: suppliers[0]?.id || 1,
     targetFacility: currentFacilityName,
-    priority: "Normal", // 'Urgent' | 'Normal'
-    totalCost: "",
-    notes: "",
-    items: [], // [{ sku, brandName, genericName, dosage, packagingUnit, currentStock, minimumLevel, maximumLevel, reorderLevel, quantity }]
   });
   const [formErrors, setFormErrors] = useState({});
 

@@ -48,6 +48,7 @@ import {
   filterProjectsByQuery,
   validateAdminAccountForm,
 } from "../../utils/helpers";
+import { DEFAULT_ADMIN_FORM } from "../../utils/constants";
 
 function SelectProject() {
   const navigate = useNavigate();
@@ -98,14 +99,6 @@ function SelectProject() {
   const [assignSuccessMsg, setAssignSuccessMsg] = useState("");
 
   // Modal & Form state for creating a new administrator
-  const DEFAULT_ADMIN_FORM = {
-    name: "",
-    username: "",
-    email: "",
-    phone: "",
-    password: "exaktpassword",
-    status: "Active",
-  };
   const [isCreateAdminModalOpen, setIsCreateAdminModalOpen] = useState(false);
   const [adminFormData, setAdminFormData] = useState(DEFAULT_ADMIN_FORM);
   const [selectedProjectsForNewAdmin, setSelectedProjectsForNewAdmin] =

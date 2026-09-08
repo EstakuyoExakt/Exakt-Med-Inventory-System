@@ -27,26 +27,10 @@ import Modal from "../../components/common/modal";
 import { suppliers as initialSuppliers } from "../../data/supplier";
 import { facilities } from "../../data/facility";
 import useAuth from "../../hooks/useAuth";
-
-const PAYMENT_TERMS_OPTIONS = [
-  "Net 15",
-  "Net 30",
-  "Net 45",
-  "Net 60",
-  "COD",
-  "Advance Payment",
-];
-
-const DEFAULT_FORM_DATA = {
-  name: "",
-  supplierCode: "",
-  contactPerson: "",
-  email: "",
-  phone: "",
-  address: "",
-  paymentTerms: "Net 30",
-  status: "Active",
-};
+import {
+  PAYMENT_TERMS_OPTIONS,
+  DEFAULT_SUPPLIER_FORM,
+} from "../../utils/constants";
 
 function SupplierManagement() {
   const { facility } = useAuth();
@@ -88,7 +72,7 @@ function SupplierManagement() {
   // Modal State
   const [modalMode, setModalMode] = useState(null); // 'add' | 'view' | 'edit' | 'delete' | null
   const [selectedSupplier, setSelectedSupplier] = useState(null);
-  const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
+  const [formData, setFormData] = useState(DEFAULT_SUPPLIER_FORM);
   const [formErrors, setFormErrors] = useState({});
 
   // Calculate 3 Total Metric Counts for Active Facility
@@ -157,7 +141,7 @@ function SupplierManagement() {
   // Modal Open Handlers
   const handleOpenAddModal = () => {
     setFormData({
-      ...DEFAULT_FORM_DATA,
+      ...DEFAULT_SUPPLIER_FORM,
       supplierCode: generateNextSupplierCode(),
     });
     setFormErrors({});
