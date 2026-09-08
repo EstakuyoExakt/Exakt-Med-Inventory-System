@@ -14,6 +14,8 @@ import {
   Sparkles,
   Layers,
   ArrowLeft,
+  ArrowRight,
+  Loader2,
 } from "lucide-react";
 
 import PortalHeader from "./components/portalHeader";
