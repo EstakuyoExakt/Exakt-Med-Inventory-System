@@ -8,7 +8,7 @@ import java.util.List;
 
 @Getter
 @Setter
-public class AssignAdminsRequestDto {
+public class AssignRequestDto {
 
     @NotEmpty(message = "Please provide at least one admin user ID")
     private List<Long> userIds;
