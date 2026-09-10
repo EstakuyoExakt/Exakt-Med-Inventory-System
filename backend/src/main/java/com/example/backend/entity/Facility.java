@@ -25,7 +25,7 @@ public class Facility {
     @JoinColumn(name = "projectId", nullable = false)
     private Project project;
 
-    @Column(nullable = false, unique = true)
+    @Column(unique = true)
     private String facilityCode;
 
     @Column(nullable = false)

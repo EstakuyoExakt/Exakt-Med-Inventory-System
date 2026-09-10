@@ -11,22 +11,78 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 public class DataInitializer {
 
     @Bean
-    public CommandLineRunner initAdminUser(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public CommandLineRunner initUsers(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         return args -> {
-            // Check if superadmin already exists to prevent duplicate entries
-            if (userRepository.findByUsername("superadmin").isEmpty()) {
-                User superAdmin = new User();
-                superAdmin.setName("Super Administrator");
-                superAdmin.setUsername("superadmin");
-                superAdmin.setPassword(passwordEncoder.encode("superadmin123")); // Hashed with BCrypt!
-                superAdmin.setEmail("superadmin@exaktmed.com");
-                superAdmin.setPhone("09123456789");
-                superAdmin.setRole(User.Role.SuperAdmin);
-                superAdmin.setStatus(true);
+            // 1. SuperAdmin
+            createUserIfNotExists(
+                    userRepository,
+                    passwordEncoder,
+                    "superadmin",
+                    "superadmin123",
+                    "Super Administrator",
+                    "superadmin@exaktmed.com",
+                    "09123456789",
+                    User.Role.SuperAdmin
+            );
 
-                userRepository.save(superAdmin);
-                System.out.println(">>> Default SuperAdmin user created: username='superadmin', password='superadmin123'");
-            }
+            // 2. Admin
+            createUserIfNotExists(
+                    userRepository,
+                    passwordEncoder,
+                    "admin",
+                    "admin123",
+                    "System Administrator",
+                    "admin@exaktmed.com",
+                    "09123456788",
+                    User.Role.Admin
+            );
+
+            // 3. Pharmacist
+            createUserIfNotExists(
+                    userRepository,
+                    passwordEncoder,
+                    "pharmacist",
+                    "pharmacist123",
+                    "Lead Pharmacist",
+                    "pharmacist@exaktmed.com",
+                    "09123456787",
+                    User.Role.Pharmacist
+            );
+
+            // 4. Procurement
+            createUserIfNotExists(
+                    userRepository,
+                    passwordEncoder,
+                    "procurement",
+                    "procurement123",
+                    "Procurement Officer",
+                    "procurement@exaktmed.com",
+                    "09123456786",
+                    User.Role.Procurement
+            );
         };
+    }
+
+    private void createUserIfNotExists(UserRepository userRepository,
+                                       PasswordEncoder passwordEncoder,
+                                       String username,
+                                       String password,
+                                       String name,
+                                       String email,
+                                       String phone,
+                                       User.Role role) {
+        if (userRepository.findByUsername(username).isEmpty()) {
+            User user = new User();
+            user.setName(name);
+            user.setUsername(username);
+            user.setPassword(passwordEncoder.encode(password)); // BCrypt hash
+            user.setEmail(email);
+            user.setPhone(phone);
+            user.setRole(role);
+            user.setStatus(true);
+
+            userRepository.save(user);
+            System.out.println(">>> Initialized " + role + " user: username='" + username + "', password='" + password + "'");
+        }
     }
 }
