@@ -76,7 +76,7 @@ public class UserService {
             Facility facility = facilityRepository.findById(request.getFacilityId())
                     .orElseThrow(() -> new RuntimeException("Facility not found with id: " + request.getFacilityId()));
 
-            UserFacilityLink link = new UserFacilityLink(); 
+            UserFacilityLink link = new UserFacilityLink();
             link.setUser(savedUser);
             link.setFacility(facility);
             userFacilityLinkRepository.save(link);
@@ -150,12 +150,14 @@ public class UserService {
             Facility facility = facilityRepository.findById(request.getFacilityId())
                     .orElseThrow(() -> new RuntimeException("Facility not found with id: " + request.getFacilityId()));
 
-            UserFacilityLink link = userFacilityLinkRepository.findByUserId(updatedUser.getId())
-                    .orElseGet(() -> {
-                        UserFacilityLink newLink = new UserFacilityLink();
-                        newLink.setUser(updatedUser);
-                        return newLink;
-                    });
+            List<UserFacilityLink> existingLinks = userFacilityLinkRepository.findByUserId(updatedUser.getId());
+            UserFacilityLink link;
+            if (!existingLinks.isEmpty()) {
+                link = existingLinks.get(0);
+            } else {
+                link = new UserFacilityLink();
+                link.setUser(updatedUser);
+            }
             link.setFacility(facility);
             userFacilityLinkRepository.save(link);
         }
@@ -198,9 +200,8 @@ public class UserService {
 
     // Helper: Map User entity to UserResponseDto (queries facility link if present)
     private UserResponseDto mapToResponseDto(User user, String message) {
-        Long facilityId = userFacilityLinkRepository.findByUserId(user.getId())
-                .map(link -> link.getFacility().getId())
-                .orElse(null);
+        List<UserFacilityLink> links = userFacilityLinkRepository.findByUserId(user.getId());
+        Long facilityId = links.isEmpty() ? null : links.get(0).getFacility().getId();
 
         return mapToResponseDto(user, facilityId, message);
     }
