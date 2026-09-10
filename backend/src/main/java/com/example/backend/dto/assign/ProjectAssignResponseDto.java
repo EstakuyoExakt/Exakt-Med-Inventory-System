@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class AssignResponseDto {
+public class ProjectAssignResponseDto {
 
     private Long id;
     private UserResponseDto user;

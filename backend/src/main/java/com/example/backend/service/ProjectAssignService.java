@@ -1,7 +1,7 @@
 package com.example.backend.service;
 
-import com.example.backend.dto.assign.AssignRequestDto;
-import com.example.backend.dto.assign.AssignResponseDto;
+import com.example.backend.dto.assign.ProjectAssignRequestDto;
+import com.example.backend.dto.assign.ProjectAssignResponseDto;
 import com.example.backend.dto.project.ProjectResponseDto;
 import com.example.backend.dto.user.UserResponseDto;
 import com.example.backend.entity.Project;
@@ -20,15 +20,15 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
-public class AssignService {
+public class ProjectAssignService {
 
     private final UserRepository userRepository;
     private final ProjectRepository projectRepository;
     private final UserProjectLinkRepository userProjectLinkRepository;
 
-    public AssignService(UserRepository userRepository,
-                         ProjectRepository projectRepository,
-                         UserProjectLinkRepository userProjectLinkRepository) {
+    public ProjectAssignService(UserRepository userRepository,
+                                ProjectRepository projectRepository,
+                                UserProjectLinkRepository userProjectLinkRepository) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
         this.userProjectLinkRepository = userProjectLinkRepository;
@@ -37,7 +37,7 @@ public class AssignService {
     // 1. ASSIGN 1 OR MORE ADMINS TO A PROJECT (SuperAdmin only)
     @Transactional
     @PreAuthorize("hasRole('SuperAdmin')")
-    public String assignAdminsToProject(Long projectId, AssignRequestDto request) {
+    public String assignAdminsToProject(Long projectId, ProjectAssignRequestDto request) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found with id: " + projectId));
 
@@ -70,7 +70,7 @@ public class AssignService {
     // 2. UNASSIGN 1 OR MORE ADMINS FROM A PROJECT (SuperAdmin only)
     @Transactional
     @PreAuthorize("hasRole('SuperAdmin')")
-    public String unassignAdminsFromProject(Long projectId, AssignRequestDto request) {
+    public String unassignAdminsFromProject(Long projectId, ProjectAssignRequestDto request) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found with id: " + projectId));
 
@@ -93,7 +93,7 @@ public class AssignService {
 
     // 3. GET ALL ASSIGNMENTS (SuperAdmin only)
     @PreAuthorize("hasRole('SuperAdmin')")
-    public List<AssignResponseDto> getAllAssignments() {
+    public List<ProjectAssignResponseDto> getAllAssignments() {
         return userProjectLinkRepository.findAll()
                 .stream()
                 .map(this::mapToAssignResponseDto)
@@ -102,7 +102,7 @@ public class AssignService {
 
     // 4. GET ONE ASSIGNMENT BY ID (SuperAdmin only)
     @PreAuthorize("hasRole('SuperAdmin')")
-    public AssignResponseDto getAssignmentById(Long id) {
+    public ProjectAssignResponseDto getAssignmentById(Long id) {
         UserProjectLink link = userProjectLinkRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Assignment not found with id: " + id));
         return mapToAssignResponseDto(link);
@@ -111,7 +111,7 @@ public class AssignService {
     /*
     // 5. GET ALL ADMINS FOR A SPECIFIC PROJECT (SuperAdmin only)
     @PreAuthorize("hasRole('SuperAdmin')")
-    public List<AssignResponseDto> getAssignmentsByProject(Long projectId) {
+    public List<ProjectAssignResponseDto> getAssignmentsByProject(Long projectId) {
         if (!projectRepository.existsById(projectId)) {
             throw new RuntimeException("Project not found with id: " + projectId);
         }
@@ -123,7 +123,7 @@ public class AssignService {
 
     // 6. GET ALL PROJECTS FOR AN ADMIN USER (SuperAdmin only)
     @PreAuthorize("hasRole('SuperAdmin')")
-    public List<AssignResponseDto> getAssignmentsByUser(Long userId) {
+    public List<ProjectAssignResponseDto> getAssignmentsByUser(Long userId) {
         if (!userRepository.existsById(userId)) {
             throw new RuntimeException("User not found with id: " + userId);
         }
@@ -134,8 +134,8 @@ public class AssignService {
     }
     */
 
-    // Helper: Map UserProjectLink to AssignResponseDto
-    private AssignResponseDto mapToAssignResponseDto(UserProjectLink link) {
+    // Helper: Map UserProjectLink to ProjectAssignResponseDto
+    private ProjectAssignResponseDto mapToAssignResponseDto(UserProjectLink link) {
         User u = link.getUser();
         UserResponseDto userDto = new UserResponseDto(
                 u.getId(),
@@ -160,7 +160,7 @@ public class AssignService {
                 null
         );
 
-        return new AssignResponseDto(
+        return new ProjectAssignResponseDto(
                 link.getId(),
                 userDto,
                 projectDto,

@@ -1,8 +1,8 @@
 package com.example.backend.controller;
 
-import com.example.backend.dto.assign.AssignRequestDto;
-import com.example.backend.dto.assign.AssignResponseDto;
-import com.example.backend.service.AssignService;
+import com.example.backend.dto.assign.ProjectAssignRequestDto;
+import com.example.backend.dto.assign.ProjectAssignResponseDto;
+import com.example.backend.service.ProjectAssignService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,20 +11,20 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/assign/projects")
-public class AssignController {
+public class ProjectAssignController {
 
-    private final AssignService assignService;
+    private final ProjectAssignService projectAssignService;
 
-    public AssignController(AssignService assignService) {
-        this.assignService = assignService;
+    public ProjectAssignController(ProjectAssignService projectAssignService) {
+        this.projectAssignService = projectAssignService;
     }
 
     // 1. ASSIGN 1 OR MORE ADMINS TO A PROJECT (SuperAdmin only)
     @PostMapping("/{projectId}")
     public ResponseEntity<String> assignAdminsToProject(
             @PathVariable Long projectId,
-            @Valid @RequestBody AssignRequestDto request) {
-        String result = assignService.assignAdminsToProject(projectId, request);
+            @Valid @RequestBody ProjectAssignRequestDto request) {
+        String result = projectAssignService.assignAdminsToProject(projectId, request);
         return ResponseEntity.ok(result);
     }
 
@@ -32,33 +32,33 @@ public class AssignController {
     @DeleteMapping("/{projectId}")
     public ResponseEntity<String> unassignAdminsFromProject(
             @PathVariable Long projectId,
-            @Valid @RequestBody AssignRequestDto request) {
-        String result = assignService.unassignAdminsFromProject(projectId, request);
+            @Valid @RequestBody ProjectAssignRequestDto request) {
+        String result = projectAssignService.unassignAdminsFromProject(projectId, request);
         return ResponseEntity.ok(result);
     }
 
     // 3. GET ALL ASSIGNMENTS (SuperAdmin only)
     @GetMapping
-    public ResponseEntity<List<AssignResponseDto>> getAllAssignments() {
-        return ResponseEntity.ok(assignService.getAllAssignments());
+    public ResponseEntity<List<ProjectAssignResponseDto>> getAllAssignments() {
+        return ResponseEntity.ok(projectAssignService.getAllAssignments());
     }
 
     // 4. GET ONE ASSIGNMENT BY ID (SuperAdmin only)
     @GetMapping("/{id}")
-    public ResponseEntity<AssignResponseDto> getAssignmentById(@PathVariable Long id) {
-        return ResponseEntity.ok(assignService.getAssignmentById(id));
+    public ResponseEntity<ProjectAssignResponseDto> getAssignmentById(@PathVariable Long id) {
+        return ResponseEntity.ok(projectAssignService.getAssignmentById(id));
     }
 
     /*
     // 5. GET ALL ADMINS FOR A SPECIFIC PROJECT (SuperAdmin only)
     @GetMapping("/{projectId}")
-    public ResponseEntity<List<AssignResponseDto>> getAssignmentsByProject(@PathVariable Long projectId) {
+    public ResponseEntity<List<ProjectAssignResponseDto>> getAssignmentsByProject(@PathVariable Long projectId) {
         return ResponseEntity.ok(assignService.getAssignmentsByProject(projectId));
     }
 
     // 6. GET ALL PROJECTS FOR A SPECIFIC ADMIN USER (SuperAdmin only)
     @GetMapping("/users/{userId}")
-    public ResponseEntity<List<AssignResponseDto>> getAssignmentsByUser(@PathVariable Long userId) {
+    public ResponseEntity<List<ProjectAssignResponseDto>> getAssignmentsByUser(@PathVariable Long userId) {
         return ResponseEntity.ok(assignService.getAssignmentsByUser(userId));
     }
     */
