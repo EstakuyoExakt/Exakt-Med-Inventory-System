@@ -20,6 +20,7 @@ public class UserResponseDto {
     private String phone;
     private User.Role role;
     private Boolean status;
+    private Long facilityId;
     private LocalDateTime createdAt;
     private String message;
 }

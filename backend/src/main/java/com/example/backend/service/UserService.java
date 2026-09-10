@@ -2,7 +2,11 @@ package com.example.backend.service;
 
 import com.example.backend.dto.user.UserRequestDto;
 import com.example.backend.dto.user.UserResponseDto;
+import com.example.backend.entity.Facility;
 import com.example.backend.entity.User;
+import com.example.backend.entity.UserFacilityLink;
+import com.example.backend.repository.FacilityRepository;
+import com.example.backend.repository.UserFacilityLinkRepository;
 import com.example.backend.repository.UserRepository;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -10,6 +14,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -18,14 +23,22 @@ import java.util.stream.Collectors;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final FacilityRepository facilityRepository;
+    private final UserFacilityLinkRepository userFacilityLinkRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository,
+                       FacilityRepository facilityRepository,
+                       UserFacilityLinkRepository userFacilityLinkRepository,
+                       PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
+        this.facilityRepository = facilityRepository;
+        this.userFacilityLinkRepository = userFacilityLinkRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
     // 1. CREATE USER
+    @Transactional
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
     public UserResponseDto createUser(UserRequestDto request) {
         if (userRepository.findByUsername(request.getUsername()).isPresent()) {
@@ -40,6 +53,12 @@ public class UserService {
             }
         }
 
+        // Validate facilityId if role is Pharmacist or Procurement
+        boolean isFacilityRole = request.getRole() == User.Role.Pharmacist || request.getRole() == User.Role.Procurement;
+        if (isFacilityRole && request.getFacilityId() == null) {
+            throw new RuntimeException("facilityId is required for role: " + request.getRole());
+        }
+
         User user = new User();
         user.setName(request.getName());
         user.setUsername(request.getUsername());
@@ -50,7 +69,21 @@ public class UserService {
         user.setStatus(request.getStatus() != null ? request.getStatus() : true);
 
         User savedUser = userRepository.save(user);
-        return mapToResponseDto(savedUser, "User created successfully");
+
+        // If role is Pharmacist or Procurement, link the user to the specified facility
+        Long linkedFacilityId = null;
+        if (isFacilityRole) {
+            Facility facility = facilityRepository.findById(request.getFacilityId())
+                    .orElseThrow(() -> new RuntimeException("Facility not found with id: " + request.getFacilityId()));
+
+            UserFacilityLink link = new UserFacilityLink(); 
+            link.setUser(savedUser);
+            link.setFacility(facility);
+            userFacilityLinkRepository.save(link);
+            linkedFacilityId = facility.getId();
+        }
+
+        return mapToResponseDto(savedUser, linkedFacilityId, "User created successfully");
     }
 
     // 2. GET ALL USERS
@@ -71,6 +104,7 @@ public class UserService {
     }
 
     // 4. UPDATE USER
+    @Transactional
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
     public UserResponseDto updateUser(Long id, UserRequestDto request) {
         User targetUser = userRepository.findById(id)
@@ -110,10 +144,27 @@ public class UserService {
         }
 
         User updatedUser = userRepository.save(targetUser);
+
+        // Update facility link if facilityId was provided
+        if (request.getFacilityId() != null) {
+            Facility facility = facilityRepository.findById(request.getFacilityId())
+                    .orElseThrow(() -> new RuntimeException("Facility not found with id: " + request.getFacilityId()));
+
+            UserFacilityLink link = userFacilityLinkRepository.findByUserId(updatedUser.getId())
+                    .orElseGet(() -> {
+                        UserFacilityLink newLink = new UserFacilityLink();
+                        newLink.setUser(updatedUser);
+                        return newLink;
+                    });
+            link.setFacility(facility);
+            userFacilityLinkRepository.save(link);
+        }
+
         return mapToResponseDto(updatedUser, "User updated successfully");
     }
 
     // 5. DELETE USER
+    @Transactional
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
     public void deleteUser(Long id) {
         User targetUser = userRepository.findById(id)
@@ -129,6 +180,8 @@ public class UserService {
             }
         }
 
+        // Remove any facility links first
+        userFacilityLinkRepository.deleteByUserId(id);
         userRepository.delete(targetUser);
     }
 
@@ -143,8 +196,17 @@ public class UserService {
                 .orElseThrow(() -> new AccessDeniedException("Authenticated user not found"));
     }
 
-    // Helper: Map User entity to UserResponseDto
+    // Helper: Map User entity to UserResponseDto (queries facility link if present)
     private UserResponseDto mapToResponseDto(User user, String message) {
+        Long facilityId = userFacilityLinkRepository.findByUserId(user.getId())
+                .map(link -> link.getFacility().getId())
+                .orElse(null);
+
+        return mapToResponseDto(user, facilityId, message);
+    }
+
+    // Helper: Map User entity with known facilityId to UserResponseDto
+    private UserResponseDto mapToResponseDto(User user, Long facilityId, String message) {
         return new UserResponseDto(
                 user.getId(),
                 user.getName(),
@@ -153,6 +215,7 @@ public class UserService {
                 user.getPhone(),
                 user.getRole(),
                 user.getStatus(),
+                facilityId,
                 user.getCreatedAt(),
                 message
         );

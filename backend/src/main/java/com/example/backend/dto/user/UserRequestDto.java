@@ -33,4 +33,7 @@ public class UserRequestDto {
     private User.Role role;
 
     private Boolean status;
+
+    // Required only when role is Pharmacist or Procurement
+    private Long facilityId;
 }

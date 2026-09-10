@@ -145,6 +145,7 @@ public class AssignService {
                 u.getPhone(),
                 u.getRole(),
                 u.getStatus(),
+                null, // facilityId is null for admins
                 u.getCreatedAt(),
                 null
         );
