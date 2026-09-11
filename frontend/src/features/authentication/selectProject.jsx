@@ -42,6 +42,7 @@ import { facilities as allFacilities } from "../../data/facility";
 import { users as initialUsers } from "../../data/user";
 import { ROLE_DETAILS, ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
+import useRole from "../../hooks/useRole";
 import {
   getAllAdminAccounts,
   getAdminsForProject,
@@ -61,6 +62,7 @@ function SelectProject() {
     logout,
     isAuthenticated,
   } = useAuth();
+  const { isSuperAdmin, isAdmin, roleDetails } = useRole();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState(null);
@@ -116,16 +118,10 @@ function SelectProject() {
     }
 
     // Only Admin and Super Admin accounts use project selection; other roles go to facility selection
-    const isAdminOrSuperAdmin =
-      user.role === "Admin" ||
-      user.role === "Super Admin" ||
-      user.role === ROLES.ADMIN ||
-      user.role === ROLES.SUPER_ADMIN;
-
-    if (!isAdminOrSuperAdmin) {
+    if (!isAdmin) {
       navigate("/select-facility", { replace: true });
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, user, isAdmin, navigate]);
 
   // Retrieve existing current project from auth session
   const currentSavedProject = sessionProject;
@@ -175,8 +171,7 @@ function SelectProject() {
   // Form Submit Handler for Creating a Project
   const handleCreateProject = (e) => {
     e.preventDefault();
-    if (user?.role !== ROLES.SUPER_ADMIN && user?.role !== "Super Admin")
-      return;
+    if (!isSuperAdmin) return;
 
     const trimmed = newProjectName.trim();
     if (!trimmed) {
@@ -213,7 +208,7 @@ function SelectProject() {
 
   // Open Edit Modal
   const handleOpenEditModal = (project) => {
-    if (user?.role !== ROLES.SUPER_ADMIN && user?.role !== "Super Admin") return;
+    if (!isSuperAdmin) return;
     setEditingProject(project);
     setEditProjectName(project.name || "");
     setEditSelectedFacilities(project.facilityIds || []);
@@ -241,7 +236,7 @@ function SelectProject() {
 
   const handleUpdateProject = (e) => {
     e.preventDefault();
-    if (user?.role !== ROLES.SUPER_ADMIN && user?.role !== "Super Admin") return;
+    if (!isSuperAdmin) return;
     if (!editingProject) return;
 
     const trimmed = editProjectName.trim();
@@ -291,7 +286,7 @@ function SelectProject() {
 
   // Open Delete Modal
   const handleOpenDeleteModal = (project) => {
-    if (user?.role !== ROLES.SUPER_ADMIN && user?.role !== "Super Admin") return;
+    if (!isSuperAdmin) return;
     setProjectToDelete(project);
     setIsDeleteModalOpen(true);
   };
@@ -302,7 +297,7 @@ function SelectProject() {
   };
 
   const handleConfirmDeleteProject = () => {
-    if (user?.role !== ROLES.SUPER_ADMIN && user?.role !== "Super Admin") return;
+    if (!isSuperAdmin) return;
     if (!projectToDelete) return;
 
     const targetId = projectToDelete.id;
@@ -319,7 +314,9 @@ function SelectProject() {
         ) {
           return {
             ...u,
-            assignedProjects: u.assignedProjects.filter((id) => id !== targetId),
+            assignedProjects: u.assignedProjects.filter(
+              (id) => id !== targetId,
+            ),
           };
         }
         return u;
@@ -385,8 +382,7 @@ function SelectProject() {
   // Save Admin Assignments
   const handleSaveAssignments = (e) => {
     e.preventDefault();
-    if (user?.role !== ROLES.SUPER_ADMIN && user?.role !== "Super Admin")
-      return;
+    if (!isSuperAdmin) return;
     if (!selectedProjectIdForAssignment) return;
 
     setUserList((prevUsers) =>
@@ -464,8 +460,7 @@ function SelectProject() {
 
   const handleCreateAdminSubmit = (e) => {
     e.preventDefault();
-    if (user?.role !== ROLES.SUPER_ADMIN && user?.role !== "Super Admin")
-      return;
+    if (!isSuperAdmin) return;
 
     const errors = validateAdminAccountForm(adminFormData, userList);
     setAdminFormErrors(errors);
@@ -497,22 +492,14 @@ function SelectProject() {
     }, 700);
   };
 
-  const roleInfo = user?.role ? ROLE_DETAILS[user.role] : null;
-
-  const isAdminOrSuperAdmin =
-    user?.role === "Admin" ||
-    user?.role === "Super Admin" ||
-    user?.role === ROLES.ADMIN ||
-    user?.role === ROLES.SUPER_ADMIN;
-
-  if (!user || !isAdminOrSuperAdmin) return null;
+  if (!user || !isAdmin) return null;
 
   return (
     <div className="w-full min-h-screen bg-gray-50 flex flex-col justify-between py-6 px-4 sm:px-6 lg:px-8">
       {/* Top Header Navigation */}
       <PortalHeader
         user={user}
-        roleInfo={roleInfo}
+        roleInfo={roleDetails}
         subtitle="Multi-Project Administrator Portal"
         onLogout={logout}
         badgeTheme="purple"
@@ -526,7 +513,7 @@ function SelectProject() {
           badgeIcon={Sparkles}
           badgeTheme="purple"
           title="Select Your Operating Project"
-          description={`Welcome back, ${user.name}. Please choose an assigned mother project network to manage its child clinics and hospital branches.`}
+          description={`Welcome back, ${user.name || user.username}. Please choose an assigned mother project network to manage its child clinics and hospital branches.`}
         />
 
         {/* Search Bar Toolbar */}
@@ -623,9 +610,7 @@ function SelectProject() {
                     <Building2 className="w-3.5 h-3.5" />
                     <span>
                       {childFacilities.length} Child{" "}
-                      {childFacilities.length === 1
-                        ? "Facility"
-                        : "Facilities"}
+                      {childFacilities.length === 1 ? "Facility" : "Facilities"}
                     </span>
                   </div>
 
@@ -1147,7 +1132,8 @@ function SelectProject() {
                 Super Administrator Authority
               </p>
               <p className="mt-0.5 text-purple-700">
-                Modify project network details and update assigned child healthcare facilities.
+                Modify project network details and update assigned child
+                healthcare facilities.
               </p>
             </div>
           </div>
@@ -1215,7 +1201,10 @@ function SelectProject() {
             >
               Cancel
             </button>
-            <button type="submit" className="btn-primary text-xs flex items-center gap-1.5">
+            <button
+              type="submit"
+              className="btn-primary text-xs flex items-center gap-1.5"
+            >
               <Check className="w-3.5 h-3.5" />
               <span>Save Changes</span>
             </button>
@@ -1242,9 +1231,11 @@ function SelectProject() {
                   This will permanently remove the record for{" "}
                   <span className="font-bold">{projectToDelete.name}</span> (
                   <span className="font-mono font-semibold">
-                    {projectToDelete.projectCode || `PRJ-00${projectToDelete.id}`}
+                    {projectToDelete.projectCode ||
+                      `PRJ-00${projectToDelete.id}`}
                   </span>
-                  ). Associated administrators will be unassigned. This action cannot be undone.
+                  ). Associated administrators will be unassigned. This action
+                  cannot be undone.
                 </p>
               </div>
             </div>

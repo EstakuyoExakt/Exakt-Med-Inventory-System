@@ -29,6 +29,7 @@ import { users as initialUsers } from "../../data/user";
 import { facilities } from "../../data/facility";
 import { ROLES, ROLE_DETAILS } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
+import useRole from "../../hooks/useRole";
 import {
   canEditUser as checkCanEditUser,
   canDeleteUser as checkCanDeleteUser,
@@ -37,6 +38,7 @@ import { DEFAULT_USER_FORM } from "../../utils/constants";
 
 function UserManagement() {
   const { facility, user: currentUser } = useAuth();
+  const { isSuperAdmin } = useRole();
 
   // Automatically detect current active facility
   const currentFacility = useMemo(() => {
@@ -788,8 +790,7 @@ function UserManagement() {
                 onChange={handleInputChange}
                 className="input"
               >
-                {(currentUser?.role === ROLES.SUPER_ADMIN ||
-                  currentUser?.role === "Super Admin") && (
+                {isSuperAdmin && (
                   <option value={ROLES.SUPER_ADMIN}>Super Admin</option>
                 )}
                 <option value={ROLES.ADMIN}>Admin</option>

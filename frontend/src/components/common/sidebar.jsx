@@ -1,21 +1,18 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { Boxes, LogOut, Building2, ArrowLeftRight } from "lucide-react";
 import { NAVIGATION_ITEMS } from "../../config/navigation";
-import { ROLE_DETAILS } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
+import useRole from "../../hooks/useRole";
 
 function Sidebar() {
   const navigate = useNavigate();
   const { user, facility, logout } = useAuth();
+  const { role: userRole, roleDetails: roleInfo } = useRole();
 
   // Filter navigation items based on user role
-  const userRole = user?.role;
   const filteredNavItems = NAVIGATION_ITEMS.filter((item) =>
     item.roles.includes(userRole),
   );
-
-  // Get role metadata (badge colors, display labels)
-  const roleInfo = userRole ? ROLE_DETAILS[userRole] : null;
 
   const handleLogout = () => {
     logout();

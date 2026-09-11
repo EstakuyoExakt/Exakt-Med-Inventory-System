@@ -42,6 +42,7 @@ import { facilities as allFacilities } from "../../data/facility";
 import { users as initialUsers } from "../../data/user";
 import { ROLE_DETAILS, ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
+import useRole from "../../hooks/useRole";
 import {
   FACILITY_TYPE_OPTIONS,
   DEFAULT_FACILITY_FORM,
@@ -60,6 +61,7 @@ function SelectFacility() {
     logout,
     isAuthenticated,
   } = useAuth();
+  const { isSuperAdmin, isAdmin, roleDetails } = useRole();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFacilityId, setSelectedFacilityId] = useState(null);
@@ -111,18 +113,14 @@ function SelectFacility() {
     }
   }, [isAuthenticated, user, navigate]);
 
-  const isSuperAdminOrAdmin =
-    user?.role === "Super Admin" ||
-    user?.role === ROLES.SUPER_ADMIN ||
-    user?.role === "Admin" ||
-    user?.role === ROLES.ADMIN;
+  const isSuperAdminOrAdmin = isAdmin;
 
   // Filter facilities assigned to the user (and scoped by active project)
   const userAssignedFacilities = useMemo(() => {
     if (!user) return [];
 
     // Super Admins: access to all facilities, scoped by selected project if one is active
-    if (user.role === "Super Admin" || user.role === ROLES.SUPER_ADMIN) {
+    if (isSuperAdmin) {
       if (activeProject) {
         return facilityList.filter(
           (f) =>
@@ -134,7 +132,7 @@ function SelectFacility() {
     }
 
     // Admins: if a project is selected, show facilities in that project; otherwise all in their assigned projects
-    if (user.role === "Admin" || user.role === ROLES.ADMIN) {
+    if (isAdmin) {
       if (activeProject) {
         return facilityList.filter(
           (f) =>
@@ -411,7 +409,9 @@ function SelectFacility() {
       setFacility(updatedFacility);
     }
 
-    setEditSuccessMsg(`Facility "${updatedFacility.name}" updated successfully!`);
+    setEditSuccessMsg(
+      `Facility "${updatedFacility.name}" updated successfully!`,
+    );
     setTimeout(() => {
       handleCloseEditModal();
     }, 700);
@@ -465,17 +465,18 @@ function SelectFacility() {
 
   // Helper: Roles allowed for user creation based on current logged in user
   const availableRolesForCreation = useMemo(() => {
-    if (user?.role === ROLES.SUPER_ADMIN || user?.role === "Super Admin") {
+    if (isSuperAdmin) {
       return [ROLES.ADMIN, ROLES.PHARMACIST, ROLES.PROCUREMENT];
     }
     return [ROLES.PHARMACIST, ROLES.PROCUREMENT];
-  }, [user]);
+  }, [isSuperAdmin]);
 
   // Helper: Get users assigned to a specific facility
   const getAssignedUsers = (facilityId) => {
     const fac = facilityList.find((f) => f.id === Number(facilityId));
     return userList.filter((u) => {
-      if (u.role === ROLES.SUPER_ADMIN || u.role === "Super Admin") return false;
+      if (u.role === ROLES.SUPER_ADMIN || u.role === "Super Admin")
+        return false;
       const inUserFacilities =
         Array.isArray(u.assignedFacilities) &&
         u.assignedFacilities.includes(Number(facilityId));
@@ -697,8 +698,6 @@ function SelectFacility() {
     }, 700);
   };
 
-  const roleInfo = user?.role ? ROLE_DETAILS[user.role] : null;
-
   if (!user) return null;
 
   return (
@@ -706,7 +705,7 @@ function SelectFacility() {
       {/* Top Header Navigation */}
       <PortalHeader
         user={user}
-        roleInfo={roleInfo}
+        roleInfo={roleDetails}
         subtitle="Multi-Facility Portal"
         onLogout={logout}
         badgeTheme="blue"
@@ -1167,7 +1166,8 @@ function SelectFacility() {
                 Modify Facility Information
               </p>
               <p className="mt-0.5 text-amber-800">
-                Update operational branch details, contact points, or operating status.
+                Update operational branch details, contact points, or operating
+                status.
               </p>
             </div>
           </div>
@@ -1400,7 +1400,9 @@ function SelectFacility() {
                   <span className="font-mono font-semibold">
                     {facilityToDelete.facilityCode}
                   </span>
-                  ) from this network. If it is currently selected in your active session, it will be unselected. This action cannot be undone.
+                  ) from this network. If it is currently selected in your
+                  active session, it will be unselected. This action cannot be
+                  undone.
                 </p>
               </div>
             </div>
@@ -1441,8 +1443,9 @@ function SelectFacility() {
                 Facility Staff Delegation
               </p>
               <p className="mt-0.5 text-blue-700">
-                Grant or revoke user access to healthcare facilities and hospital branches.
-                Assigned users will be able to select and operate within this facility.
+                Grant or revoke user access to healthcare facilities and
+                hospital branches. Assigned users will be able to select and
+                operate within this facility.
               </p>
             </div>
           </div>
@@ -1470,7 +1473,8 @@ function SelectFacility() {
             >
               {facilityList.map((f) => (
                 <option key={f.id} value={f.id}>
-                  {f.name} ({getAssignedUsers(f.id).length} Users) - {f.facilityCode}
+                  {f.name} ({getAssignedUsers(f.id).length} Users) -{" "}
+                  {f.facilityCode}
                 </option>
               ))}
             </select>
@@ -1587,8 +1591,8 @@ function SelectFacility() {
                 Facility Staff Provisioning
               </p>
               <p className="mt-0.5 text-blue-700">
-                Create a new user account and optionally assign them to healthcare
-                facilities immediately.
+                Create a new user account and optionally assign them to
+                healthcare facilities immediately.
               </p>
             </div>
           </div>

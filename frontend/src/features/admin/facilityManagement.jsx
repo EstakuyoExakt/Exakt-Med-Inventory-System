@@ -29,21 +29,15 @@ import { projects } from "../../data/projects";
 import { getProjectForFacility } from "../../utils/helpers";
 import { ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
+import useRole from "../../hooks/useRole";
 import {
   FACILITY_TYPE_OPTIONS,
   DEFAULT_FACILITY_FORM,
 } from "../../utils/constants";
 
 function FacilityManagement() {
-  const {
-    facility: authFacility,
-    project: authProject,
-    user: currentUser,
-  } = useAuth();
-
-  const isSuperAdmin =
-    currentUser?.role === ROLES.SUPER_ADMIN ||
-    currentUser?.role === "Super Admin";
+  const { facility: authFacility, project: authProject } = useAuth();
+  const { isSuperAdmin } = useRole();
 
   // Detect current active project
   const currentProject = useMemo(() => {
