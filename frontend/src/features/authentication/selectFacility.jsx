@@ -21,6 +21,10 @@ import {
   Pencil,
   Trash2,
   Check,
+  UserPlus,
+  Users,
+  Lock,
+  Shield,
 } from "lucide-react";
 
 import PortalHeader from "./components/portalHeader";
@@ -28,16 +32,19 @@ import PortalFooter from "./components/portalFooter";
 import PortalHeroBanner from "./components/portalHeroBanner";
 import PortalToolbar from "./components/portalToolbar";
 import EmptyState from "./components/emptyState";
+import SearchableChecklist from "./components/searchableChecklist";
 import Modal from "../../components/common/modal";
 import RoleGuard from "../../components/guard/roleGuard";
 
 // Data & Hooks
 import { facilities as allFacilities } from "../../data/facility";
+import { users as initialUsers } from "../../data/user";
 import { ROLE_DETAILS, ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
 import {
   FACILITY_TYPE_OPTIONS,
   DEFAULT_FACILITY_FORM,
+  DEFAULT_USER_FORM,
 } from "../../utils/constants";
 
 function SelectFacility() {
@@ -60,6 +67,9 @@ function SelectFacility() {
   // Facilities list state initialized with mock data
   const [facilityList, setFacilityList] = useState(allFacilities);
 
+  // User list state for managing staff assignments
+  const [userList, setUserList] = useState(initialUsers);
+
   // Modal state for adding a facility
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [formData, setFormData] = useState(DEFAULT_FACILITY_FORM);
@@ -76,6 +86,22 @@ function SelectFacility() {
   // Modal state for deleting a facility
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [facilityToDelete, setFacilityToDelete] = useState(null);
+
+  // Modal & Form state for assigning users to a facility
+  const [isAssignUserModalOpen, setIsAssignUserModalOpen] = useState(false);
+  const [selectedFacilityIdForAssignment, setSelectedFacilityIdForAssignment] =
+    useState(null);
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [userSearchTerm, setUserSearchTerm] = useState("");
+  const [assignSuccessMsg, setAssignSuccessMsg] = useState("");
+
+  // Modal & Form state for creating a new user
+  const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
+  const [userFormData, setUserFormData] = useState(DEFAULT_USER_FORM);
+  const [selectedFacilitiesForNewUser, setSelectedFacilitiesForNewUser] =
+    useState([]);
+  const [userFormErrors, setUserFormErrors] = useState({});
+  const [createUserSuccessMsg, setCreateUserSuccessMsg] = useState("");
 
   // If not logged in, redirect back to login
   useEffect(() => {
@@ -429,6 +455,247 @@ function SelectFacility() {
     handleCloseDeleteModal();
   };
 
+  // Helper: All assignable user accounts (excluding Super Admin)
+  const assignableUsers = useMemo(() => {
+    return userList.filter(
+      (u) => u.role !== ROLES.SUPER_ADMIN && u.role !== "Super Admin",
+    );
+  }, [userList]);
+
+  // Helper: Roles allowed for user creation based on current logged in user
+  const availableRolesForCreation = useMemo(() => {
+    if (user?.role === ROLES.SUPER_ADMIN || user?.role === "Super Admin") {
+      return [ROLES.ADMIN, ROLES.PHARMACIST, ROLES.PROCUREMENT];
+    }
+    return [ROLES.PHARMACIST, ROLES.PROCUREMENT];
+  }, [user]);
+
+  // Helper: Get users assigned to a specific facility
+  const getAssignedUsers = (facilityId) => {
+    const fac = facilityList.find((f) => f.id === Number(facilityId));
+    return userList.filter((u) => {
+      if (u.role === ROLES.SUPER_ADMIN || u.role === "Super Admin") return false;
+      const inUserFacilities =
+        Array.isArray(u.assignedFacilities) &&
+        u.assignedFacilities.includes(Number(facilityId));
+      const inFacilityUsers =
+        fac &&
+        Array.isArray(fac.assignedUserIds) &&
+        fac.assignedUserIds.includes(u.id);
+      return inUserFacilities || inFacilityUsers;
+    });
+  };
+
+  // --- Assign Users Modal Handlers ---
+  const handleOpenAssignUsersModal = (facility) => {
+    if (!isSuperAdminOrAdmin) return;
+    const targetFacility = facility || filteredFacilities[0] || facilityList[0];
+    if (!targetFacility) return;
+
+    setSelectedFacilityIdForAssignment(targetFacility.id);
+
+    const currentlyAssignedUserIds = getAssignedUsers(targetFacility.id).map(
+      (u) => u.id,
+    );
+    setSelectedUserIds(currentlyAssignedUserIds);
+    setUserSearchTerm("");
+    setAssignSuccessMsg("");
+    setIsAssignUserModalOpen(true);
+  };
+
+  const handleFacilityChangeInModal = (facilityId) => {
+    const fid = Number(facilityId);
+    setSelectedFacilityIdForAssignment(fid);
+
+    const currentlyAssignedUserIds = getAssignedUsers(fid).map((u) => u.id);
+    setSelectedUserIds(currentlyAssignedUserIds);
+    setAssignSuccessMsg("");
+  };
+
+  const handleToggleUser = (userId) => {
+    setSelectedUserIds((prev) =>
+      prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId],
+    );
+  };
+
+  const handleSaveAssignments = (e) => {
+    e.preventDefault();
+    if (!isSuperAdminOrAdmin || !selectedFacilityIdForAssignment) return;
+
+    const targetFid = Number(selectedFacilityIdForAssignment);
+
+    // Update facilityList with new assignedUserIds
+    setFacilityList((prevFacilities) =>
+      prevFacilities.map((f) =>
+        f.id === targetFid
+          ? {
+              ...f,
+              assignedUserIds: selectedUserIds,
+            }
+          : f,
+      ),
+    );
+
+    // Update userList assignedFacilities
+    setUserList((prevUsers) =>
+      prevUsers.map((u) => {
+        if (u.role === ROLES.SUPER_ADMIN || u.role === "Super Admin") return u;
+        const shouldBeAssigned = selectedUserIds.includes(u.id);
+        const currentFacilities = Array.isArray(u.assignedFacilities)
+          ? u.assignedFacilities
+          : [];
+
+        if (shouldBeAssigned && !currentFacilities.includes(targetFid)) {
+          return {
+            ...u,
+            assignedFacilities: [...currentFacilities, targetFid],
+          };
+        } else if (!shouldBeAssigned && currentFacilities.includes(targetFid)) {
+          return {
+            ...u,
+            assignedFacilities: currentFacilities.filter(
+              (fid) => fid !== targetFid,
+            ),
+          };
+        }
+        return u;
+      }),
+    );
+
+    const targetFac = facilityList.find((f) => f.id === targetFid);
+    setAssignSuccessMsg(
+      `Updated user assignments for ${targetFac?.name || "facility"}!`,
+    );
+
+    setTimeout(() => {
+      setIsAssignUserModalOpen(false);
+      setAssignSuccessMsg("");
+    }, 700);
+  };
+
+  // --- Create User Form Handlers ---
+  const handleOpenCreateUserModal = () => {
+    if (!isSuperAdminOrAdmin) return;
+    setUserFormData(DEFAULT_USER_FORM);
+    const initialFacs = currentSavedFacility
+      ? [currentSavedFacility.id]
+      : filteredFacilities[0]
+        ? [filteredFacilities[0].id]
+        : [];
+    setSelectedFacilitiesForNewUser(initialFacs);
+    setUserFormErrors({});
+    setCreateUserSuccessMsg("");
+    setIsCreateUserModalOpen(true);
+  };
+
+  const handleUserInputChange = (e) => {
+    const { name, value } = e.target;
+    setUserFormData((prev) => ({ ...prev, [name]: value }));
+    if (userFormErrors[name]) {
+      setUserFormErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+  };
+
+  const handleToggleFacilityForNewUser = (facilityId) => {
+    const fid = Number(facilityId);
+    setSelectedFacilitiesForNewUser((prev) =>
+      prev.includes(fid) ? prev.filter((id) => id !== fid) : [...prev, fid],
+    );
+  };
+
+  const validateUserForm = () => {
+    const errors = {};
+    if (!userFormData.name?.trim()) {
+      errors.name = "Full name is required.";
+    }
+
+    if (!userFormData.username?.trim()) {
+      errors.username = "Username is required.";
+    } else {
+      const exists = userList.some(
+        (u) =>
+          u.username?.toLowerCase() ===
+          userFormData.username.trim().toLowerCase(),
+      );
+      if (exists) {
+        errors.username = "Username is already taken.";
+      }
+    }
+
+    if (!userFormData.email?.trim()) {
+      errors.email = "Email address is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userFormData.email.trim())) {
+      errors.email = "Please enter a valid email address.";
+    } else {
+      const exists = userList.some(
+        (u) =>
+          u.email?.toLowerCase() === userFormData.email.trim().toLowerCase(),
+      );
+      if (exists) {
+        errors.email = "Email address is already registered.";
+      }
+    }
+
+    if (!userFormData.password || userFormData.password.length < 6) {
+      errors.password = "Password must be at least 6 characters.";
+    }
+
+    setUserFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleCreateUserSubmit = (e) => {
+    e.preventDefault();
+    if (!isSuperAdminOrAdmin) return;
+    if (!validateUserForm()) return;
+
+    const newUserId = Date.now();
+    const newUser = {
+      id: newUserId,
+      name: userFormData.name.trim(),
+      username: userFormData.username.trim(),
+      email: userFormData.email.trim(),
+      phone: userFormData.phone.trim() || "+63 900 000 0000",
+      role: userFormData.role,
+      status: userFormData.status || "Active",
+      password: userFormData.password || "exaktpassword",
+      assignedFacilities: selectedFacilitiesForNewUser,
+      createdAt: new Date().toISOString().split("T")[0],
+    };
+
+    setUserList((prev) => [newUser, ...prev]);
+
+    if (selectedFacilitiesForNewUser.length > 0) {
+      setFacilityList((prevFacilities) =>
+        prevFacilities.map((fac) => {
+          if (selectedFacilitiesForNewUser.includes(fac.id)) {
+            const currentUsers = Array.isArray(fac.assignedUserIds)
+              ? fac.assignedUserIds
+              : [];
+            return {
+              ...fac,
+              assignedUserIds: [...currentUsers, newUserId],
+            };
+          }
+          return fac;
+        }),
+      );
+    }
+
+    setCreateUserSuccessMsg(
+      `User account for ${newUser.name} created successfully!`,
+    );
+
+    setTimeout(() => {
+      setIsCreateUserModalOpen(false);
+      setCreateUserSuccessMsg("");
+      setUserFormData(DEFAULT_USER_FORM);
+      setSelectedFacilitiesForNewUser([]);
+    }, 700);
+  };
+
   const roleInfo = user?.role ? ROLE_DETAILS[user.role] : null;
 
   if (!user) return null;
@@ -485,15 +752,39 @@ function SelectFacility() {
           itemLabel="assigned branches"
         >
           <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]}>
-            <button
-              type="button"
-              onClick={handleOpenAddModal}
-              className="btn-primary py-2 px-3.5 text-xs shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer"
-              title="Create New Facility"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create Facility</span>
-            </button>
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+              <button
+                type="button"
+                onClick={handleOpenCreateUserModal}
+                className="btn-secondary py-2 px-3 text-xs shadow-sm flex items-center gap-1.5 shrink-0 hover:border-blue-300 hover:text-blue-700 cursor-pointer"
+                title="Create New User Account"
+              >
+                <UserPlus className="w-3.5 h-3.5 text-blue-600" />
+                <span>Create User</span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleOpenAssignUsersModal(
+                    filteredFacilities[0] || facilityList[0],
+                  )
+                }
+                className="btn-secondary py-2 px-3 text-xs shadow-sm flex items-center gap-1.5 shrink-0 hover:border-blue-300 hover:text-blue-700 cursor-pointer"
+                title="Assign Users to Facility"
+              >
+                <Users className="w-3.5 h-3.5 text-blue-600" />
+                <span>Assign Users</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenAddModal}
+                className="btn-primary py-2 px-3.5 text-xs shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer"
+                title="Create New Facility"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Facility</span>
+              </button>
+            </div>
           </RoleGuard>
         </PortalToolbar>
 
@@ -618,6 +909,50 @@ function SelectFacility() {
                         <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                         <span className="truncate">{facility.email}</span>
                       </div>
+                    </div>
+
+                    {/* Assigned Users Preview & Assign Action */}
+                    <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                          Assigned Users ({getAssignedUsers(facility.id).length})
+                        </p>
+                        <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenAssignUsersModal(facility);
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                            title="Assign or remove users for this facility"
+                          >
+                            <UserPlus className="w-3 h-3" />
+                            <span>Assign</span>
+                          </button>
+                        </RoleGuard>
+                      </div>
+
+                      {getAssignedUsers(facility.id).length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {getAssignedUsers(facility.id).slice(0, 3).map((u) => (
+                            <span
+                              key={u.id}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 text-[11px] font-medium rounded-md border border-blue-100"
+                            >
+                              <User className="w-3 h-3 text-blue-500 shrink-0" />
+                              <span className="truncate max-w-28">{u.name}</span>
+                            </span>
+                          ))}
+                          {getAssignedUsers(facility.id).length > 3 && (
+                            <span className="text-[10px] text-gray-400 font-medium self-center pl-0.5">
+                              +{getAssignedUsers(facility.id).length - 3} more
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic">No users assigned yet</p>
+                      )}
                     </div>
                   </div>
 
@@ -1222,6 +1557,396 @@ function SelectFacility() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Super Admin & Admin Assign Users Modal */}
+      <Modal
+        isOpen={isAssignUserModalOpen}
+        onClose={() => setIsAssignUserModalOpen(false)}
+        title="Assign Users to Facility"
+        size="md"
+      >
+        <form onSubmit={handleSaveAssignments} className="space-y-4">
+          <div className="flex items-start gap-3 p-3 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-blue-800">
+            <Users className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-blue-900">
+                Facility Staff Delegation
+              </p>
+              <p className="mt-0.5 text-blue-700">
+                Grant or revoke user access to healthcare facilities and hospital branches.
+                Assigned users will be able to select and operate within this facility.
+              </p>
+            </div>
+          </div>
+
+          {assignSuccessMsg && (
+            <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl animate-fade-in">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+              <span className="font-semibold">{assignSuccessMsg}</span>
+            </div>
+          )}
+
+          {/* Select Target Facility Dropdown */}
+          <div>
+            <label
+              htmlFor="targetFacility"
+              className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1.5"
+            >
+              Target Healthcare Facility
+            </label>
+            <select
+              id="targetFacility"
+              value={selectedFacilityIdForAssignment || ""}
+              onChange={(e) => handleFacilityChangeInModal(e.target.value)}
+              className="input text-xs font-medium"
+            >
+              {facilityList.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name} ({getAssignedUsers(f.id).length} Users) - {f.facilityCode}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Users List */}
+          <SearchableChecklist
+            label="Select Users"
+            selectedCount={selectedUserIds.length}
+            totalCount={assignableUsers.length}
+            selectedIds={selectedUserIds}
+            onToggle={handleToggleUser}
+            onSelectAll={() =>
+              setSelectedUserIds(assignableUsers.map((u) => u.id))
+            }
+            onDeselectAll={() => setSelectedUserIds([])}
+            searchTerm={userSearchTerm}
+            onSearchChange={setUserSearchTerm}
+            placeholder="Search users by name, username, or email..."
+            items={assignableUsers.filter((u) => {
+              if (!userSearchTerm.trim()) return true;
+              const term = userSearchTerm.toLowerCase();
+              return (
+                u.name.toLowerCase().includes(term) ||
+                u.username.toLowerCase().includes(term) ||
+                u.email.toLowerCase().includes(term) ||
+                (u.role && u.role.toLowerCase().includes(term))
+              );
+            })}
+            maxHeight="max-h-56"
+            helperText="Checked staff will have access to select and manage inventory in this facility upon logging in."
+            renderItem={(u, isChecked, toggleFn) => {
+              const facCount = Array.isArray(u.assignedFacilities)
+                ? u.assignedFacilities.length
+                : 0;
+
+              return (
+                <label
+                  key={u.id}
+                  className={`flex items-center justify-between p-2.5 rounded-xl text-xs cursor-pointer transition-colors ${
+                    isChecked
+                      ? "bg-blue-50/90 text-blue-950 border border-blue-200/90 shadow-2xs"
+                      : "hover:bg-white text-gray-700 bg-white/70 border border-transparent"
+                  }`}
+                >
+                  <div className="flex items-center gap-3 truncate">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={toggleFn}
+                      className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                    />
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-700 font-bold text-xs shrink-0">
+                      {u.name.charAt(0)}
+                    </div>
+                    <div className="truncate text-left">
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-semibold text-gray-900 truncate">
+                          {u.name}
+                        </p>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-gray-100 text-gray-600 font-medium shrink-0">
+                          {u.role}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-400 truncate">
+                        @{u.username} &bull; {u.email}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 text-right ml-2">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                      <Building2 className="w-2.5 h-2.5" />
+                      {facCount} {facCount === 1 ? "facility" : "facilities"}
+                    </span>
+                  </div>
+                </label>
+              );
+            }}
+          />
+
+          {/* Modal Actions */}
+          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={() => setIsAssignUserModalOpen(false)}
+              className="btn-secondary text-xs cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn-primary text-xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Save Assignments</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Super Admin & Admin Create User Modal */}
+      <Modal
+        isOpen={isCreateUserModalOpen}
+        onClose={() => setIsCreateUserModalOpen(false)}
+        title="Create User Account"
+        size="md"
+      >
+        <form onSubmit={handleCreateUserSubmit} className="space-y-4">
+          <div className="flex items-start gap-3 p-3 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-blue-800">
+            <UserPlus className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-blue-900">
+                Facility Staff Provisioning
+              </p>
+              <p className="mt-0.5 text-blue-700">
+                Create a new user account and optionally assign them to healthcare
+                facilities immediately.
+              </p>
+            </div>
+          </div>
+
+          {createUserSuccessMsg && (
+            <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl animate-fade-in">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+              <span className="font-semibold">{createUserSuccessMsg}</span>
+            </div>
+          )}
+
+          {/* Full Name */}
+          <div>
+            <label
+              htmlFor="user-fullname"
+              className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+            >
+              Full Name <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <input
+                id="user-fullname"
+                name="name"
+                type="text"
+                value={userFormData.name}
+                onChange={handleUserInputChange}
+                placeholder="e.g. Dr. Jonathan Mendoza"
+                className={`input text-xs pl-9 ${userFormErrors.name ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`}
+                autoFocus
+              />
+              <User className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+            {userFormErrors.name && (
+              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5" />
+                {userFormErrors.name}
+              </p>
+            )}
+          </div>
+
+          {/* Username & Email Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <label
+                htmlFor="user-username"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Username <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  id="user-username"
+                  name="username"
+                  type="text"
+                  value={userFormData.username}
+                  onChange={handleUserInputChange}
+                  placeholder="jmendoza_pharma"
+                  className={`input text-xs pl-7 font-mono ${userFormErrors.username ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`}
+                />
+                <span className="text-gray-400 font-mono text-xs absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  @
+                </span>
+              </div>
+              {userFormErrors.username && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {userFormErrors.username}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="user-email"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Email Address <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  id="user-email"
+                  name="email"
+                  type="email"
+                  value={userFormData.email}
+                  onChange={handleUserInputChange}
+                  placeholder="jmendoza@exaktmed.com"
+                  className={`input text-xs pl-9 ${userFormErrors.email ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`}
+                />
+                <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+              {userFormErrors.email && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {userFormErrors.email}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Phone & Password Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <label
+                htmlFor="user-phone"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Phone Number
+              </label>
+              <div className="relative">
+                <input
+                  id="user-phone"
+                  name="phone"
+                  type="text"
+                  value={userFormData.phone}
+                  onChange={handleUserInputChange}
+                  placeholder="+63 917 000 0000"
+                  className="input text-xs pl-9"
+                />
+                <Phone className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="user-password"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Initial Password <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  id="user-password"
+                  name="password"
+                  type="text"
+                  value={userFormData.password}
+                  onChange={handleUserInputChange}
+                  placeholder="exaktpassword"
+                  className={`input text-xs pl-9 ${userFormErrors.password ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`}
+                />
+                <Lock className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+              {userFormErrors.password && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {userFormErrors.password}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Role & Status Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <label
+                htmlFor="user-role"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Assigned Role <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="user-role"
+                name="role"
+                value={userFormData.role}
+                onChange={handleUserInputChange}
+                className="input text-xs font-medium"
+              >
+                {availableRolesForCreation.map((role) => (
+                  <option key={role} value={role}>
+                    {ROLE_DETAILS[role]?.label || role}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="user-status"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Account Status
+              </label>
+              <select
+                id="user-status"
+                name="status"
+                value={userFormData.status}
+                onChange={handleUserInputChange}
+                className="input text-xs"
+              >
+                <option value="Active">Active (Permitted to log in)</option>
+                <option value="Inactive">Inactive (Suspended)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Assign Initial Facilities */}
+          <SearchableChecklist
+            label="Assign Facilities"
+            selectedCount={selectedFacilitiesForNewUser.length}
+            totalCount={facilityList.length}
+            selectedIds={selectedFacilitiesForNewUser}
+            onToggle={handleToggleFacilityForNewUser}
+            items={facilityList}
+            getItemBadge={(fac) => fac.facilityCode}
+            maxHeight="max-h-36"
+            helperText="The new user will be granted access to these healthcare branches upon logging in."
+          />
+
+          {/* Modal Actions */}
+          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={() => setIsCreateUserModalOpen(false)}
+              className="btn-secondary text-xs cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn-primary text-xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Create User</span>
+            </button>
+          </div>
+        </form>
       </Modal>
     </div>
   );
