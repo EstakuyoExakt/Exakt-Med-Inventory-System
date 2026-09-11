@@ -62,7 +62,7 @@ function PortalEntityCard({
   editRoles = [ROLES.SUPER_ADMIN, ROLES.ADMIN],
   editTitle = "Edit",
   deleteTitle = "Delete",
-  // Assigned members preview
+  showAssigned = true,
   assignedLabel = "Assigned Members",
   assignedItems = [],
   assignedIconType = "user", // "user" | "shield"
@@ -198,52 +198,54 @@ function PortalEntityCard({
         {children}
 
         {/* Assigned Members Section */}
-        <div className="mt-3.5 pt-3 border-t border-gray-100 space-y-1.5">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-              {assignedLabel} ({assignedItems.length})
-            </p>
-            {onAssign && (
-              <RoleGuard allowedRoles={assignRoles}>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAssign();
-                  }}
-                  className={`inline-flex items-center gap-1 text-[11px] font-semibold hover:underline cursor-pointer ${theme.assignBtn}`}
-                  title={`Assign or manage members for this ${badgeText?.toLowerCase() || "item"}`}
-                >
-                  <UserPlus className="w-3 h-3" />
-                  <span>Assign</span>
-                </button>
-              </RoleGuard>
-            )}
-          </div>
-
-          {assignedItems.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5 pt-0.5">
-              {assignedItems.slice(0, maxPreviewMembers).map((item) => (
-                <span
-                  key={item.id}
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-md border ${theme.assignedTag}`}
-                >
-                  <AssignedIcon
-                    className={`w-3 h-3 shrink-0 ${theme.assignedIcon}`}
-                  />
-                  <span className="truncate max-w-28">{item.name}</span>
-                </span>
-              ))}
-              {assignedItems.length > maxPreviewMembers && (
-                <span className="text-[10px] text-gray-400 font-medium self-center pl-0.5">
-                  +{assignedItems.length - maxPreviewMembers} more
-                </span>
+        {showAssigned && (
+          <div className="mt-3.5 pt-3 border-t border-gray-100 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                {assignedLabel} ({assignedItems.length})
+              </p>
+              {onAssign && (
+                <RoleGuard allowedRoles={assignRoles}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAssign();
+                    }}
+                    className={`inline-flex items-center gap-1 text-[11px] font-semibold hover:underline cursor-pointer ${theme.assignBtn}`}
+                    title={`Assign or manage members for this ${badgeText?.toLowerCase() || "item"}`}
+                  >
+                    <UserPlus className="w-3 h-3" />
+                    <span>Assign</span>
+                  </button>
+                </RoleGuard>
               )}
             </div>
-          ) : (
-            <p className="text-xs text-gray-400 italic">{emptyAssignedText}</p>
-          )}
-        </div>
+
+            {assignedItems.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {assignedItems.slice(0, maxPreviewMembers).map((item) => (
+                  <span
+                    key={item.id}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-md border ${theme.assignedTag}`}
+                  >
+                    <AssignedIcon
+                      className={`w-3 h-3 shrink-0 ${theme.assignedIcon}`}
+                    />
+                    <span className="truncate max-w-28">{item.name}</span>
+                  </span>
+                ))}
+                {assignedItems.length > maxPreviewMembers && (
+                  <span className="text-[10px] text-gray-400 font-medium self-center pl-0.5">
+                    +{assignedItems.length - maxPreviewMembers} more
+                  </span>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 italic">{emptyAssignedText}</p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Card Action Footer */}

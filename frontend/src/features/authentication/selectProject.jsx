@@ -1,28 +1,17 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Boxes,
-  FolderKanban,
   Building2,
   Sparkles,
-  ArrowRight,
-  CheckCircle2,
-  Loader2,
-  ChevronRight,
   Shield,
   Layers,
   Plus,
   FolderPlus,
   AlertCircle,
-  UserPlus,
-  Users,
   Check,
-  Mail,
-  Phone,
-  Lock,
-  User,
-  Pencil,
   Trash2,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 
 // Common Components
@@ -33,24 +22,17 @@ import PortalFooter from "./components/portalFooter";
 import PortalHeroBanner from "./components/portalHeroBanner";
 import PortalToolbar from "./components/portalToolbar";
 import EmptyState from "./components/emptyState";
-import SearchableChecklist from "./components/searchableChecklist";
 import PortalEntityCard from "./components/portalEntityCard";
 
-// Data & Hooks
-import { projects as allProjects } from "../../data/projects";
-import { facilities as allFacilities } from "../../data/facility";
-import { users as initialUsers } from "../../data/user";
-import { ROLE_DETAILS, ROLES } from "../../config/roles";
+// Services, Data & Hooks
+import projectService from "../../services/project";
+import { ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
 import useRole from "../../hooks/useRole";
 import {
-  getAllAdminAccounts,
-  getAdminsForProject,
   getUserAssignedProjects,
   filterProjectsByQuery,
-  validateAdminAccountForm,
 } from "../../utils/helpers";
-import { DEFAULT_ADMIN_FORM } from "../../utils/constants";
 
 function SelectProject() {
   const navigate = useNavigate();
@@ -68,47 +50,29 @@ function SelectProject() {
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Projects list state initialized from mock data
-  const [projectList, setProjectList] = useState(allProjects);
-
-  // User list state for managing admin assignments
-  const [userList, setUserList] = useState(initialUsers);
+  // Projects list state loaded from backend API
+  const [projectList, setProjectList] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
 
   // Modal & Form state for creating a new project
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
-  const [selectedFacilitiesForNewProject, setSelectedFacilitiesForNewProject] =
-    useState([]);
-  const [facilitySearchTerm, setFacilitySearchTerm] = useState("");
   const [formError, setFormError] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
 
   // Modal & Form state for editing an existing project
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [editProjectName, setEditProjectName] = useState("");
-  const [editSelectedFacilities, setEditSelectedFacilities] = useState([]);
-  const [editFacilitySearchTerm, setEditFacilitySearchTerm] = useState("");
   const [editFormError, setEditFormError] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Modal & state for deleting a project
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState(null);
-
-  // Modal & Form state for assigning admins to a project
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-  const [selectedProjectIdForAssignment, setSelectedProjectIdForAssignment] =
-    useState(null);
-  const [selectedAdminIds, setSelectedAdminIds] = useState([]);
-  const [adminSearchTerm, setAdminSearchTerm] = useState("");
-  const [assignSuccessMsg, setAssignSuccessMsg] = useState("");
-
-  // Modal & Form state for creating a new administrator
-  const [isCreateAdminModalOpen, setIsCreateAdminModalOpen] = useState(false);
-  const [adminFormData, setAdminFormData] = useState(DEFAULT_ADMIN_FORM);
-  const [selectedProjectsForNewAdmin, setSelectedProjectsForNewAdmin] =
-    useState([]);
-  const [adminFormErrors, setAdminFormErrors] = useState({});
-  const [createAdminSuccessMsg, setCreateAdminSuccessMsg] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // If not authenticated, redirect to login
   useEffect(() => {
@@ -123,21 +87,45 @@ function SelectProject() {
     }
   }, [isAuthenticated, user, isAdmin, navigate]);
 
+  // Fetch projects from backend API
+  const fetchProjects = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setFetchError("");
+      const data = await projectService.getAllProjects();
+      setProjectList(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to fetch projects:", err);
+      const errMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to load projects from server.";
+      setFetchError(
+        typeof errMsg === "string" ? errMsg : "Failed to load projects.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated && isAdmin) {
+      fetchProjects();
+    }
+  }, [isAuthenticated, isAdmin, fetchProjects]);
+
   // Retrieve existing current project from auth session
   const currentSavedProject = sessionProject;
 
   // Filter projects assigned to this User
   const userAssignedProjects = useMemo(() => {
-    return getUserAssignedProjects(user, projectList, userList);
-  }, [user, userList, projectList]);
+    return getUserAssignedProjects(user, projectList);
+  }, [user, projectList]);
 
   // Filtered projects based on search query (matches project name or child facility names)
   const filteredProjects = useMemo(() => {
-    return filterProjectsByQuery(
-      userAssignedProjects,
-      searchQuery,
-      allFacilities,
-    );
+    return filterProjectsByQuery(userAssignedProjects, searchQuery);
   }, [userAssignedProjects, searchQuery]);
 
   // Handle project selection
@@ -150,26 +138,14 @@ function SelectProject() {
     }, 350);
   };
 
-  // Modal Open Handler
+  // --- Create Project Handlers ---
   const handleOpenAddModal = () => {
     setNewProjectName("");
-    setSelectedFacilitiesForNewProject([]);
-    setFacilitySearchTerm("");
     setFormError("");
     setIsAddModalOpen(true);
   };
 
-  // Facility checkbox toggle
-  const handleToggleFacility = (facilityId) => {
-    setSelectedFacilitiesForNewProject((prev) =>
-      prev.includes(facilityId)
-        ? prev.filter((id) => id !== facilityId)
-        : [...prev, facilityId],
-    );
-  };
-
-  // Form Submit Handler for Creating a Project
-  const handleCreateProject = (e) => {
+  const handleCreateProject = async (e) => {
     e.preventDefault();
     if (!isSuperAdmin) return;
 
@@ -179,40 +155,54 @@ function SelectProject() {
       return;
     }
 
-    if (trimmed.length < 3) {
-      setFormError("Project name must be at least 3 characters long.");
+    if (trimmed.length < 2) {
+      setFormError("Project name must be at least 2 characters long.");
       return;
     }
 
     const nameExists = projectList.some(
-      (p) => p.name.toLowerCase() === trimmed.toLowerCase(),
+      (p) => p.name?.toLowerCase() === trimmed.toLowerCase(),
     );
     if (nameExists) {
       setFormError("A project with this name already exists.");
       return;
     }
 
-    const newProject = {
-      id: Date.now(),
-      name: trimmed,
-      facilityIds: selectedFacilitiesForNewProject,
-    };
+    try {
+      setIsCreating(true);
+      setFormError("");
+      const createdProject = await projectService.createProject({
+        name: trimmed,
+      });
 
-    setProjectList((prev) => [newProject, ...prev]);
+      setProjectList((prev) => [
+        { ...createdProject, facilities: createdProject.facilities || [] },
+        ...prev,
+      ]);
 
-    setIsAddModalOpen(false);
-    setNewProjectName("");
-    setSelectedFacilitiesForNewProject([]);
-    setFormError("");
+      setIsAddModalOpen(false);
+      setNewProjectName("");
+      setFormError("");
+    } catch (err) {
+      console.error("Error creating project:", err);
+      const errMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to create project. Please try again.";
+      setFormError(
+        typeof errMsg === "string" ? errMsg : "Failed to create project.",
+      );
+    } finally {
+      setIsCreating(false);
+    }
   };
 
-  // Open Edit Modal
+  // --- Edit Project Handlers ---
   const handleOpenEditModal = (project) => {
     if (!isSuperAdmin) return;
     setEditingProject(project);
     setEditProjectName(project.name || "");
-    setEditSelectedFacilities(project.facilityIds || []);
-    setEditFacilitySearchTerm("");
     setEditFormError("");
     setIsEditModalOpen(true);
   };
@@ -221,20 +211,10 @@ function SelectProject() {
     setIsEditModalOpen(false);
     setEditingProject(null);
     setEditProjectName("");
-    setEditSelectedFacilities([]);
-    setEditFacilitySearchTerm("");
     setEditFormError("");
   };
 
-  const handleToggleEditFacility = (facilityId) => {
-    setEditSelectedFacilities((prev) =>
-      prev.includes(facilityId)
-        ? prev.filter((id) => id !== facilityId)
-        : [...prev, facilityId],
-    );
-  };
-
-  const handleUpdateProject = (e) => {
+  const handleUpdateProject = async (e) => {
     e.preventDefault();
     if (!isSuperAdmin) return;
     if (!editingProject) return;
@@ -245,251 +225,119 @@ function SelectProject() {
       return;
     }
 
-    if (trimmed.length < 3) {
-      setEditFormError("Project name must be at least 3 characters long.");
+    if (trimmed.length < 2) {
+      setEditFormError("Project name must be at least 2 characters long.");
       return;
     }
 
     const nameExists = projectList.some(
       (p) =>
         p.id !== editingProject.id &&
-        p.name.toLowerCase() === trimmed.toLowerCase(),
+        p.name?.toLowerCase() === trimmed.toLowerCase(),
     );
     if (nameExists) {
       setEditFormError("Another project with this name already exists.");
       return;
     }
 
-    setProjectList((prev) =>
-      prev.map((p) =>
-        p.id === editingProject.id
-          ? {
-              ...p,
-              name: trimmed,
-              facilityIds: editSelectedFacilities,
-            }
-          : p,
-      ),
-    );
+    try {
+      setIsUpdating(true);
+      setEditFormError("");
+      const updatedProject = await projectService.updateProject(
+        editingProject.id,
+        {
+          name: trimmed,
+        },
+      );
 
-    // Sync active project if currently active
-    if (sessionProject?.id === editingProject.id) {
-      setProject({
-        ...sessionProject,
-        name: trimmed,
-        facilityIds: editSelectedFacilities,
-      });
+      setProjectList((prev) =>
+        prev.map((p) =>
+          p.id === editingProject.id
+            ? {
+                ...p,
+                ...updatedProject,
+                facilities: updatedProject.facilities || p.facilities || [],
+              }
+            : p,
+        ),
+      );
+
+      // Sync active project if currently active
+      if (sessionProject?.id === editingProject.id) {
+        setProject({
+          ...sessionProject,
+          ...updatedProject,
+          facilities:
+            updatedProject.facilities || editingProject.facilities || [],
+        });
+      }
+
+      handleCloseEditModal();
+    } catch (err) {
+      console.error("Error updating project:", err);
+      const errMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to update project. Please try again.";
+      setEditFormError(
+        typeof errMsg === "string" ? errMsg : "Failed to update project.",
+      );
+    } finally {
+      setIsUpdating(false);
     }
-
-    handleCloseEditModal();
   };
 
-  // Open Delete Modal
+  // --- Delete Project Handlers ---
   const handleOpenDeleteModal = (project) => {
     if (!isSuperAdmin) return;
     setProjectToDelete(project);
+    setDeleteError("");
     setIsDeleteModalOpen(true);
   };
 
   const handleCloseDeleteModal = () => {
     setIsDeleteModalOpen(false);
     setProjectToDelete(null);
+    setDeleteError("");
   };
 
-  const handleConfirmDeleteProject = () => {
+  const handleConfirmDeleteProject = async () => {
     if (!isSuperAdmin) return;
     if (!projectToDelete) return;
 
     const targetId = projectToDelete.id;
 
-    // Remove from projectList
-    setProjectList((prev) => prev.filter((p) => p.id !== targetId));
+    try {
+      setIsDeleting(true);
+      setDeleteError("");
+      await projectService.deleteProject(targetId);
 
-    // Remove from users' assigned projects
-    setUserList((prevUsers) =>
-      prevUsers.map((u) => {
-        if (
-          Array.isArray(u.assignedProjects) &&
-          u.assignedProjects.includes(targetId)
-        ) {
-          return {
-            ...u,
-            assignedProjects: u.assignedProjects.filter(
-              (id) => id !== targetId,
-            ),
-          };
-        }
-        return u;
-      }),
-    );
+      // Remove from projectList
+      setProjectList((prev) => prev.filter((p) => p.id !== targetId));
 
-    // Clean up active project if it was deleted
-    if (selectedProjectId === targetId) {
-      setSelectedProjectId(null);
+      // Clean up active project if it was deleted
+      if (selectedProjectId === targetId) {
+        setSelectedProjectId(null);
+      }
+      if (sessionProject?.id === targetId) {
+        setProject(null);
+      }
+
+      handleCloseDeleteModal();
+    } catch (err) {
+      console.error("Error deleting project:", err);
+      const errMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to delete project. Please try again.";
+      setDeleteError(
+        typeof errMsg === "string" ? errMsg : "Failed to delete project.",
+      );
+    } finally {
+      setIsDeleting(false);
     }
-    if (sessionProject?.id === targetId) {
-      setProject(null);
-    }
-
-    handleCloseDeleteModal();
-  };
-
-  // Helper: All Administrator accounts
-  const allAdminAccounts = useMemo(() => {
-    return getAllAdminAccounts(userList);
-  }, [userList]);
-
-  // Helper: Get admins assigned to a specific project
-  const getAdmins = (projectId) => getAdminsForProject(projectId, userList);
-
-  // Modal Open Handler for Assigning Admins
-  const handleOpenAssignModal = (project) => {
-    const targetProject = project || projectList[0];
-    if (!targetProject) return;
-
-    setSelectedProjectIdForAssignment(targetProject.id);
-
-    const currentlyAssignedAdminIds = getAdmins(targetProject.id).map(
-      (u) => u.id,
-    );
-
-    setSelectedAdminIds(currentlyAssignedAdminIds);
-    setAdminSearchTerm("");
-    setAssignSuccessMsg("");
-    setIsAssignModalOpen(true);
-  };
-
-  // Project dropdown change in Assign Modal
-  const handleProjectChangeInModal = (projectId) => {
-    const pid = Number(projectId);
-    setSelectedProjectIdForAssignment(pid);
-
-    const currentlyAssignedAdminIds = getAdmins(pid).map((u) => u.id);
-
-    setSelectedAdminIds(currentlyAssignedAdminIds);
-    setAssignSuccessMsg("");
-  };
-
-  // Toggle admin selection in Assign Modal
-  const handleToggleAdmin = (adminId) => {
-    setSelectedAdminIds((prev) =>
-      prev.includes(adminId)
-        ? prev.filter((id) => id !== adminId)
-        : [...prev, adminId],
-    );
-  };
-
-  // Save Admin Assignments
-  const handleSaveAssignments = (e) => {
-    e.preventDefault();
-    if (!isSuperAdmin) return;
-    if (!selectedProjectIdForAssignment) return;
-
-    setUserList((prevUsers) =>
-      prevUsers.map((u) => {
-        if (u.role !== "Admin" && u.role !== ROLES.ADMIN) return u;
-
-        const shouldBeAssigned = selectedAdminIds.includes(u.id);
-        const currentProjects = Array.isArray(u.assignedProjects)
-          ? u.assignedProjects
-          : [];
-
-        if (
-          shouldBeAssigned &&
-          !currentProjects.includes(selectedProjectIdForAssignment)
-        ) {
-          return {
-            ...u,
-            assignedProjects: [
-              ...currentProjects,
-              selectedProjectIdForAssignment,
-            ],
-          };
-        } else if (
-          !shouldBeAssigned &&
-          currentProjects.includes(selectedProjectIdForAssignment)
-        ) {
-          return {
-            ...u,
-            assignedProjects: currentProjects.filter(
-              (pid) => pid !== selectedProjectIdForAssignment,
-            ),
-          };
-        }
-        return u;
-      }),
-    );
-
-    const targetProject = projectList.find(
-      (p) => p.id === selectedProjectIdForAssignment,
-    );
-    setAssignSuccessMsg(
-      `Updated administrator assignments for ${targetProject?.name || "project"}!`,
-    );
-
-    setTimeout(() => {
-      setIsAssignModalOpen(false);
-      setAssignSuccessMsg("");
-    }, 700);
-  };
-
-  // --- Create Admin Form Handlers ---
-  const handleOpenCreateAdminModal = () => {
-    setAdminFormData(DEFAULT_ADMIN_FORM);
-    setSelectedProjectsForNewAdmin([]);
-    setAdminFormErrors({});
-    setCreateAdminSuccessMsg("");
-    setIsCreateAdminModalOpen(true);
-  };
-
-  const handleAdminInputChange = (e) => {
-    const { name, value } = e.target;
-    setAdminFormData((prev) => ({ ...prev, [name]: value }));
-    if (adminFormErrors[name]) {
-      setAdminFormErrors((prev) => ({ ...prev, [name]: "" }));
-    }
-  };
-
-  const handleToggleProjectForNewAdmin = (projectId) => {
-    setSelectedProjectsForNewAdmin((prev) =>
-      prev.includes(projectId)
-        ? prev.filter((id) => id !== projectId)
-        : [...prev, projectId],
-    );
-  };
-
-  const handleCreateAdminSubmit = (e) => {
-    e.preventDefault();
-    if (!isSuperAdmin) return;
-
-    const errors = validateAdminAccountForm(adminFormData, userList);
-    setAdminFormErrors(errors);
-    if (Object.keys(errors).length > 0) return;
-
-    const newAdmin = {
-      id: Date.now(),
-      name: adminFormData.name.trim(),
-      username: adminFormData.username.trim(),
-      email: adminFormData.email.trim(),
-      phone: adminFormData.phone.trim() || "+63 900 000 0000",
-      role: ROLES.ADMIN,
-      status: adminFormData.status || "Active",
-      password: adminFormData.password || "exaktpassword",
-      assignedProjects: selectedProjectsForNewAdmin,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-
-    setUserList((prev) => [newAdmin, ...prev]);
-    setCreateAdminSuccessMsg(
-      `Administrator account for ${newAdmin.name} created successfully!`,
-    );
-
-    setTimeout(() => {
-      setIsCreateAdminModalOpen(false);
-      setCreateAdminSuccessMsg("");
-      setAdminFormData(DEFAULT_ADMIN_FORM);
-      setSelectedProjectsForNewAdmin([]);
-    }, 700);
   };
 
   if (!user || !isAdmin) return null;
@@ -531,26 +379,6 @@ function SelectProject() {
             <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
               <button
                 type="button"
-                onClick={handleOpenCreateAdminModal}
-                className="btn-secondary py-2 px-3 text-xs shadow-sm flex items-center gap-1.5 shrink-0 hover:border-purple-300 hover:text-purple-700 cursor-pointer"
-                title="Create New Administrator Account"
-              >
-                <UserPlus className="w-3.5 h-3.5 text-purple-600" />
-                <span>Create Admin</span>
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  handleOpenAssignModal(filteredProjects[0] || projectList[0])
-                }
-                className="btn-secondary py-2 px-3 text-xs shadow-sm flex items-center gap-1.5 shrink-0 hover:border-purple-300 hover:text-purple-700 cursor-pointer"
-                title="Assign Administrators to Projects"
-              >
-                <Users className="w-3.5 h-3.5 text-purple-600" />
-                <span>Assign Admins</span>
-              </button>
-              <button
-                type="button"
                 onClick={handleOpenAddModal}
                 className="btn-primary py-2 px-3.5 text-xs shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer"
                 title="Create New Project"
@@ -563,19 +391,38 @@ function SelectProject() {
         </PortalToolbar>
 
         {/* Projects Grid */}
-        {filteredProjects.length > 0 ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+            <Loader2 className="w-8 h-8 animate-spin text-purple-600 mb-3" />
+            <p className="text-sm font-medium">Loading projects from server...</p>
+          </div>
+        ) : fetchError ? (
+          <div className="p-6 bg-red-50 border border-red-200 rounded-2xl text-center space-y-3">
+            <AlertCircle className="w-8 h-8 text-red-500 mx-auto" />
+            <div>
+              <p className="font-semibold text-red-900">Unable to load projects</p>
+              <p className="text-xs text-red-700 mt-1">{fetchError}</p>
+            </div>
+            <button
+              type="button"
+              onClick={fetchProjects}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-white border border-purple-200 rounded-lg shadow-2xs hover:bg-purple-50 cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Retry</span>
+            </button>
+          </div>
+        ) : filteredProjects.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredProjects.map((project) => {
               const isSelected = selectedProjectId === project.id;
               const isCurrentlyActiveInSession =
                 currentSavedProject?.id === project.id;
 
-              // Find child facilities linked to this project
-              const childFacilities = allFacilities.filter(
-                (f) =>
-                  project.facilityIds?.includes(f.id) ||
-                  f.projectId === Number(project.id),
-              );
+              // Child facilities linked to this project directly from backend API
+              const childFacilities = Array.isArray(project.facilities)
+                ? project.facilities
+                : [];
 
               return (
                 <PortalEntityCard
@@ -595,12 +442,7 @@ function SelectProject() {
                   editRoles={[ROLES.SUPER_ADMIN]}
                   editTitle="Edit Project"
                   deleteTitle="Delete Project"
-                  assignedLabel="Assigned Admins"
-                  assignedItems={getAdmins(project.id)}
-                  assignedIconType="shield"
-                  assignRoles={[ROLES.SUPER_ADMIN]}
-                  onAssign={() => handleOpenAssignModal(project)}
-                  emptyAssignedText="No admin assigned yet"
+                  showAssigned={false}
                   footerVariant="compact"
                   footerLabel="Select project & choose facility"
                   selectButtonText="Select"
@@ -630,7 +472,7 @@ function SelectProject() {
                               {facility.name}
                             </span>
                             <span className="text-[10px] text-gray-400 font-mono">
-                              {facility.facilityCode}
+                              {facility.facilityCode || `FAC-00${facility.id}`}
                             </span>
                           </div>
                         ))}
@@ -654,9 +496,13 @@ function SelectProject() {
           <EmptyState
             icon={Layers}
             title="No matching projects found"
-            description={`We couldn't find any assigned projects matching "${searchQuery}". Try adjusting your keywords.`}
-            actionText="Clear Search Query"
-            onAction={() => setSearchQuery("")}
+            description={
+              searchQuery
+                ? `We couldn't find any assigned projects matching "${searchQuery}". Try adjusting your keywords.`
+                : "No projects are currently available. Create one to get started."
+            }
+            actionText={searchQuery ? "Clear Search Query" : undefined}
+            onAction={searchQuery ? () => setSearchQuery("") : undefined}
           />
         )}
       </main>
@@ -675,7 +521,7 @@ function SelectProject() {
       {/* Super Admin Create Project Modal */}
       <Modal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        onClose={() => !isCreating && setIsAddModalOpen(false)}
         title="Create New Mother Project"
         size="md"
       >
@@ -687,8 +533,8 @@ function SelectProject() {
                 Super Administrator Authority
               </p>
               <p className="mt-0.5 text-purple-700">
-                Create a new overarching mother project network and assign child
-                healthcare facilities.
+                Create a new overarching mother project network. Child facilities
+                can be assigned under this project.
               </p>
             </div>
           </div>
@@ -719,399 +565,31 @@ function SelectProject() {
               placeholder="e.g. Pasig Regional Medical Network"
               className="input text-xs"
               autoFocus
+              disabled={isCreating}
             />
           </div>
-
-          {/* Assign Facilities */}
-          <SearchableChecklist
-            label="Assign Child Facilities"
-            selectedIds={selectedFacilitiesForNewProject}
-            onToggle={handleToggleFacility}
-            onDeselectAll={() => setSelectedFacilitiesForNewProject([])}
-            searchTerm={facilitySearchTerm}
-            onSearchChange={setFacilitySearchTerm}
-            placeholder="Filter facilities by name or code..."
-            items={allFacilities.filter((f) => {
-              if (!facilitySearchTerm.trim()) return true;
-              const term = facilitySearchTerm.toLowerCase();
-              return (
-                f.name.toLowerCase().includes(term) ||
-                f.facilityCode.toLowerCase().includes(term) ||
-                f.type.toLowerCase().includes(term)
-              );
-            })}
-            getItemBadge={(fac) => fac.facilityCode}
-            helperText="Linked clinics and branches will be accessible under this mother project."
-          />
 
           {/* Modal Actions */}
           <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
             <button
               type="button"
+              disabled={isCreating}
               onClick={() => setIsAddModalOpen(false)}
               className="btn-secondary text-xs"
             >
               Cancel
             </button>
-            <button type="submit" className="btn-primary text-xs">
-              <Plus className="w-3.5 h-3.5" />
-              <span>Create Project</span>
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Super Admin Assign Admins Modal */}
-      <Modal
-        isOpen={isAssignModalOpen}
-        onClose={() => setIsAssignModalOpen(false)}
-        title="Assign Administrators to Project"
-        size="md"
-      >
-        <form onSubmit={handleSaveAssignments} className="space-y-4">
-          <div className="flex items-start gap-3 p-3 bg-purple-50/70 border border-purple-100 rounded-xl text-xs text-purple-800">
-            <UserPlus className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-purple-900">
-                Administrator Access Delegation
-              </p>
-              <p className="mt-0.5 text-purple-700">
-                Grant or revoke administrator access to mother project networks.
-                Assigned administrators will be able to manage all clinics
-                within this project.
-              </p>
-            </div>
-          </div>
-
-          {assignSuccessMsg && (
-            <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl animate-fade-in">
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-              <span className="font-semibold">{assignSuccessMsg}</span>
-            </div>
-          )}
-
-          {/* Select Target Project Dropdown */}
-          <div>
-            <label
-              htmlFor="targetProject"
-              className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1.5"
-            >
-              Target Mother Project
-            </label>
-            <select
-              id="targetProject"
-              value={selectedProjectIdForAssignment || ""}
-              onChange={(e) => handleProjectChangeInModal(e.target.value)}
-              className="input text-xs font-medium"
-            >
-              {projectList.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({getAdmins(p.id).length} Admins)
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Administrators List */}
-          <SearchableChecklist
-            label="Select Administrators"
-            selectedCount={selectedAdminIds.length}
-            totalCount={allAdminAccounts.length}
-            selectedIds={selectedAdminIds}
-            onToggle={handleToggleAdmin}
-            onSelectAll={() =>
-              setSelectedAdminIds(allAdminAccounts.map((a) => a.id))
-            }
-            onDeselectAll={() => setSelectedAdminIds([])}
-            searchTerm={adminSearchTerm}
-            onSearchChange={setAdminSearchTerm}
-            placeholder="Search administrators by name or username..."
-            items={allAdminAccounts.filter((adm) => {
-              if (!adminSearchTerm.trim()) return true;
-              const term = adminSearchTerm.toLowerCase();
-              return (
-                adm.name.toLowerCase().includes(term) ||
-                adm.username.toLowerCase().includes(term) ||
-                adm.email.toLowerCase().includes(term)
-              );
-            })}
-            maxHeight="max-h-56"
-            helperText="Checked administrators will have access to manage this mother project upon logging in."
-            renderItem={(adm, isChecked, toggleFn) => {
-              const assignedCount = Array.isArray(adm.assignedProjects)
-                ? adm.assignedProjects.length
-                : 0;
-
-              return (
-                <label
-                  key={adm.id}
-                  className={`flex items-center justify-between p-2.5 rounded-xl text-xs cursor-pointer transition-colors ${
-                    isChecked
-                      ? "bg-purple-50/90 text-purple-950 border border-purple-200/90 shadow-2xs"
-                      : "hover:bg-white text-gray-700 bg-white/70 border border-transparent"
-                  }`}
-                >
-                  <div className="flex items-center gap-3 truncate">
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={toggleFn}
-                      className="rounded text-purple-600 focus:ring-purple-500 w-4 h-4 cursor-pointer"
-                    />
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-100 text-purple-700 font-bold text-xs shrink-0">
-                      {adm.name.charAt(0)}
-                    </div>
-                    <div className="truncate text-left">
-                      <p className="font-semibold text-gray-900 truncate">
-                        {adm.name}
-                      </p>
-                      <p className="text-[11px] text-gray-400 truncate">
-                        @{adm.username} &bull; {adm.email}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="shrink-0 text-right ml-2">
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
-                      <Layers className="w-2.5 h-2.5" />
-                      {assignedCount}{" "}
-                      {assignedCount === 1 ? "project" : "projects"}
-                    </span>
-                  </div>
-                </label>
-              );
-            }}
-          />
-
-          {/* Modal Actions */}
-          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
             <button
-              type="button"
-              onClick={() => setIsAssignModalOpen(false)}
-              className="btn-secondary text-xs"
+              type="submit"
+              disabled={isCreating}
+              className="btn-primary text-xs flex items-center gap-1.5"
             >
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary text-xs">
-              <Check className="w-3.5 h-3.5" />
-              <span>Save Assignments</span>
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Super Admin Create Admin Modal */}
-      <Modal
-        isOpen={isCreateAdminModalOpen}
-        onClose={() => setIsCreateAdminModalOpen(false)}
-        title="Create Administrator Account"
-        size="md"
-      >
-        <form onSubmit={handleCreateAdminSubmit} className="space-y-4">
-          <div className="flex items-start gap-3 p-3 bg-purple-50/70 border border-purple-100 rounded-xl text-xs text-purple-800">
-            <Shield className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-purple-900">
-                Super Administrator Provisioning
-              </p>
-              <p className="mt-0.5 text-purple-700">
-                Create a new Administrator account and optionally assign them to
-                mother projects immediately.
-              </p>
-            </div>
-          </div>
-
-          {createAdminSuccessMsg && (
-            <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl animate-fade-in">
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-              <span className="font-semibold">{createAdminSuccessMsg}</span>
-            </div>
-          )}
-
-          {/* Name Field */}
-          <div>
-            <label
-              htmlFor="admin-name"
-              className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-            >
-              Full Name <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <input
-                id="admin-name"
-                name="name"
-                type="text"
-                value={adminFormData.name}
-                onChange={handleAdminInputChange}
-                placeholder="e.g. Lucas Montemayor"
-                className={`input text-xs pl-9 ${adminFormErrors.name ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`}
-                autoFocus
-              />
-              <User className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-            {adminFormErrors.name && (
-              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                <AlertCircle className="w-3.5 h-3.5" />
-                {adminFormErrors.name}
-              </p>
-            )}
-          </div>
-
-          {/* Username & Email Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div>
-              <label
-                htmlFor="admin-username"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Username <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  id="admin-username"
-                  name="username"
-                  type="text"
-                  value={adminFormData.username}
-                  onChange={handleAdminInputChange}
-                  placeholder="lmontemayor_admin"
-                  className={`input text-xs pl-7 font-mono ${adminFormErrors.username ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`}
-                />
-                <span className="text-gray-400 font-mono text-xs absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                  @
-                </span>
-              </div>
-              {adminFormErrors.username && (
-                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  {adminFormErrors.username}
-                </p>
+              {isCreating ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Plus className="w-3.5 h-3.5" />
               )}
-            </div>
-
-            <div>
-              <label
-                htmlFor="admin-email"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Email Address <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  id="admin-email"
-                  name="email"
-                  type="email"
-                  value={adminFormData.email}
-                  onChange={handleAdminInputChange}
-                  placeholder="lucas@exaktmed.com"
-                  className={`input text-xs pl-9 ${adminFormErrors.email ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`}
-                />
-                <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-              {adminFormErrors.email && (
-                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  {adminFormErrors.email}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Phone & Password Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div>
-              <label
-                htmlFor="admin-phone"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Phone Number
-              </label>
-              <div className="relative">
-                <input
-                  id="admin-phone"
-                  name="phone"
-                  type="text"
-                  value={adminFormData.phone}
-                  onChange={handleAdminInputChange}
-                  placeholder="+63 917 000 0000"
-                  className="input text-xs pl-9"
-                />
-                <Phone className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="admin-password"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Initial Password <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  id="admin-password"
-                  name="password"
-                  type="text"
-                  value={adminFormData.password}
-                  onChange={handleAdminInputChange}
-                  placeholder="exaktpassword"
-                  className={`input text-xs pl-9 ${adminFormErrors.password ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`}
-                />
-                <Lock className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-              {adminFormErrors.password && (
-                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  {adminFormErrors.password}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Account Status */}
-          <div>
-            <label
-              htmlFor="admin-status"
-              className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-            >
-              Account Status
-            </label>
-            <select
-              id="admin-status"
-              name="status"
-              value={adminFormData.status}
-              onChange={handleAdminInputChange}
-              className="input text-xs"
-            >
-              <option value="Active">Active (Permitted to log in)</option>
-              <option value="Inactive">Inactive (Suspended)</option>
-            </select>
-          </div>
-
-          {/* Assign Initial Mother Projects */}
-          <SearchableChecklist
-            label="Assign Mother Projects"
-            selectedCount={selectedProjectsForNewAdmin.length}
-            totalCount={projectList.length}
-            selectedIds={selectedProjectsForNewAdmin}
-            onToggle={handleToggleProjectForNewAdmin}
-            items={projectList}
-            getItemBadge={(proj) => proj.projectCode || `PRJ-00${proj.id}`}
-            maxHeight="max-h-36"
-            helperText="The new administrator will be able to select and manage these projects upon login."
-          />
-
-          {/* Modal Actions */}
-          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
-            <button
-              type="button"
-              onClick={() => setIsCreateAdminModalOpen(false)}
-              className="btn-secondary text-xs"
-            >
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary text-xs">
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>Create Administrator</span>
+              <span>{isCreating ? "Creating..." : "Create Project"}</span>
             </button>
           </div>
         </form>
@@ -1120,7 +598,7 @@ function SelectProject() {
       {/* Super Admin Edit Project Modal */}
       <Modal
         isOpen={isEditModalOpen}
-        onClose={handleCloseEditModal}
+        onClose={() => !isUpdating && handleCloseEditModal()}
         title={`Edit Project - ${editingProject?.name || ""}`}
         size="md"
       >
@@ -1132,8 +610,7 @@ function SelectProject() {
                 Super Administrator Authority
               </p>
               <p className="mt-0.5 text-purple-700">
-                Modify project network details and update assigned child
-                healthcare facilities.
+                Modify project network details.
               </p>
             </div>
           </div>
@@ -1164,38 +641,15 @@ function SelectProject() {
               placeholder="e.g. Pasig Regional Medical Network"
               className="input text-xs"
               autoFocus
+              disabled={isUpdating}
             />
           </div>
-
-          {/* Assign Facilities */}
-          <SearchableChecklist
-            label="Assign Child Facilities"
-            selectedIds={editSelectedFacilities}
-            onToggle={handleToggleEditFacility}
-            onSelectAll={() =>
-              setEditSelectedFacilities(allFacilities.map((f) => f.id))
-            }
-            onDeselectAll={() => setEditSelectedFacilities([])}
-            searchTerm={editFacilitySearchTerm}
-            onSearchChange={setEditFacilitySearchTerm}
-            placeholder="Filter facilities by name or code..."
-            items={allFacilities.filter((f) => {
-              if (!editFacilitySearchTerm.trim()) return true;
-              const term = editFacilitySearchTerm.toLowerCase();
-              return (
-                f.name.toLowerCase().includes(term) ||
-                f.facilityCode.toLowerCase().includes(term) ||
-                f.type.toLowerCase().includes(term)
-              );
-            })}
-            getItemBadge={(fac) => fac.facilityCode}
-            helperText="Linked clinics and branches will be accessible under this mother project."
-          />
 
           {/* Modal Actions */}
           <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
             <button
               type="button"
+              disabled={isUpdating}
               onClick={handleCloseEditModal}
               className="btn-secondary text-xs"
             >
@@ -1203,10 +657,15 @@ function SelectProject() {
             </button>
             <button
               type="submit"
+              disabled={isUpdating}
               className="btn-primary text-xs flex items-center gap-1.5"
             >
-              <Check className="w-3.5 h-3.5" />
-              <span>Save Changes</span>
+              {isUpdating ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Check className="w-3.5 h-3.5" />
+              )}
+              <span>{isUpdating ? "Saving..." : "Save Changes"}</span>
             </button>
           </div>
         </form>
@@ -1215,7 +674,7 @@ function SelectProject() {
       {/* Super Admin Delete Project Confirmation Modal */}
       <Modal
         isOpen={isDeleteModalOpen}
-        onClose={handleCloseDeleteModal}
+        onClose={() => !isDeleting && handleCloseDeleteModal()}
         title="Delete Project"
         size="sm"
       >
@@ -1234,15 +693,22 @@ function SelectProject() {
                     {projectToDelete.projectCode ||
                       `PRJ-00${projectToDelete.id}`}
                   </span>
-                  ). Associated administrators will be unassigned. This action
-                  cannot be undone.
+                  ). This action cannot be undone.
                 </p>
               </div>
             </div>
 
+            {deleteError && (
+              <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
               <button
                 type="button"
+                disabled={isDeleting}
                 onClick={handleCloseDeleteModal}
                 className="btn-secondary text-xs"
               >
@@ -1250,11 +716,16 @@ function SelectProject() {
               </button>
               <button
                 type="button"
+                disabled={isDeleting}
                 onClick={handleConfirmDeleteProject}
                 className="btn-danger text-xs flex items-center gap-1.5"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Project</span>
+                {isDeleting ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" />
+                )}
+                <span>{isDeleting ? "Deleting..." : "Delete Project"}</span>
               </button>
             </div>
           </div>

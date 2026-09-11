@@ -1,8 +1,11 @@
 package com.example.backend.service;
 
+import com.example.backend.dto.facility.FacilityResponseDto;
 import com.example.backend.dto.project.ProjectRequestDto;
 import com.example.backend.dto.project.ProjectResponseDto;
+import com.example.backend.entity.Facility;
 import com.example.backend.entity.Project;
+import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.ProjectRepository;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -15,9 +18,11 @@ import java.util.stream.Collectors;
 public class ProjectService {
 
     private final ProjectRepository projectRepository;
+    private final FacilityRepository facilityRepository;
 
-    public ProjectService(ProjectRepository projectRepository) {
+    public ProjectService(ProjectRepository projectRepository, FacilityRepository facilityRepository) {
         this.projectRepository = projectRepository;
+        this.facilityRepository = facilityRepository;
     }
 
     // 1. CREATE PROJECT (SuperAdmin only)
@@ -37,21 +42,38 @@ public class ProjectService {
         return mapToResponseDto(savedProject, "Project Created Successfully");
     }
 
-    // 2. GET ALL PROJECTS (SuperAdmin only)
+    // 2. GET ALL PROJECTS (SuperAdmin only) - Includes associated facilities
     @PreAuthorize("hasRole('SuperAdmin')")
     public List<ProjectResponseDto> getAllProjects() {
         return projectRepository.findAll()
                 .stream()
-                .map(project -> mapToResponseDto(project, null))
+                .map(project -> {
+                    List<FacilityResponseDto> facilities = facilityRepository.findByProjectId(project.getId())
+                            .stream()
+                            .map(this::mapFacilityToDto)
+                            .collect(Collectors.toList());
+
+                    ProjectResponseDto dto = mapToResponseDto(project, null);
+                    dto.setFacilities(facilities);
+                    return dto;
+                })
                 .collect(Collectors.toList());
     }
 
-    // 3. GET PROJECT BY ID (SuperAdmin only)
+    // 3. GET PROJECT BY ID (SuperAdmin only) - Includes associated facilities
     @PreAuthorize("hasRole('SuperAdmin')")
     public ProjectResponseDto getProjectById(Long id) {
         Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Project not found with id: " + id));
-        return mapToResponseDto(project, "Project Fetched Successfully");
+
+        List<FacilityResponseDto> facilities = facilityRepository.findByProjectId(project.getId())
+                .stream()
+                .map(this::mapFacilityToDto)
+                .collect(Collectors.toList());
+
+        ProjectResponseDto dto = mapToResponseDto(project, "Project Fetched Successfully");
+        dto.setFacilities(facilities);
+        return dto;
     }
 
     // 4. UPDATE PROJECT (SuperAdmin only)
@@ -85,5 +107,25 @@ public class ProjectService {
         response.setUpdatedAt(project.getUpdatedAt());
         response.setMessage(message);
         return response;
+    }
+
+    // Helper: Map Facility entity to FacilityResponseDto
+    private FacilityResponseDto mapFacilityToDto(Facility f) {
+        return new FacilityResponseDto(
+                f.getId(),
+                f.getProject() != null ? f.getProject().getId() : null,
+                f.getProject() != null ? f.getProject().getName() : null,
+                f.getFacilityCode(),
+                f.getName(),
+                f.getType(),
+                f.getContactPerson(),
+                f.getEmail(),
+                f.getPhone(),
+                f.getAddress(),
+                f.getStatus(),
+                f.getCreatedAt(),
+                f.getUpdatedAt(),
+                null
+        );
     }
 }

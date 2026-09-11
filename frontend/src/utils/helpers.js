@@ -253,14 +253,17 @@ export const filterProjectsByQuery = (
       .toLowerCase()
       .includes(normalizedQuery);
 
-    const childFacilities = facilityList.filter(
-      (f) =>
-        proj.facilityIds?.includes(f.id) || f.projectId === Number(proj.id),
-    );
+    const childFacilities = Array.isArray(proj.facilities)
+      ? proj.facilities
+      : facilityList.filter(
+          (f) =>
+            proj.facilityIds?.includes(f.id) || f.projectId === Number(proj.id),
+        );
+
     const facilityMatch = childFacilities.some(
       (f) =>
-        f.name.toLowerCase().includes(normalizedQuery) ||
-        f.facilityCode.toLowerCase().includes(normalizedQuery),
+        f.name?.toLowerCase().includes(normalizedQuery) ||
+        f.facilityCode?.toLowerCase().includes(normalizedQuery),
     );
 
     return nameMatch || codeMatch || facilityMatch;

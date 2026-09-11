@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Building2,
@@ -25,6 +25,7 @@ import {
   Users,
   Lock,
   Shield,
+  RefreshCw,
 } from "lucide-react";
 
 import PortalHeader from "./components/portalHeader";
@@ -37,8 +38,9 @@ import PortalEntityCard from "./components/portalEntityCard";
 import Modal from "../../components/common/modal";
 import RoleGuard from "../../components/guard/roleGuard";
 
-// Data & Hooks
-import { facilities as allFacilities } from "../../data/facility";
+// Services, Data & Hooks
+import facilityService from "../../services/facility";
+import projectService from "../../services/project";
 import { users as initialUsers } from "../../data/user";
 import { ROLE_DETAILS, ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
@@ -67,8 +69,19 @@ function SelectFacility() {
   const [selectedFacilityId, setSelectedFacilityId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Facilities list state initialized with mock data
-  const [facilityList, setFacilityList] = useState(allFacilities);
+  // Facilities list state loaded from backend API
+  const [facilityList, setFacilityList] = useState([]);
+  const [isLoadingFacilities, setIsLoadingFacilities] = useState(true);
+  const [fetchFacilitiesError, setFetchFacilitiesError] = useState("");
+
+  // Projects list for selecting parent project when adding/editing
+  const [projectList, setProjectList] = useState([]);
+
+  // Submitting states for CRUD
+  const [isCreatingFacility, setIsCreatingFacility] = useState(false);
+  const [isUpdatingFacility, setIsUpdatingFacility] = useState(false);
+  const [isDeletingFacility, setIsDeletingFacility] = useState(false);
+  const [deleteFacilityError, setDeleteFacilityError] = useState("");
 
   // User list state for managing staff assignments
   const [userList, setUserList] = useState(initialUsers);
@@ -112,6 +125,47 @@ function SelectFacility() {
       navigate("/", { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
+
+  // Fetch facilities from backend API
+  const fetchFacilities = useCallback(async () => {
+    try {
+      setIsLoadingFacilities(true);
+      setFetchFacilitiesError("");
+      const data = await facilityService.getAllFacilities();
+      setFacilityList(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to fetch facilities:", err);
+      const errMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to load facilities from server.";
+      setFetchFacilitiesError(
+        typeof errMsg === "string" ? errMsg : "Failed to load facilities.",
+      );
+    } finally {
+      setIsLoadingFacilities(false);
+    }
+  }, []);
+
+  // Fetch projects from backend API to populate parent project options
+  const fetchProjects = useCallback(async () => {
+    try {
+      const data = await projectService.getAllProjects();
+      setProjectList(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to fetch projects in selectFacility:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      fetchFacilities();
+      if (isAdmin) {
+        fetchProjects();
+      }
+    }
+  }, [isAuthenticated, user, isAdmin, fetchFacilities, fetchProjects]);
 
   const isSuperAdminOrAdmin = isAdmin;
 
@@ -208,26 +262,10 @@ function SelectFacility() {
     }
   };
 
-  // Generate next facility code
-  const generateNextFacilityCode = () => {
-    const maxNum = facilityList.reduce((max, f) => {
-      const match = f.facilityCode?.match(/FAC-(\d+)/i);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        return num > max ? num : max;
-      }
-      return max;
-    }, 0);
-    return `FAC-${String(maxNum + 1).padStart(3, "0")}`;
-  };
-
   // Modal Handlers
   const handleOpenAddModal = () => {
     if (!isSuperAdminOrAdmin) return;
-    setFormData({
-      ...DEFAULT_FACILITY_FORM,
-      facilityCode: generateNextFacilityCode(),
-    });
+    setFormData(DEFAULT_FACILITY_FORM);
     setFormErrors({});
     setAddSuccessMsg("");
     setIsAddModalOpen(true);
@@ -242,8 +280,8 @@ function SelectFacility() {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    if (formErrors[name]) {
-      setFormErrors((prev) => ({ ...prev, [name]: "" }));
+    if (formErrors[name] || formErrors.general) {
+      setFormErrors((prev) => ({ ...prev, [name]: "", general: "" }));
     }
   };
 
@@ -251,21 +289,12 @@ function SelectFacility() {
     const errors = {};
     if (!formData.name?.trim()) {
       errors.name = "Facility name is required.";
-    } else if (formData.name.trim().length < 3) {
-      errors.name = "Facility name must be at least 3 characters.";
+    } else if (formData.name.trim().length < 2) {
+      errors.name = "Facility name must be at least 2 characters.";
     }
 
-    if (!formData.facilityCode?.trim()) {
-      errors.facilityCode = "Facility code is required.";
-    } else {
-      const codeExists = facilityList.some(
-        (f) =>
-          f.facilityCode?.toLowerCase() ===
-          formData.facilityCode.trim().toLowerCase(),
-      );
-      if (codeExists) {
-        errors.facilityCode = "Facility code already in use.";
-      }
+    if (!formData.type?.trim()) {
+      errors.type = "Facility type is required.";
     }
 
     if (!formData.contactPerson?.trim()) {
@@ -278,49 +307,75 @@ function SelectFacility() {
       errors.email = "Please enter a valid email address.";
     }
 
+    if (!formData.phone?.trim()) {
+      errors.phone = "Phone number is required.";
+    }
+
+    if (!formData.address?.trim()) {
+      errors.address = "Physical address is required.";
+    }
+
+    const currentProjectId = Number(activeProject?.id);
+    if (!currentProjectId) {
+      errors.general =
+        "An active project is required to create a facility. Please select a project first.";
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleCreateFacilitySubmit = (e) => {
+  const handleCreateFacilitySubmit = async (e) => {
     e.preventDefault();
     if (!isSuperAdminOrAdmin) return;
     if (!validateFacilityForm()) return;
 
-    const newFacId = Date.now();
-    const targetProjectId = activeProject ? Number(activeProject.id) : null;
-
-    const newFacility = {
-      id: newFacId,
-      facilityCode: formData.facilityCode.trim().toUpperCase(),
-      name: formData.name.trim(),
-      type: formData.type,
-      contactPerson: formData.contactPerson.trim(),
-      email: formData.email.trim(),
-      phone: formData.phone.trim() || "+63 2 8000 0000",
-      address: formData.address.trim() || "Metro Manila, Philippines",
-      status: formData.status || "Active",
-      createdAt: new Date().toISOString().split("T")[0],
-      assignedUserIds: user?.id ? [user.id] : [1],
-      projectId: targetProjectId,
-    };
-
-    setFacilityList((prev) => [newFacility, ...prev]);
-
-    // Update activeProject facilityIds in storage and in state
-    if (activeProject) {
-      const updatedProject = {
-        ...activeProject,
-        facilityIds: [...(activeProject.facilityIds || []), newFacId],
-      };
-      setProject(updatedProject);
+    const targetProjectId = Number(activeProject?.id);
+    if (!targetProjectId) {
+      setFormErrors((prev) => ({
+        ...prev,
+        general: "An active project is required to create a facility.",
+      }));
+      return;
     }
 
-    setAddSuccessMsg(`Facility "${newFacility.name}" created successfully!`);
-    setTimeout(() => {
-      handleCloseAddModal();
-      setAddSuccessMsg("");
-    }, 700);
+    try {
+      setIsCreatingFacility(true);
+      const payload = {
+        projectId: targetProjectId,
+        name: formData.name.trim(),
+        type: formData.type,
+        contactPerson: formData.contactPerson.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim(),
+        address: formData.address.trim(),
+        status: formData.status || "Active",
+      };
+
+      const newFacility = await facilityService.createFacility(payload);
+
+      setFacilityList((prev) => [newFacility, ...prev]);
+
+      setAddSuccessMsg(`Facility "${newFacility.name}" created successfully!`);
+      setTimeout(() => {
+        handleCloseAddModal();
+        setAddSuccessMsg("");
+      }, 700);
+    } catch (err) {
+      console.error("Failed to create facility:", err);
+      const errMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to create facility. Please try again.";
+      setFormErrors((prev) => ({
+        ...prev,
+        general:
+          typeof errMsg === "string" ? errMsg : "Failed to create facility.",
+      }));
+    } finally {
+      setIsCreatingFacility(false);
+    }
   };
 
   // --- EDIT FACILITY HANDLERS ---
@@ -336,6 +391,11 @@ function SelectFacility() {
       phone: fac.phone || "",
       address: fac.address || "",
       status: fac.status || "Active",
+      projectId: fac.projectId
+        ? String(fac.projectId)
+        : activeProject
+          ? String(activeProject.id)
+          : "",
     });
     setEditFormErrors({});
     setEditSuccessMsg("");
@@ -352,8 +412,8 @@ function SelectFacility() {
   const handleEditInputChange = (e) => {
     const { name, value } = e.target;
     setEditFormData((prev) => ({ ...prev, [name]: value }));
-    if (editFormErrors[name]) {
-      setEditFormErrors((prev) => ({ ...prev, [name]: "" }));
+    if (editFormErrors[name] || editFormErrors.general) {
+      setEditFormErrors((prev) => ({ ...prev, [name]: "", general: "" }));
     }
   };
 
@@ -361,8 +421,12 @@ function SelectFacility() {
     const errors = {};
     if (!editFormData.name?.trim()) {
       errors.name = "Facility name is required.";
-    } else if (editFormData.name.trim().length < 3) {
-      errors.name = "Facility name must be at least 3 characters.";
+    } else if (editFormData.name.trim().length < 2) {
+      errors.name = "Facility name must be at least 2 characters.";
+    }
+
+    if (!editFormData.type?.trim()) {
+      errors.type = "Facility type is required.";
     }
 
     if (!editFormData.contactPerson?.trim()) {
@@ -375,85 +439,143 @@ function SelectFacility() {
       errors.email = "Please enter a valid email address.";
     }
 
+    if (!editFormData.phone?.trim()) {
+      errors.phone = "Phone number is required.";
+    }
+
     if (!editFormData.address?.trim()) {
       errors.address = "Physical address is required.";
+    }
+
+    const resolvedProjectId = Number(
+      editFormData.projectId || editingFacility?.projectId || activeProject?.id,
+    );
+    if (!resolvedProjectId) {
+      errors.projectId = "Please select a mother project.";
     }
 
     setEditFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleUpdateFacilitySubmit = (e) => {
+  const handleUpdateFacilitySubmit = async (e) => {
     e.preventDefault();
     if (!isSuperAdminOrAdmin) return;
+    if (!editingFacility) return;
     if (!validateEditFacilityForm()) return;
 
-    const updatedFacility = {
-      ...editingFacility,
-      name: editFormData.name.trim(),
-      facilityCode: editFormData.facilityCode.trim().toUpperCase(),
-      type: editFormData.type,
-      contactPerson: editFormData.contactPerson.trim(),
-      email: editFormData.email.trim(),
-      phone: editFormData.phone.trim(),
-      address: editFormData.address.trim(),
-      status: editFormData.status,
-    };
-
-    setFacilityList((prev) =>
-      prev.map((f) => (f.id === editingFacility.id ? updatedFacility : f)),
+    const targetProjectId = Number(
+      editFormData.projectId || editingFacility.projectId || activeProject?.id,
     );
-
-    // If this facility is currently active in session, update session
-    if (currentSavedFacility?.id === editingFacility.id) {
-      setFacility(updatedFacility);
+    if (!targetProjectId) {
+      setEditFormErrors((prev) => ({
+        ...prev,
+        projectId: "Project selection is required.",
+      }));
+      return;
     }
 
-    setEditSuccessMsg(
-      `Facility "${updatedFacility.name}" updated successfully!`,
-    );
-    setTimeout(() => {
-      handleCloseEditModal();
-    }, 700);
+    try {
+      setIsUpdatingFacility(true);
+      const payload = {
+        projectId: targetProjectId,
+        name: editFormData.name.trim(),
+        type: editFormData.type,
+        contactPerson: editFormData.contactPerson.trim(),
+        email: editFormData.email.trim(),
+        phone: editFormData.phone.trim(),
+        address: editFormData.address.trim(),
+        status: editFormData.status || "Active",
+      };
+
+      const updatedFacility = await facilityService.updateFacility(
+        editingFacility.id,
+        payload,
+      );
+
+      setFacilityList((prev) =>
+        prev.map((f) =>
+          f.id === editingFacility.id ? { ...f, ...updatedFacility } : f,
+        ),
+      );
+
+      // If this facility is currently active in session, update session
+      if (currentSavedFacility?.id === editingFacility.id) {
+        setFacility({ ...currentSavedFacility, ...updatedFacility });
+      }
+
+      setEditSuccessMsg(
+        `Facility "${updatedFacility.name}" updated successfully!`,
+      );
+      setTimeout(() => {
+        handleCloseEditModal();
+        setEditSuccessMsg("");
+      }, 700);
+    } catch (err) {
+      console.error("Failed to update facility:", err);
+      const errMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to update facility. Please try again.";
+      setEditFormErrors((prev) => ({
+        ...prev,
+        general:
+          typeof errMsg === "string" ? errMsg : "Failed to update facility.",
+      }));
+    } finally {
+      setIsUpdatingFacility(false);
+    }
   };
 
   // --- DELETE FACILITY HANDLERS ---
   const handleOpenDeleteModal = (fac) => {
     if (!isSuperAdminOrAdmin) return;
     setFacilityToDelete(fac);
+    setDeleteFacilityError("");
     setIsDeleteModalOpen(true);
   };
 
   const handleCloseDeleteModal = () => {
     setIsDeleteModalOpen(false);
     setFacilityToDelete(null);
+    setDeleteFacilityError("");
   };
 
-  const handleConfirmDeleteFacility = () => {
+  const handleConfirmDeleteFacility = async () => {
     if (!isSuperAdminOrAdmin || !facilityToDelete) return;
     const targetId = facilityToDelete.id;
 
-    // Remove from facility list
-    setFacilityList((prev) => prev.filter((f) => f.id !== targetId));
+    try {
+      setIsDeletingFacility(true);
+      setDeleteFacilityError("");
+      await facilityService.deleteFacility(targetId);
 
-    // Update active project facilityIds if linked
-    if (activeProject && Array.isArray(activeProject.facilityIds)) {
-      const updatedProject = {
-        ...activeProject,
-        facilityIds: activeProject.facilityIds.filter((id) => id !== targetId),
-      };
-      setProject(updatedProject);
-    }
+      // Remove from facility list
+      setFacilityList((prev) => prev.filter((f) => f.id !== targetId));
 
-    // Clean up if it was the active facility in session
-    if (currentSavedFacility?.id === targetId) {
-      setFacility(null);
-    }
-    if (selectedFacilityId === targetId) {
-      setSelectedFacilityId(null);
-    }
+      // Clean up if it was the active facility in session
+      if (currentSavedFacility?.id === targetId) {
+        setFacility(null);
+      }
+      if (selectedFacilityId === targetId) {
+        setSelectedFacilityId(null);
+      }
 
-    handleCloseDeleteModal();
+      handleCloseDeleteModal();
+    } catch (err) {
+      console.error("Failed to delete facility:", err);
+      const errMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to delete facility. Please try again.";
+      setDeleteFacilityError(
+        typeof errMsg === "string" ? errMsg : "Failed to delete facility.",
+      );
+    } finally {
+      setIsDeletingFacility(false);
+    }
   };
 
   // Helper: All assignable user accounts (excluding Super Admin)
@@ -789,7 +911,28 @@ function SelectFacility() {
         </PortalToolbar>
 
         {/* Facilities Grid */}
-        {filteredFacilities.length > 0 ? (
+        {isLoadingFacilities ? (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-3" />
+            <p className="text-sm font-medium">Loading facilities from server...</p>
+          </div>
+        ) : fetchFacilitiesError ? (
+          <div className="p-6 bg-red-50 border border-red-200 rounded-2xl text-center space-y-3">
+            <AlertCircle className="w-8 h-8 text-red-500 mx-auto" />
+            <div>
+              <p className="font-semibold text-red-900">Unable to load facilities</p>
+              <p className="text-xs text-red-700 mt-1">{fetchFacilitiesError}</p>
+            </div>
+            <button
+              type="button"
+              onClick={fetchFacilities}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-white border border-blue-200 rounded-lg shadow-2xs hover:bg-blue-50 cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Retry</span>
+            </button>
+          </div>
+        ) : filteredFacilities.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 animate-slide-up-2">
             {filteredFacilities.map((facility) => {
               const isActive = facility.status === "Active";
@@ -914,6 +1057,13 @@ function SelectFacility() {
             </div>
           </div>
 
+          {formErrors.general && (
+            <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+              <span>{formErrors.general}</span>
+            </div>
+          )}
+
           {addSuccessMsg && (
             <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl">
               <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
@@ -941,6 +1091,7 @@ function SelectFacility() {
                   formErrors.name ? "border-red-400 focus:border-red-500" : ""
                 }`}
                 autoFocus
+                disabled={isCreatingFacility}
               />
               {formErrors.name && (
                 <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
@@ -950,33 +1101,21 @@ function SelectFacility() {
               )}
             </div>
 
-            {/* Facility Code */}
+            {/* Facility Code (Auto-generated by server) */}
             <div>
               <label
                 htmlFor="fac-code"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
               >
-                Facility Code <span className="text-red-500">*</span>
+                Facility Code
               </label>
               <input
                 id="fac-code"
                 type="text"
-                name="facilityCode"
-                value={formData.facilityCode}
-                onChange={handleInputChange}
-                placeholder="FAC-001"
-                className={`input text-xs font-mono uppercase ${
-                  formErrors.facilityCode
-                    ? "border-red-400 focus:border-red-500"
-                    : ""
-                }`}
+                disabled
+                value="Auto-generated (e.g. FAC-001)"
+                className="input text-xs font-mono uppercase bg-gray-100 text-gray-500 cursor-not-allowed"
               />
-              {formErrors.facilityCode && (
-                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  {formErrors.facilityCode}
-                </p>
-              )}
             </div>
 
             {/* Facility Type */}
@@ -993,6 +1132,7 @@ function SelectFacility() {
                 value={formData.type}
                 onChange={handleInputChange}
                 className="input text-xs"
+                disabled={isCreatingFacility}
               >
                 {FACILITY_TYPE_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -1023,6 +1163,7 @@ function SelectFacility() {
                       ? "border-red-400 focus:border-red-500"
                       : ""
                   }`}
+                  disabled={isCreatingFacility}
                 />
                 <User className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
@@ -1055,6 +1196,7 @@ function SelectFacility() {
                       ? "border-red-400 focus:border-red-500"
                       : ""
                   }`}
+                  disabled={isCreatingFacility}
                 />
                 <Mail className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
@@ -1072,7 +1214,7 @@ function SelectFacility() {
                 htmlFor="fac-phone"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
               >
-                Phone / Hotline
+                Phone / Hotline <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <input
@@ -1082,10 +1224,19 @@ function SelectFacility() {
                   value={formData.phone}
                   onChange={handleInputChange}
                   placeholder="+63 2 8920 5000"
-                  className="input text-xs pl-8"
+                  className={`input text-xs pl-8 ${
+                    formErrors.phone ? "border-red-400 focus:border-red-500" : ""
+                  }`}
+                  disabled={isCreatingFacility}
                 />
                 <Phone className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
+              {formErrors.phone && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {formErrors.phone}
+                </p>
+              )}
             </div>
 
             {/* Status */}
@@ -1102,6 +1253,7 @@ function SelectFacility() {
                 value={formData.status}
                 onChange={handleInputChange}
                 className="input text-xs"
+                disabled={isCreatingFacility}
               >
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
@@ -1114,7 +1266,7 @@ function SelectFacility() {
                 htmlFor="fac-address"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
               >
-                Physical Address
+                Physical Address <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <input
@@ -1124,10 +1276,21 @@ function SelectFacility() {
                   value={formData.address}
                   onChange={handleInputChange}
                   placeholder="e.g. E. Rodriguez Sr. Ave, Quezon City, Metro Manila"
-                  className="input text-xs pl-8"
+                  className={`input text-xs pl-8 ${
+                    formErrors.address
+                      ? "border-red-400 focus:border-red-500"
+                      : ""
+                  }`}
+                  disabled={isCreatingFacility}
                 />
                 <MapPin className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
+              {formErrors.address && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {formErrors.address}
+                </p>
+              )}
             </div>
           </div>
 
@@ -1135,6 +1298,7 @@ function SelectFacility() {
           <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
             <button
               type="button"
+              disabled={isCreatingFacility}
               onClick={handleCloseAddModal}
               className="btn-secondary text-xs cursor-pointer"
             >
@@ -1142,10 +1306,15 @@ function SelectFacility() {
             </button>
             <button
               type="submit"
+              disabled={isCreatingFacility}
               className="btn-primary text-xs flex items-center gap-1.5 cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Create Facility</span>
+              {isCreatingFacility ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Plus className="w-3.5 h-3.5" />
+              )}
+              <span>{isCreatingFacility ? "Creating..." : "Create Facility"}</span>
             </button>
           </div>
         </form>
@@ -1154,7 +1323,7 @@ function SelectFacility() {
       {/* Super Admin & Admin Edit Facility Modal */}
       <Modal
         isOpen={isEditModalOpen}
-        onClose={handleCloseEditModal}
+        onClose={() => !isUpdatingFacility && handleCloseEditModal()}
         title={`Edit Facility - ${editingFacility?.name || ""}`}
         size="md"
       >
@@ -1171,6 +1340,13 @@ function SelectFacility() {
               </p>
             </div>
           </div>
+
+          {editFormErrors.general && (
+            <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+              <span>{editFormErrors.general}</span>
+            </div>
+          )}
 
           {editSuccessMsg && (
             <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl animate-fade-in">
@@ -1195,11 +1371,66 @@ function SelectFacility() {
                 value={editFormData.name}
                 onChange={handleEditInputChange}
                 className={`input text-xs ${editFormErrors.name ? "border-red-500 focus:border-red-500 focus:ring-red-100" : ""}`}
+                disabled={isUpdatingFacility}
               />
               {editFormErrors.name && (
                 <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
                   {editFormErrors.name}
+                </p>
+              )}
+            </div>
+
+            {/* Parent Project */}
+            <div>
+              <label
+                htmlFor="edit-fac-project"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Parent Project <span className="text-red-500">*</span>
+              </label>
+              {projectList.length > 0 ? (
+                <select
+                  id="edit-fac-project"
+                  name="projectId"
+                  value={
+                    editFormData.projectId ||
+                    (editingFacility?.projectId
+                      ? String(editingFacility.projectId)
+                      : "")
+                  }
+                  onChange={handleEditInputChange}
+                  className={`input text-xs font-medium ${
+                    editFormErrors.projectId
+                      ? "border-red-400 focus:border-red-500"
+                      : ""
+                  }`}
+                  disabled={isUpdatingFacility}
+                >
+                  <option value="">Select Mother Project</option>
+                  {projectList.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.projectCode || `PRJ-00${p.id}`})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id="edit-fac-project"
+                  type="text"
+                  readOnly
+                  value={
+                    editingFacility?.projectName ||
+                    activeProject?.name ||
+                    `Project #${editFormData.projectId || 1}`
+                  }
+                  className="input text-xs bg-gray-100 text-gray-600 cursor-not-allowed"
+                />
+              )}
+              {editFormErrors.projectId && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {editFormErrors.projectId}
                 </p>
               )}
             </div>
@@ -1217,8 +1448,8 @@ function SelectFacility() {
                 type="text"
                 name="facilityCode"
                 value={editFormData.facilityCode}
-                onChange={handleEditInputChange}
-                className="input text-xs font-mono uppercase bg-gray-50/80"
+                readOnly
+                className="input text-xs font-mono uppercase bg-gray-100 text-gray-500 cursor-not-allowed"
               />
             </div>
 
@@ -1236,6 +1467,7 @@ function SelectFacility() {
                 value={editFormData.type}
                 onChange={handleEditInputChange}
                 className="input text-xs font-medium"
+                disabled={isUpdatingFacility}
               >
                 {FACILITY_TYPE_OPTIONS.map((typeOpt) => (
                   <option key={typeOpt} value={typeOpt}>
@@ -1260,6 +1492,7 @@ function SelectFacility() {
                 value={editFormData.contactPerson}
                 onChange={handleEditInputChange}
                 className={`input text-xs ${editFormErrors.contactPerson ? "border-red-500" : ""}`}
+                disabled={isUpdatingFacility}
               />
               {editFormErrors.contactPerson && (
                 <p className="text-[11px] text-red-500 mt-1">
@@ -1283,6 +1516,7 @@ function SelectFacility() {
                 value={editFormData.email}
                 onChange={handleEditInputChange}
                 className={`input text-xs ${editFormErrors.email ? "border-red-500" : ""}`}
+                disabled={isUpdatingFacility}
               />
               {editFormErrors.email && (
                 <p className="text-[11px] text-red-500 mt-1">
@@ -1297,7 +1531,7 @@ function SelectFacility() {
                 htmlFor="edit-fac-phone"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
               >
-                Phone Number
+                Phone Number <span className="text-red-500">*</span>
               </label>
               <input
                 id="edit-fac-phone"
@@ -1305,12 +1539,18 @@ function SelectFacility() {
                 name="phone"
                 value={editFormData.phone}
                 onChange={handleEditInputChange}
-                className="input text-xs"
+                className={`input text-xs ${editFormErrors.phone ? "border-red-500" : ""}`}
+                disabled={isUpdatingFacility}
               />
+              {editFormErrors.phone && (
+                <p className="text-[11px] text-red-500 mt-1">
+                  {editFormErrors.phone}
+                </p>
+              )}
             </div>
 
             {/* Status */}
-            <div>
+            <div className="sm:col-span-2">
               <label
                 htmlFor="edit-fac-status"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
@@ -1323,6 +1563,7 @@ function SelectFacility() {
                 value={editFormData.status}
                 onChange={handleEditInputChange}
                 className="input text-xs"
+                disabled={isUpdatingFacility}
               >
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
@@ -1345,6 +1586,7 @@ function SelectFacility() {
                   value={editFormData.address}
                   onChange={handleEditInputChange}
                   className={`input text-xs pl-8 ${editFormErrors.address ? "border-red-500" : ""}`}
+                  disabled={isUpdatingFacility}
                 />
                 <MapPin className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
@@ -1360,6 +1602,7 @@ function SelectFacility() {
           <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
             <button
               type="button"
+              disabled={isUpdatingFacility}
               onClick={handleCloseEditModal}
               className="btn-secondary text-xs cursor-pointer"
             >
@@ -1367,10 +1610,15 @@ function SelectFacility() {
             </button>
             <button
               type="submit"
+              disabled={isUpdatingFacility}
               className="btn-primary text-xs flex items-center gap-1.5 cursor-pointer"
             >
-              <Check className="w-3.5 h-3.5" />
-              <span>Save Changes</span>
+              {isUpdatingFacility ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Check className="w-3.5 h-3.5" />
+              )}
+              <span>{isUpdatingFacility ? "Saving..." : "Save Changes"}</span>
             </button>
           </div>
         </form>
@@ -1379,7 +1627,7 @@ function SelectFacility() {
       {/* Super Admin & Admin Delete Facility Confirmation Modal */}
       <Modal
         isOpen={isDeleteModalOpen}
-        onClose={handleCloseDeleteModal}
+        onClose={() => !isDeletingFacility && handleCloseDeleteModal()}
         title="Delete Facility"
         size="sm"
       >
@@ -1407,9 +1655,17 @@ function SelectFacility() {
               </div>
             </div>
 
+            {deleteFacilityError && (
+              <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                <span>{deleteFacilityError}</span>
+              </div>
+            )}
+
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
               <button
                 type="button"
+                disabled={isDeletingFacility}
                 onClick={handleCloseDeleteModal}
                 className="btn-secondary text-xs cursor-pointer"
               >
@@ -1417,11 +1673,16 @@ function SelectFacility() {
               </button>
               <button
                 type="button"
+                disabled={isDeletingFacility}
                 onClick={handleConfirmDeleteFacility}
                 className="btn-danger text-xs flex items-center gap-1.5 cursor-pointer"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Facility</span>
+                {isDeletingFacility ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" />
+                )}
+                <span>{isDeletingFacility ? "Deleting..." : "Delete Facility"}</span>
               </button>
             </div>
           </div>
