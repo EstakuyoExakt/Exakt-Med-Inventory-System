@@ -1,6 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Eye, EyeOff, Loader2, Boxes, ShieldCheck } from "lucide-react";
-import { users } from "../../data/user";
 import useAuth from "../../hooks/useAuth";
 
 function Login() {
@@ -13,55 +12,22 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // 1 User per role for quick demo testing
-  const uniqueRoleUsers = useMemo(() => {
-    const seenRoles = new Set();
-    return users.filter((user) => {
-      if (seenRoles.has(user.role)) {
-        return false;
-      }
-      seenRoles.add(user.role);
-      return true;
-    });
-  }, []);
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage("");
     setIsLoading(true);
 
-    setTimeout(() => {
-      const matchedUser = users.find(
-        (user) =>
-          user.username.toLowerCase() === username.trim().toLowerCase() &&
-          user.password === password,
-      );
-
-      if (!matchedUser) {
-        setErrorMessage("Invalid username or password. Please try again.");
-        setIsLoading(false);
-        return;
-      }
-
-      // Check account status
-      if (matchedUser.status !== "Active") {
-        setErrorMessage(
-          "Your account is inactive. Please contact an administrator.",
-        );
-        setIsLoading(false);
-        return;
-      }
-
-      // Use the auth hook to store user and handle role-based navigation
-      login(matchedUser);
-    }, 500);
-  };
-
-  // Quick fill helper for testing different roles
-  const handleQuickFill = (user) => {
-    setUsername(user.username);
-    setPassword(user.password);
-    setErrorMessage("");
+    try {
+      await login({ username: username.trim(), password });
+    } catch (err) {
+      const msg =
+        err.response?.data?.message ||
+        (typeof err.response?.data === "string" ? err.response?.data : null) ||
+        "Invalid username or password. Please try again.";
+      setErrorMessage(msg);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -161,7 +127,7 @@ function Login() {
           {isLoading ? (
             <span className="inline-flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Authenticating role...
+              Authenticating...
             </span>
           ) : (
             <span className="inline-flex items-center gap-2">
@@ -171,30 +137,6 @@ function Login() {
           )}
         </button>
       </form>
-
-      {/* Demo Role Fast-Switcher for Easy Testing */}
-      <div className="mt-6 pt-5 border-t border-gray-100">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 text-center mb-2.5">
-          Quick Demo Accounts
-        </p>
-        <div className="grid grid-cols-2 gap-1.5">
-          {uniqueRoleUsers.map((demoUser) => (
-            <button
-              key={demoUser.id}
-              type="button"
-              onClick={() => handleQuickFill(demoUser)}
-              className="text-left px-2.5 py-1.5 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-colors text-xs text-gray-700 cursor-pointer"
-            >
-              <span className="font-semibold block truncate">
-                {demoUser.role}
-              </span>
-              <span className="text-[11px] text-gray-400 block truncate">
-                {demoUser.username}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
 
       {/* Footer Info */}
       <div className="flex items-center justify-center gap-1.5 text-xs text-gray-400 mt-5">

@@ -4,6 +4,7 @@ import com.example.backend.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -15,6 +16,11 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -31,6 +37,9 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                // Enable CORS with our custom configuration
+                .cors(Customizer.withDefaults())
+
                 // Disable CSRF because we use stateless JWTs, not cookies
                 .csrf(AbstractHttpConfigurer::disable)
 
@@ -54,13 +63,50 @@ public class SecurityConfig {
         return http.build();
     }
 
-    // 2. Password Hashing Tool (equivalent to bcrypt in Node.js)
+    // 2. CORS Configuration Source (equivalent to cors({ origin: 'http://localhost:5173', ... }) in Express)
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+
+        // Allowed frontend origins
+        configuration.setAllowedOrigins(List.of(
+                "http://localhost:5173",
+                "http://localhost:3000"
+        ));
+
+        // Allowed HTTP methods
+        configuration.setAllowedMethods(List.of(
+                "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"
+        ));
+
+        // Allowed headers (e.g. Authorization, Content-Type)
+        configuration.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "Accept",
+                "Origin",
+                "X-Requested-With"
+        ));
+
+        // Expose headers if needed by client
+        configuration.setExposedHeaders(List.of("Authorization"));
+
+        // Allow sending credentials (cookies, authorization headers)
+        configuration.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        // Apply CORS config to all endpoints
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+
+    // 3. Password Hashing Tool (equivalent to bcrypt in Node.js)
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    // 3. AuthenticationManager (used in AuthService/Login endpoint to verify credentials)
+    // 4. AuthenticationManager (used in AuthService/Login endpoint to verify credentials)
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();

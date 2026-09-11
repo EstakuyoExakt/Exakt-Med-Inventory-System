@@ -1,7 +1,8 @@
 import { createContext, useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { getRedirectPathForRole } from "../utils/helpers";
-import { ROLES } from "../config/roles";
+import { ROLE_DETAILS } from "../config/roles";
+import authService from "../services/auth";
 
 export const AuthContext = createContext(null);
 
@@ -67,21 +68,26 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-  const login = (userData) => {
+  const login = async (credentials) => {
+    const response = await authService.login(credentials);
+
+    if (response?.token) {
+      localStorage.setItem("token", response.token);
+    }
+
+    const userData = {
+      username: response.username,
+      role: response.role,
+      token: response.token,
+    };
+
     localStorage.setItem("currentUser", JSON.stringify(userData));
     setUser(userData);
 
-    // Admins and Super Admins redirect to project selection first, other roles to facility selection
-    if (
-      userData?.role === "Admin" ||
-      userData?.role === "Super Admin" ||
-      userData?.role === ROLES.SUPER_ADMIN ||
-      userData?.role === ROLES.ADMIN
-    ) {
-      navigate("/select-project", { replace: true });
-    } else {
-      navigate("/select-facility", { replace: true });
-    }
+    const targetRoute = ROLE_DETAILS[userData?.role]?.initialRoute;
+    navigate(targetRoute, { replace: true });
+
+    return userData;
   };
 
   const selectProject = (projectData, navigateToFacility = true) => {
@@ -118,6 +124,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    localStorage.removeItem("token");
     localStorage.removeItem("currentUser");
     localStorage.removeItem("currentFacility");
     localStorage.removeItem("currentProject");
@@ -144,9 +151,7 @@ export function AuthProvider({ children }) {
   );
 
   return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
   );
 }
 
