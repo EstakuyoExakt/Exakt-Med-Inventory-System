@@ -41,6 +41,7 @@ public class AuthService {
         // 4. Return the token and user details
         return new LoginResponseDto(
                 token,
+                user.getName(),
                 user.getUsername(),
                 user.getRole().name(),
                 "Login successful"

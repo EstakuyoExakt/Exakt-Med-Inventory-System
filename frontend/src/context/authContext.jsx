@@ -76,6 +76,7 @@ export function AuthProvider({ children }) {
     }
 
     const userData = {
+      name: response.name,
       username: response.username,
       role: response.role,
       token: response.token,

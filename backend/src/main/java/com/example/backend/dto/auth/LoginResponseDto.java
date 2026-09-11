@@ -9,6 +9,7 @@ import lombok.Setter;
 @AllArgsConstructor
 public class LoginResponseDto {
     private String token;
+    private String name;
     private String username;
     private String role;
     private String message;
