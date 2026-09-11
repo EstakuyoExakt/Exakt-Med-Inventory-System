@@ -52,10 +52,13 @@ public class FacilityService {
         return mapToResponseDto(savedFacility, "Facility Created Successfully");
     }
 
-    // 2. GET ALL FACILITIES (SuperAdmin and Admin)
+    // 2. GET ALL FACILITIES BY PROJECT ID (SuperAdmin and Admin)
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
-    public List<FacilityResponseDto> getAllFacilities() {
-        return facilityRepository.findAll()
+    public List<FacilityResponseDto> getFacilitiesByProjectId(Long projectId) {
+        if (!projectRepository.existsById(projectId)) {
+            throw new RuntimeException("Project not found with id: " + projectId);
+        }
+        return facilityRepository.findByProjectId(projectId)
                 .stream()
                 .map(facility -> mapToResponseDto(facility, null))
                 .collect(Collectors.toList());

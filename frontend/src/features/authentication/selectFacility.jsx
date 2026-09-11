@@ -40,7 +40,6 @@ import RoleGuard from "../../components/guard/roleGuard";
 
 // Services, Data & Hooks
 import facilityService from "../../services/facility";
-import projectService from "../../services/project";
 import { users as initialUsers } from "../../data/user";
 import { ROLE_DETAILS, ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
@@ -73,9 +72,6 @@ function SelectFacility() {
   const [facilityList, setFacilityList] = useState([]);
   const [isLoadingFacilities, setIsLoadingFacilities] = useState(true);
   const [fetchFacilitiesError, setFetchFacilitiesError] = useState("");
-
-  // Projects list for selecting parent project when adding/editing
-  const [projectList, setProjectList] = useState([]);
 
   // Submitting states for CRUD
   const [isCreatingFacility, setIsCreatingFacility] = useState(false);
@@ -119,22 +115,33 @@ function SelectFacility() {
   const [userFormErrors, setUserFormErrors] = useState({});
   const [createUserSuccessMsg, setCreateUserSuccessMsg] = useState("");
 
-  // If not logged in, redirect back to login
+  // If not logged in, redirect back to login. If Admin has no project selected, redirect to select-project
   useEffect(() => {
     if (!isAuthenticated || !user) {
       navigate("/", { replace: true });
+      return;
     }
-  }, [isAuthenticated, user, navigate]);
+    if (isAdmin && !activeProject) {
+      navigate("/select-project", { replace: true });
+    }
+  }, [isAuthenticated, user, isAdmin, activeProject, navigate]);
 
-  // Fetch facilities from backend API
+  // Fetch facilities from backend API for the active project
   const fetchFacilities = useCallback(async () => {
+    const targetProjectId = activeProject?.id;
+    if (!targetProjectId) {
+      setFacilityList([]);
+      setIsLoadingFacilities(false);
+      return;
+    }
+
     try {
       setIsLoadingFacilities(true);
       setFetchFacilitiesError("");
-      const data = await facilityService.getAllFacilities();
+      const data = await facilityService.getFacilitiesByProjectId(targetProjectId);
       setFacilityList(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Failed to fetch facilities:", err);
+      console.error("Failed to fetch facilities by project:", err);
       const errMsg =
         err.response?.data?.message ||
         err.response?.data?.error ||
@@ -146,26 +153,15 @@ function SelectFacility() {
     } finally {
       setIsLoadingFacilities(false);
     }
-  }, []);
-
-  // Fetch projects from backend API to populate parent project options
-  const fetchProjects = useCallback(async () => {
-    try {
-      const data = await projectService.getAllProjects();
-      setProjectList(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Failed to fetch projects in selectFacility:", err);
-    }
-  }, []);
+  }, [activeProject?.id]);
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      fetchFacilities();
-      if (isAdmin) {
-        fetchProjects();
+      if (activeProject?.id) {
+        fetchFacilities();
       }
     }
-  }, [isAuthenticated, user, isAdmin, fetchFacilities, fetchProjects]);
+  }, [isAuthenticated, user, activeProject?.id, fetchFacilities]);
 
   const isSuperAdminOrAdmin = isAdmin;
 
@@ -173,37 +169,8 @@ function SelectFacility() {
   const userAssignedFacilities = useMemo(() => {
     if (!user) return [];
 
-    // Super Admins: access to all facilities, scoped by selected project if one is active
-    if (isSuperAdmin) {
-      if (activeProject) {
-        return facilityList.filter(
-          (f) =>
-            activeProject.facilityIds?.includes(f.id) ||
-            f.projectId === Number(activeProject.id),
-        );
-      }
-      return facilityList;
-    }
-
-    // Admins: if a project is selected, show facilities in that project; otherwise all in their assigned projects
-    if (isAdmin) {
-      if (activeProject) {
-        return facilityList.filter(
-          (f) =>
-            activeProject.facilityIds?.includes(f.id) ||
-            f.projectId === Number(activeProject.id),
-        );
-      }
-      if (user.assignedProjects && user.assignedProjects.length > 0) {
-        return facilityList.filter((f) =>
-          user.assignedProjects.includes(f.projectId),
-        );
-      }
-      if (user.assignedFacilities && user.assignedFacilities.length > 0) {
-        return facilityList.filter((f) =>
-          user.assignedFacilities.includes(f.id),
-        );
-      }
+    // Super Admins & Admins: access to all facilities loaded for this project
+    if (isSuperAdmin || isAdmin) {
       return facilityList;
     }
 
@@ -218,7 +185,7 @@ function SelectFacility() {
     return facilityList.filter((facility) =>
       facility.assignedUserIds?.includes(user.id),
     );
-  }, [user, activeProject, facilityList]);
+  }, [user, isSuperAdmin, isAdmin, facilityList]);
 
   const projectHasNoFacilities = userAssignedFacilities.length === 0;
 
@@ -1381,60 +1348,6 @@ function SelectFacility() {
               )}
             </div>
 
-            {/* Parent Project */}
-            <div>
-              <label
-                htmlFor="edit-fac-project"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Parent Project <span className="text-red-500">*</span>
-              </label>
-              {projectList.length > 0 ? (
-                <select
-                  id="edit-fac-project"
-                  name="projectId"
-                  value={
-                    editFormData.projectId ||
-                    (editingFacility?.projectId
-                      ? String(editingFacility.projectId)
-                      : "")
-                  }
-                  onChange={handleEditInputChange}
-                  className={`input text-xs font-medium ${
-                    editFormErrors.projectId
-                      ? "border-red-400 focus:border-red-500"
-                      : ""
-                  }`}
-                  disabled={isUpdatingFacility}
-                >
-                  <option value="">Select Mother Project</option>
-                  {projectList.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.projectCode || `PRJ-00${p.id}`})
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  id="edit-fac-project"
-                  type="text"
-                  readOnly
-                  value={
-                    editingFacility?.projectName ||
-                    activeProject?.name ||
-                    `Project #${editFormData.projectId || 1}`
-                  }
-                  className="input text-xs bg-gray-100 text-gray-600 cursor-not-allowed"
-                />
-              )}
-              {editFormErrors.projectId && (
-                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  {editFormErrors.projectId}
-                </p>
-              )}
-            </div>
-
             {/* Facility Code */}
             <div>
               <label
@@ -1550,7 +1463,7 @@ function SelectFacility() {
             </div>
 
             {/* Status */}
-            <div className="sm:col-span-2">
+            <div>
               <label
                 htmlFor="edit-fac-status"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"

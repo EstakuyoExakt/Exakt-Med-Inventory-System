@@ -27,10 +27,10 @@ public class FacilityController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-    // 2. GET ALL FACILITIES
+    // 2. GET ALL FACILITIES BY PROJECT ID
     @GetMapping
-    public ResponseEntity<List<FacilityResponseDto>> getAllFacilities() {
-        return ResponseEntity.ok(facilityService.getAllFacilities());
+    public ResponseEntity<List<FacilityResponseDto>> getFacilitiesByProjectId(@RequestParam Long projectId) {
+        return ResponseEntity.ok(facilityService.getFacilitiesByProjectId(projectId));
     }
 
     // 3. GET FACILITY BY ID

@@ -10,8 +10,8 @@ const getAuthHeaders = (config = {}) => {
 };
 
 const facilityService = {
-  getAllFacilities: async (config = {}) => {
-    const response = await axios.get(facilityApi.getAllFacilities, {
+  getFacilitiesByProjectId: async (projectId, config = {}) => {
+    const response = await axios.get(facilityApi.getFacilitiesByProjectId(projectId), {
       ...config,
       headers: getAuthHeaders(config),
     });
