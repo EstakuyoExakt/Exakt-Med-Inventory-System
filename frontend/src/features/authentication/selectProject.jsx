@@ -34,6 +34,7 @@ import PortalHeroBanner from "./components/portalHeroBanner";
 import PortalToolbar from "./components/portalToolbar";
 import EmptyState from "./components/emptyState";
 import SearchableChecklist from "./components/searchableChecklist";
+import PortalEntityCard from "./components/portalEntityCard";
 
 // Data & Hooks
 import { projects as allProjects } from "../../data/projects";
@@ -590,187 +591,77 @@ function SelectProject() {
               );
 
               return (
-                <div
+                <PortalEntityCard
                   key={project.id}
-                  onClick={() => !isSubmitting && handleSelect(project)}
-                  className={`group relative bg-white rounded-2xl border p-5 transition-all duration-200 flex flex-col justify-between hover:border-purple-500 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer border-gray-200 ${
-                    isSelected
-                      ? "ring-2 ring-purple-600 border-purple-600 bg-purple-50/20"
-                      : ""
-                  }`}
+                  icon={<Layers className="w-5 h-5" />}
+                  code={project.projectCode || `PRJ-00${project.id}`}
+                  badgeText="Mother Network"
+                  title={project.name}
+                  themeColor="purple"
+                  isActiveSession={isCurrentlyActiveInSession}
+                  sessionBadgeLabel="Current Active"
+                  isSelected={isSelected}
+                  isSubmitting={isSubmitting}
+                  onSelect={() => handleSelect(project)}
+                  onEdit={() => handleOpenEditModal(project)}
+                  onDelete={() => handleOpenDeleteModal(project)}
+                  editRoles={[ROLES.SUPER_ADMIN]}
+                  editTitle="Edit Project"
+                  deleteTitle="Delete Project"
+                  assignedLabel="Assigned Admins"
+                  assignedItems={getAdmins(project.id)}
+                  assignedIconType="shield"
+                  assignRoles={[ROLES.SUPER_ADMIN]}
+                  onAssign={() => handleOpenAssignModal(project)}
+                  emptyAssignedText="No admin assigned yet"
+                  footerVariant="compact"
+                  footerLabel="Select project & choose facility"
+                  selectButtonText="Select"
                 >
-                  <div>
-                    {/* Top Project Header Row */}
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-50 border border-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
-                          <Layers className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <span className="font-mono text-[11px] font-bold text-purple-700 uppercase bg-purple-50 border border-purple-100 px-2 py-0.5 rounded">
-                            {project.projectCode || `PRJ-00${project.id}`}
-                          </span>
-                          <p className="text-[11px] font-medium text-gray-500 mt-0.5">
-                            Mother Network
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {/* Session Badge */}
-                        {isCurrentlyActiveInSession && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-md">
-                            <CheckCircle2 className="w-3 h-3" />
-                            Current Active
-                          </span>
-                        )}
-
-                        {/* Super Admin Edit & Delete Actions */}
-                        <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN]}>
-                          <div className="flex items-center gap-1 bg-gray-50/80 p-0.5 rounded-lg border border-gray-100">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenEditModal(project);
-                              }}
-                              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-white rounded-md transition-all cursor-pointer hover:shadow-xs"
-                              title="Edit Project"
-                              aria-label="Edit Project"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenDeleteModal(project);
-                              }}
-                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-white rounded-md transition-all cursor-pointer hover:shadow-xs"
-                              title="Delete Project"
-                              aria-label="Delete Project"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </RoleGuard>
-                      </div>
-                    </div>
-
-                    {/* Project Name */}
-                    <h3 className="text-base font-bold text-gray-900 group-hover:text-purple-700 transition-colors">
-                      {project.name}
-                    </h3>
-
-                    {/* Facility Count Summary */}
-                    <div className="mt-2.5 flex items-center gap-1.5 text-xs font-semibold text-purple-700 bg-purple-50/60 border border-purple-100 px-2.5 py-1 rounded-lg w-fit">
-                      <Building2 className="w-3.5 h-3.5" />
-                      <span>
-                        {childFacilities.length} Child{" "}
-                        {childFacilities.length === 1
-                          ? "Facility"
-                          : "Facilities"}
-                      </span>
-                    </div>
-
-                    {/* Child Facilities Preview List */}
-                    <div className="mt-3.5 pt-3 border-t border-gray-100 space-y-1.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                        Assigned Child Branches
-                      </p>
-                      {childFacilities.length > 0 ? (
-                        <div className="space-y-1">
-                          {childFacilities.slice(0, 3).map((facility) => (
-                            <div
-                              key={facility.id}
-                              className="flex items-center justify-between text-xs text-gray-600 bg-gray-50/80 px-2 py-1 rounded border border-gray-100"
-                            >
-                              <span className="truncate max-w-50 font-medium text-gray-700">
-                                {facility.name}
-                              </span>
-                              <span className="text-[10px] text-gray-400 font-mono">
-                                {facility.facilityCode}
-                              </span>
-                            </div>
-                          ))}
-                          {childFacilities.length > 3 && (
-                            <p className="text-[10px] text-gray-400 font-medium pl-1">
-                              +{childFacilities.length - 3} more branches
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-gray-400 italic">
-                          No facilities assigned yet
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Assigned Administrators Preview & Assign Action */}
-                    <div className="mt-3.5 pt-3 border-t border-gray-100 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                          Assigned Admins ({getAdmins(project.id).length})
-                        </p>
-                        <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN]}>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenAssignModal(project);
-                            }}
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-600 hover:text-purple-800 hover:underline cursor-pointer"
-                            title="Assign or remove administrators for this project"
-                          >
-                            <UserPlus className="w-3 h-3" />
-                            <span>Assign</span>
-                          </button>
-                        </RoleGuard>
-                      </div>
-
-                      {getAdmins(project.id).length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5 pt-0.5">
-                          {getAdmins(project.id).map((admin) => (
-                            <span
-                              key={admin.id}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 text-[11px] font-medium rounded-md border border-purple-100"
-                            >
-                              <Shield className="w-3 h-3 text-purple-500 shrink-0" />
-                              <span className="truncate max-w-28">
-                                {admin.name}
-                              </span>
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-gray-400 italic">
-                          No admin assigned yet
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Card Action Footer */}
-                  <div className="mt-5 pt-3 border-t border-gray-100 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-400 group-hover:text-purple-600 transition-colors">
-                      Select project & choose facility
+                  {/* Facility Count Summary */}
+                  <div className="mt-2.5 flex items-center gap-1.5 text-xs font-semibold text-purple-700 bg-purple-50/60 border border-purple-100 px-2.5 py-1 rounded-lg w-fit">
+                    <Building2 className="w-3.5 h-3.5" />
+                    <span>
+                      {childFacilities.length} Child{" "}
+                      {childFacilities.length === 1
+                        ? "Facility"
+                        : "Facilities"}
                     </span>
-                    <button
-                      type="button"
-                      disabled={isSubmitting}
-                      className="flex items-center gap-1 text-xs font-bold text-purple-600 group-hover:translate-x-1 transition-transform"
-                    >
-                      {isSelected && isSubmitting ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <>
-                          <span>Select</span>
-                          <ChevronRight className="w-4 h-4" />
-                        </>
-                      )}
-                    </button>
                   </div>
-                </div>
+
+                  {/* Child Facilities Preview List */}
+                  <div className="mt-3.5 pt-3 border-t border-gray-100 space-y-1.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                      Assigned Child Branches
+                    </p>
+                    {childFacilities.length > 0 ? (
+                      <div className="space-y-1">
+                        {childFacilities.slice(0, 3).map((facility) => (
+                          <div
+                            key={facility.id}
+                            className="flex items-center justify-between text-xs text-gray-600 bg-gray-50/80 px-2 py-1 rounded border border-gray-100"
+                          >
+                            <span className="truncate max-w-50 font-medium text-gray-700">
+                              {facility.name}
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-mono">
+                              {facility.facilityCode}
+                            </span>
+                          </div>
+                        ))}
+                        {childFacilities.length > 3 && (
+                          <p className="text-[10px] text-gray-400 font-medium pl-1">
+                            +{childFacilities.length - 3} more branches
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 italic">
+                        No facilities assigned yet
+                      </p>
+                    )}
+                  </div>
+                </PortalEntityCard>
               );
             })}
           </div>

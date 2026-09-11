@@ -33,6 +33,7 @@ import PortalHeroBanner from "./components/portalHeroBanner";
 import PortalToolbar from "./components/portalToolbar";
 import EmptyState from "./components/emptyState";
 import SearchableChecklist from "./components/searchableChecklist";
+import PortalEntityCard from "./components/portalEntityCard";
 import Modal from "../../components/common/modal";
 import RoleGuard from "../../components/guard/roleGuard";
 
@@ -798,193 +799,59 @@ function SelectFacility() {
                 currentSavedFacility?.id === facility.id;
 
               return (
-                <div
+                <PortalEntityCard
                   key={facility.id}
-                  onClick={() => isActive && handleSelect(facility)}
-                  className={`group relative bg-white rounded-2xl border p-5 transition-all duration-200 flex flex-col justify-between ${
-                    isActive
-                      ? "hover:border-blue-500 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer border-gray-200"
-                      : "opacity-60 bg-gray-50/80 border-gray-200 cursor-not-allowed"
-                  } ${isSelected ? "ring-2 ring-blue-600 border-blue-600 bg-blue-50/20" : ""}`}
+                  icon={getFacilityIcon(facility.type)}
+                  code={facility.facilityCode}
+                  badgeText={facility.type}
+                  title={facility.name}
+                  themeColor="blue"
+                  status={facility.status}
+                  showStatusBadge={true}
+                  isActiveSession={isCurrentlyActiveInSession}
+                  sessionBadgeLabel="Current Session"
+                  isSelected={isSelected}
+                  isSubmitting={isSubmitting}
+                  onSelect={() => handleSelect(facility)}
+                  onEdit={() => handleOpenEditModal(facility)}
+                  onDelete={() => handleOpenDeleteModal(facility)}
+                  editRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]}
+                  editTitle="Edit Facility"
+                  deleteTitle="Delete Facility"
+                  assignedLabel="Assigned Users"
+                  assignedItems={getAssignedUsers(facility.id)}
+                  assignedIconType="user"
+                  assignRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]}
+                  onAssign={() => handleOpenAssignUsersModal(facility)}
+                  emptyAssignedText="No users assigned yet"
+                  footerVariant="full"
+                  selectButtonText="Select Facility"
+                  enteringText="Entering Facility..."
                 >
-                  <div>
-                    {/* Top Facility Header Row */}
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-50 border border-gray-100 group-hover:bg-blue-50 group-hover:border-blue-100 transition-colors">
-                          {getFacilityIcon(facility.type)}
-                        </div>
-                        <div>
-                          <span className="font-mono text-[11px] font-bold text-gray-500 uppercase bg-gray-100 px-2 py-0.5 rounded">
-                            {facility.facilityCode}
-                          </span>
-                          <p className="text-[11px] font-semibold text-blue-600 mt-0.5">
-                            {facility.type}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Status Badges & Admin Actions */}
-                      <div className="flex flex-col items-end gap-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                              isActive
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : "bg-red-50 text-red-600 border border-red-200"
-                            }`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                isActive ? "bg-emerald-500" : "bg-red-400"
-                              }`}
-                            />
-                            {facility.status}
-                          </span>
-
-                          {/* Super Admin & Admin CRUD Actions */}
-                          <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]}>
-                            <div className="flex items-center gap-0.5 bg-gray-50/90 p-0.5 rounded-lg border border-gray-100">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenEditModal(facility);
-                                }}
-                                className="p-1 text-gray-400 hover:text-amber-600 hover:bg-white rounded transition-all cursor-pointer hover:shadow-2xs"
-                                title="Edit Facility"
-                                aria-label="Edit Facility"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenDeleteModal(facility);
-                                }}
-                                className="p-1 text-gray-400 hover:text-red-600 hover:bg-white rounded transition-all cursor-pointer hover:shadow-2xs"
-                                title="Delete Facility"
-                                aria-label="Delete Facility"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </RoleGuard>
-                        </div>
-
-                        {isCurrentlyActiveInSession && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-md">
-                            <CheckCircle2 className="w-2.5 h-2.5" />
-                            Current Session
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Facility Name */}
-                    <h3 className="text-base font-bold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
-                      {facility.name}
-                    </h3>
-
-                    {/* Address */}
-                    <div className="flex items-start gap-1.5 text-xs text-gray-500 mt-2.5">
-                      <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
-                      <span className="line-clamp-2">{facility.address}</span>
-                    </div>
-
-                    {/* Contact Person Details */}
-                    <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5 text-xs text-gray-500">
-                      <div className="flex items-center gap-2">
-                        <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                        <span className="truncate font-medium text-gray-700">
-                          {facility.contactPerson}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                        <span className="truncate">{facility.phone}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                        <span className="truncate">{facility.email}</span>
-                      </div>
-                    </div>
-
-                    {/* Assigned Users Preview & Assign Action */}
-                    <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                          Assigned Users ({getAssignedUsers(facility.id).length})
-                        </p>
-                        <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]}>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenAssignUsersModal(facility);
-                            }}
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
-                            title="Assign or remove users for this facility"
-                          >
-                            <UserPlus className="w-3 h-3" />
-                            <span>Assign</span>
-                          </button>
-                        </RoleGuard>
-                      </div>
-
-                      {getAssignedUsers(facility.id).length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5 pt-0.5">
-                          {getAssignedUsers(facility.id).slice(0, 3).map((u) => (
-                            <span
-                              key={u.id}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 text-[11px] font-medium rounded-md border border-blue-100"
-                            >
-                              <User className="w-3 h-3 text-blue-500 shrink-0" />
-                              <span className="truncate max-w-28">{u.name}</span>
-                            </span>
-                          ))}
-                          {getAssignedUsers(facility.id).length > 3 && (
-                            <span className="text-[10px] text-gray-400 font-medium self-center pl-0.5">
-                              +{getAssignedUsers(facility.id).length - 3} more
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-gray-400 italic">No users assigned yet</p>
-                      )}
-                    </div>
+                  {/* Address */}
+                  <div className="flex items-start gap-1.5 text-xs text-gray-500 mt-2.5">
+                    <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
+                    <span className="line-clamp-2">{facility.address}</span>
                   </div>
 
-                  {/* Action Selection Button */}
-                  <div className="mt-4 pt-3 border-t border-gray-100">
-                    <button
-                      type="button"
-                      disabled={!isActive || isSubmitting}
-                      className={`w-full py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
-                        isActive
-                          ? "bg-gray-100 text-gray-800 group-hover:bg-blue-600 group-hover:text-white group-hover:shadow-md group-hover:shadow-blue-500/20"
-                          : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      }`}
-                    >
-                      {isSelected && isSubmitting ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Entering Facility...</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>
-                            {isActive ? "Select Facility" : "Facility Inactive"}
-                          </span>
-                          {isActive && (
-                            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                          )}
-                        </>
-                      )}
-                    </button>
+                  {/* Contact Person Details */}
+                  <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5 text-xs text-gray-500">
+                    <div className="flex items-center gap-2">
+                      <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <span className="truncate font-medium text-gray-700">
+                        {facility.contactPerson}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <span className="truncate">{facility.phone}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <span className="truncate">{facility.email}</span>
+                    </div>
                   </div>
-                </div>
+                </PortalEntityCard>
               );
             })}
           </div>
