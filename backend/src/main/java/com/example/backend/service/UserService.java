@@ -53,12 +53,6 @@ public class UserService {
             }
         }
 
-        // Validate facilityId if role is Pharmacist or Procurement
-        boolean isFacilityRole = request.getRole() == User.Role.Pharmacist || request.getRole() == User.Role.Procurement;
-        if (isFacilityRole && request.getFacilityId() == null) {
-            throw new RuntimeException("facilityId is required for role: " + request.getRole());
-        }
-
         User user = new User();
         user.setName(request.getName());
         user.setUsername(request.getUsername());
@@ -70,9 +64,10 @@ public class UserService {
 
         User savedUser = userRepository.save(user);
 
-        // If role is Pharmacist or Procurement, link the user to the specified facility
+        // If role is Pharmacist or Procurement and facilityId is provided, link the user to the specified facility
         Long linkedFacilityId = null;
-        if (isFacilityRole) {
+        boolean isFacilityRole = request.getRole() == User.Role.Pharmacist || request.getRole() == User.Role.Procurement;
+        if (isFacilityRole && request.getFacilityId() != null) {
             Facility facility = facilityRepository.findById(request.getFacilityId())
                     .orElseThrow(() -> new RuntimeException("Facility not found with id: " + request.getFacilityId()));
 
