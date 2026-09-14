@@ -40,6 +40,8 @@ import RoleGuard from "../../components/guard/roleGuard";
 
 // Services, Data & Hooks
 import facilityService from "../../services/facility";
+import assignFacilityService from "../../services/assignFacility";
+import userService from "../../services/user";
 import { users as initialUsers } from "../../data/user";
 import { ROLE_DETAILS, ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
@@ -105,6 +107,8 @@ function SelectFacility() {
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [userSearchTerm, setUserSearchTerm] = useState("");
   const [assignSuccessMsg, setAssignSuccessMsg] = useState("");
+  const [isSavingAssignments, setIsSavingAssignments] = useState(false);
+  const [assignErrorMsg, setAssignErrorMsg] = useState("");
 
   // Modal & Form state for creating a new user
   const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
@@ -113,6 +117,8 @@ function SelectFacility() {
     useState([]);
   const [userFormErrors, setUserFormErrors] = useState({});
   const [createUserSuccessMsg, setCreateUserSuccessMsg] = useState("");
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [createUserErrorMsg, setCreateUserErrorMsg] = useState("");
 
   // If not logged in, redirect back to login. If Admin has no project selected, redirect to select-project
   useEffect(() => {
@@ -124,6 +130,8 @@ function SelectFacility() {
       navigate("/select-project", { replace: true });
     }
   }, [isAuthenticated, user, isAdmin, activeProject, navigate]);
+
+  const isSuperAdminOrAdmin = isAdmin;
 
   // Fetch facilities from backend API for the active project
   const fetchFacilities = useCallback(async () => {
@@ -137,8 +145,41 @@ function SelectFacility() {
     try {
       setIsLoadingFacilities(true);
       setFetchFacilitiesError("");
-      const data = await facilityService.getFacilitiesByProjectId(targetProjectId);
-      setFacilityList(Array.isArray(data) ? data : []);
+      const [facsData, assignmentsRes] = await Promise.allSettled([
+        facilityService.getFacilitiesByProjectId(targetProjectId),
+        isSuperAdminOrAdmin
+          ? assignFacilityService.getAllAssignments()
+          : Promise.resolve([]),
+      ]);
+
+      const rawFacilities =
+        facsData.status === "fulfilled" && Array.isArray(facsData.value)
+          ? facsData.value
+          : [];
+
+      const assignments =
+        assignmentsRes.status === "fulfilled" &&
+        Array.isArray(assignmentsRes.value)
+          ? assignmentsRes.value
+          : [];
+
+      const facilityUserMap = {};
+      assignments.forEach((link) => {
+        const uid = link.user?.id;
+        const fid = link.facility?.id;
+        if (uid && fid) {
+          if (!facilityUserMap[fid]) facilityUserMap[fid] = [];
+          if (!facilityUserMap[fid].includes(uid))
+            facilityUserMap[fid].push(uid);
+        }
+      });
+
+      const mergedFacilities = rawFacilities.map((fac) => ({
+        ...fac,
+        assignedUserIds: facilityUserMap[fac.id] || fac.assignedUserIds || [],
+      }));
+
+      setFacilityList(mergedFacilities);
     } catch (err) {
       console.error("Failed to fetch facilities by project:", err);
       const errMsg =
@@ -152,17 +193,86 @@ function SelectFacility() {
     } finally {
       setIsLoadingFacilities(false);
     }
-  }, [activeProject?.id]);
+  }, [activeProject?.id, isSuperAdminOrAdmin]);
+
+  // Fetch users and assignments from backend API
+  const fetchUsersAndAssignments = useCallback(async () => {
+    if (!isSuperAdminOrAdmin) return;
+    try {
+      const [usersRes, assignmentsRes] = await Promise.allSettled([
+        userService.getAllUsers(),
+        assignFacilityService.getAllAssignments(),
+      ]);
+
+      const backendUsers =
+        usersRes.status === "fulfilled" && Array.isArray(usersRes.value)
+          ? usersRes.value
+          : [];
+
+      const backendAssignments =
+        assignmentsRes.status === "fulfilled" &&
+        Array.isArray(assignmentsRes.value)
+          ? assignmentsRes.value
+          : [];
+
+      const facilityUserMap = {};
+      const userFacilityMap = {};
+
+      backendAssignments.forEach((link) => {
+        const uid = link.user?.id;
+        const fid = link.facility?.id;
+        if (uid && fid) {
+          if (!facilityUserMap[fid]) facilityUserMap[fid] = [];
+          if (!facilityUserMap[fid].includes(uid))
+            facilityUserMap[fid].push(uid);
+
+          if (!userFacilityMap[uid]) userFacilityMap[uid] = [];
+          if (!userFacilityMap[uid].includes(fid))
+            userFacilityMap[uid].push(fid);
+        }
+      });
+
+      if (backendUsers.length > 0) {
+        setUserList(
+          backendUsers.map((u) => ({
+            ...u,
+            status: u.status ? "Active" : "Inactive",
+            assignedFacilities: [
+              ...(userFacilityMap[u.id] || []),
+              ...(u.facilityId ? [u.facilityId] : []),
+            ],
+          })),
+        );
+      }
+
+      setFacilityList((prevFacilities) =>
+        prevFacilities.map((fac) => ({
+          ...fac,
+          assignedUserIds: facilityUserMap[fac.id] || fac.assignedUserIds || [],
+        })),
+      );
+    } catch (err) {
+      console.error("Failed to load users or assignments:", err);
+    }
+  }, [isSuperAdminOrAdmin]);
 
   useEffect(() => {
     if (isAuthenticated && user) {
       if (activeProject?.id) {
         fetchFacilities();
       }
+      if (isSuperAdminOrAdmin) {
+        fetchUsersAndAssignments();
+      }
     }
-  }, [isAuthenticated, user, activeProject?.id, fetchFacilities]);
-
-  const isSuperAdminOrAdmin = isAdmin;
+  }, [
+    isAuthenticated,
+    user,
+    activeProject?.id,
+    isSuperAdminOrAdmin,
+    fetchFacilities,
+    fetchUsersAndAssignments,
+  ]);
 
   // Filter facilities assigned to the user (and scoped by active project)
   const userAssignedFacilities = useMemo(() => {
@@ -567,6 +677,7 @@ function SelectFacility() {
     setSelectedUserIds(currentlyAssignedUserIds);
     setUserSearchTerm("");
     setAssignSuccessMsg("");
+    setAssignErrorMsg("");
     setIsAssignUserModalOpen(true);
   };
 
@@ -577,6 +688,7 @@ function SelectFacility() {
     const currentlyAssignedUserIds = getAssignedUsers(fid).map((u) => u.id);
     setSelectedUserIds(currentlyAssignedUserIds);
     setAssignSuccessMsg("");
+    setAssignErrorMsg("");
   };
 
   const handleToggleUser = (userId) => {
@@ -587,59 +699,105 @@ function SelectFacility() {
     );
   };
 
-  const handleSaveAssignments = (e) => {
+  const handleSaveAssignments = async (e) => {
     e.preventDefault();
     if (!isSuperAdminOrAdmin || !selectedFacilityIdForAssignment) return;
 
     const targetFid = Number(selectedFacilityIdForAssignment);
-
-    // Update facilityList with new assignedUserIds
-    setFacilityList((prevFacilities) =>
-      prevFacilities.map((f) =>
-        f.id === targetFid
-          ? {
-              ...f,
-              assignedUserIds: selectedUserIds,
-            }
-          : f,
-      ),
-    );
-
-    // Update userList assignedFacilities
-    setUserList((prevUsers) =>
-      prevUsers.map((u) => {
-        if (u.role === ROLES.SUPER_ADMIN || u.role === "Super Admin") return u;
-        const shouldBeAssigned = selectedUserIds.includes(u.id);
-        const currentFacilities = Array.isArray(u.assignedFacilities)
-          ? u.assignedFacilities
-          : [];
-
-        if (shouldBeAssigned && !currentFacilities.includes(targetFid)) {
-          return {
-            ...u,
-            assignedFacilities: [...currentFacilities, targetFid],
-          };
-        } else if (!shouldBeAssigned && currentFacilities.includes(targetFid)) {
-          return {
-            ...u,
-            assignedFacilities: currentFacilities.filter(
-              (fid) => fid !== targetFid,
-            ),
-          };
-        }
-        return u;
-      }),
-    );
-
     const targetFac = facilityList.find((f) => f.id === targetFid);
-    setAssignSuccessMsg(
-      `Updated user assignments for ${targetFac?.name || "facility"}!`,
+
+    // Current assigned user IDs for this facility
+    const currentAssigned = getAssignedUsers(targetFid).map((u) => u.id);
+
+    // Newly selected users to assign
+    const usersToAssign = selectedUserIds.filter(
+      (id) => !currentAssigned.includes(id),
+    );
+    // Users to unassign
+    const usersToUnassign = currentAssigned.filter(
+      (id) => !selectedUserIds.includes(id),
     );
 
-    setTimeout(() => {
-      setIsAssignUserModalOpen(false);
+    try {
+      setIsSavingAssignments(true);
+      setAssignErrorMsg("");
       setAssignSuccessMsg("");
-    }, 700);
+
+      // Call backend assign/unassign endpoints
+      if (usersToAssign.length > 0) {
+        await assignFacilityService.assignUsersToFacility(targetFid, {
+          userIds: usersToAssign,
+        });
+      }
+      if (usersToUnassign.length > 0) {
+        await assignFacilityService.unassignUsersFromFacility(targetFid, {
+          userIds: usersToUnassign,
+        });
+      }
+
+      // Update facilityList with new assignedUserIds
+      setFacilityList((prevFacilities) =>
+        prevFacilities.map((f) =>
+          f.id === targetFid
+            ? {
+                ...f,
+                assignedUserIds: selectedUserIds,
+              }
+            : f,
+        ),
+      );
+
+      // Update userList assignedFacilities
+      setUserList((prevUsers) =>
+        prevUsers.map((u) => {
+          if (u.role === ROLES.SUPER_ADMIN || u.role === "Super Admin")
+            return u;
+          const shouldBeAssigned = selectedUserIds.includes(u.id);
+          const currentFacilities = Array.isArray(u.assignedFacilities)
+            ? u.assignedFacilities
+            : [];
+
+          if (shouldBeAssigned && !currentFacilities.includes(targetFid)) {
+            return {
+              ...u,
+              assignedFacilities: [...currentFacilities, targetFid],
+            };
+          } else if (
+            !shouldBeAssigned &&
+            currentFacilities.includes(targetFid)
+          ) {
+            return {
+              ...u,
+              assignedFacilities: currentFacilities.filter(
+                (fid) => fid !== targetFid,
+              ),
+            };
+          }
+          return u;
+        }),
+      );
+
+      setAssignSuccessMsg(
+        `Updated user assignments for ${targetFac?.name || "facility"}!`,
+      );
+
+      setTimeout(() => {
+        setIsAssignUserModalOpen(false);
+        setAssignSuccessMsg("");
+      }, 700);
+    } catch (err) {
+      console.error("Failed to save facility assignments:", err);
+      const errMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to update assignments. Please try again.";
+      setAssignErrorMsg(
+        typeof errMsg === "string" ? errMsg : "Failed to update assignments.",
+      );
+    } finally {
+      setIsSavingAssignments(false);
+    }
   };
 
   // --- Create User Form Handlers ---
@@ -654,6 +812,7 @@ function SelectFacility() {
     setSelectedFacilitiesForNewUser(initialFacs);
     setUserFormErrors({});
     setCreateUserSuccessMsg("");
+    setCreateUserErrorMsg("");
     setIsCreateUserModalOpen(true);
   };
 
@@ -713,54 +872,115 @@ function SelectFacility() {
     return Object.keys(errors).length === 0;
   };
 
-  const handleCreateUserSubmit = (e) => {
+  const handleCreateUserSubmit = async (e) => {
     e.preventDefault();
     if (!isSuperAdminOrAdmin) return;
     if (!validateUserForm()) return;
 
-    const newUserId = Date.now();
-    const newUser = {
-      id: newUserId,
-      name: userFormData.name.trim(),
-      username: userFormData.username.trim(),
-      email: userFormData.email.trim(),
-      phone: userFormData.phone.trim() || "+63 900 000 0000",
-      role: userFormData.role,
-      status: userFormData.status || "Active",
-      password: userFormData.password || "exaktpassword",
-      assignedFacilities: selectedFacilitiesForNewUser,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-
-    setUserList((prev) => [newUser, ...prev]);
-
-    if (selectedFacilitiesForNewUser.length > 0) {
-      setFacilityList((prevFacilities) =>
-        prevFacilities.map((fac) => {
-          if (selectedFacilitiesForNewUser.includes(fac.id)) {
-            const currentUsers = Array.isArray(fac.assignedUserIds)
-              ? fac.assignedUserIds
-              : [];
-            return {
-              ...fac,
-              assignedUserIds: [...currentUsers, newUserId],
-            };
-          }
-          return fac;
-        }),
-      );
-    }
-
-    setCreateUserSuccessMsg(
-      `User account for ${newUser.name} created successfully!`,
-    );
-
-    setTimeout(() => {
-      setIsCreateUserModalOpen(false);
+    try {
+      setIsCreatingUser(true);
+      setCreateUserErrorMsg("");
       setCreateUserSuccessMsg("");
-      setUserFormData(DEFAULT_USER_FORM);
-      setSelectedFacilitiesForNewUser([]);
-    }, 700);
+
+      const primaryFacilityId =
+        selectedFacilitiesForNewUser.length > 0
+          ? Number(selectedFacilitiesForNewUser[0])
+          : null;
+
+      const payload = {
+        name: userFormData.name.trim(),
+        username: userFormData.username.trim(),
+        password: userFormData.password,
+        email: userFormData.email.trim(),
+        phone: userFormData.phone.trim() || "+63 900 000 0000",
+        role: userFormData.role,
+        status: userFormData.status === "Active",
+        facilityId:
+          userFormData.role === ROLES.PHARMACIST ||
+          userFormData.role === ROLES.PROCUREMENT
+            ? primaryFacilityId
+            : null,
+      };
+
+      const createdUser = await userService.createUser(payload);
+
+      // If additional facilities were selected beyond the primary one, or if role is Admin and facilities were selected
+      const additionalFacilities =
+        userFormData.role === ROLES.PHARMACIST ||
+        userFormData.role === ROLES.PROCUREMENT
+          ? selectedFacilitiesForNewUser.slice(1)
+          : selectedFacilitiesForNewUser;
+
+      if (additionalFacilities.length > 0 && createdUser?.id) {
+        for (const facId of additionalFacilities) {
+          try {
+            await assignFacilityService.assignUsersToFacility(Number(facId), {
+              userIds: [createdUser.id],
+            });
+          } catch (assignErr) {
+            console.warn(
+              `Failed to assign user ${createdUser.id} to facility ${facId}:`,
+              assignErr,
+            );
+          }
+        }
+      }
+
+      const formattedNewUser = {
+        id: createdUser.id,
+        name: createdUser.name,
+        username: createdUser.username,
+        email: createdUser.email,
+        phone: createdUser.phone,
+        role: createdUser.role,
+        status: createdUser.status ? "Active" : "Inactive",
+        assignedFacilities: selectedFacilitiesForNewUser.map(Number),
+        createdAt: createdUser.createdAt || new Date().toISOString(),
+      };
+
+      setUserList((prev) => [formattedNewUser, ...prev]);
+
+      if (selectedFacilitiesForNewUser.length > 0) {
+        const selectedNumericFids = selectedFacilitiesForNewUser.map(Number);
+        setFacilityList((prevFacilities) =>
+          prevFacilities.map((fac) => {
+            if (selectedNumericFids.includes(fac.id)) {
+              const currentUsers = Array.isArray(fac.assignedUserIds)
+                ? fac.assignedUserIds
+                : [];
+              return {
+                ...fac,
+                assignedUserIds: [...currentUsers, createdUser.id],
+              };
+            }
+            return fac;
+          }),
+        );
+      }
+
+      setCreateUserSuccessMsg(
+        `User account for ${formattedNewUser.name} created successfully!`,
+      );
+
+      setTimeout(() => {
+        setIsCreateUserModalOpen(false);
+        setCreateUserSuccessMsg("");
+        setUserFormData(DEFAULT_USER_FORM);
+        setSelectedFacilitiesForNewUser([]);
+      }, 700);
+    } catch (err) {
+      console.error("Failed to create user:", err);
+      const errMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to create user. Please try again.";
+      setCreateUserErrorMsg(
+        typeof errMsg === "string" ? errMsg : "Failed to create user.",
+      );
+    } finally {
+      setIsCreatingUser(false);
+    }
   };
 
   if (!user) return null;
@@ -857,14 +1077,20 @@ function SelectFacility() {
         {isLoadingFacilities ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-500">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-3" />
-            <p className="text-sm font-medium">Loading facilities from server...</p>
+            <p className="text-sm font-medium">
+              Loading facilities from server...
+            </p>
           </div>
         ) : fetchFacilitiesError ? (
           <div className="p-6 bg-red-50 border border-red-200 rounded-2xl text-center space-y-3">
             <AlertCircle className="w-8 h-8 text-red-500 mx-auto" />
             <div>
-              <p className="font-semibold text-red-900">Unable to load facilities</p>
-              <p className="text-xs text-red-700 mt-1">{fetchFacilitiesError}</p>
+              <p className="font-semibold text-red-900">
+                Unable to load facilities
+              </p>
+              <p className="text-xs text-red-700 mt-1">
+                {fetchFacilitiesError}
+              </p>
             </div>
             <button
               type="button"
@@ -1165,7 +1391,9 @@ function SelectFacility() {
                   onChange={handleInputChange}
                   placeholder="+63 2 8920 5000"
                   className={`input text-xs pl-8 ${
-                    formErrors.phone ? "border-red-400 focus:border-red-500" : ""
+                    formErrors.phone
+                      ? "border-red-400 focus:border-red-500"
+                      : ""
                   }`}
                   disabled={isCreatingFacility}
                 />
@@ -1233,7 +1461,9 @@ function SelectFacility() {
               ) : (
                 <Plus className="w-3.5 h-3.5" />
               )}
-              <span>{isCreatingFacility ? "Creating..." : "Create Facility"}</span>
+              <span>
+                {isCreatingFacility ? "Creating..." : "Create Facility"}
+              </span>
             </button>
           </div>
         </form>
@@ -1523,7 +1753,9 @@ function SelectFacility() {
                 ) : (
                   <Trash2 className="w-3.5 h-3.5" />
                 )}
-                <span>{isDeletingFacility ? "Deleting..." : "Delete Facility"}</span>
+                <span>
+                  {isDeletingFacility ? "Deleting..." : "Delete Facility"}
+                </span>
               </button>
             </div>
           </div>
@@ -1556,6 +1788,13 @@ function SelectFacility() {
             <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl animate-fade-in">
               <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
               <span className="font-semibold">{assignSuccessMsg}</span>
+            </div>
+          )}
+
+          {assignErrorMsg && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl animate-fade-in">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+              <span>{assignErrorMsg}</span>
             </div>
           )}
 
@@ -1662,17 +1901,28 @@ function SelectFacility() {
           <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
             <button
               type="button"
+              disabled={isSavingAssignments}
               onClick={() => setIsAssignUserModalOpen(false)}
-              className="btn-secondary text-xs cursor-pointer"
+              className="btn-secondary text-xs cursor-pointer disabled:opacity-60"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="btn-primary text-xs flex items-center gap-1.5 cursor-pointer"
+              disabled={isSavingAssignments}
+              className="btn-primary text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
             >
-              <Check className="w-3.5 h-3.5" />
-              <span>Save Assignments</span>
+              {isSavingAssignments ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Save Assignments</span>
+                </>
+              )}
             </button>
           </div>
         </form>
@@ -1703,6 +1953,13 @@ function SelectFacility() {
             <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl animate-fade-in">
               <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
               <span className="font-semibold">{createUserSuccessMsg}</span>
+            </div>
+          )}
+
+          {createUserErrorMsg && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl animate-fade-in">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+              <span>{createUserErrorMsg}</span>
             </div>
           )}
 
@@ -1883,8 +2140,8 @@ function SelectFacility() {
                 onChange={handleUserInputChange}
                 className="input text-xs"
               >
-                <option value="Active">Active (Permitted to log in)</option>
-                <option value="Inactive">Inactive (Suspended)</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
               </select>
             </div>
           </div>
@@ -1906,17 +2163,28 @@ function SelectFacility() {
           <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
             <button
               type="button"
+              disabled={isCreatingUser}
               onClick={() => setIsCreateUserModalOpen(false)}
-              className="btn-secondary text-xs cursor-pointer"
+              className="btn-secondary text-xs cursor-pointer disabled:opacity-60"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="btn-primary text-xs flex items-center gap-1.5 cursor-pointer"
+              disabled={isCreatingUser}
+              className="btn-primary text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
             >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>Create User</span>
+              {isCreatingUser ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Creating User...</span>
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Create User</span>
+                </>
+              )}
             </button>
           </div>
         </form>
