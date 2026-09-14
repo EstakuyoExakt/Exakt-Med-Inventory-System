@@ -1,6 +1,10 @@
 package com.example.backend.config;
 
+import com.example.backend.entity.Facility;
+import com.example.backend.entity.Project;
 import com.example.backend.entity.User;
+import com.example.backend.repository.FacilityRepository;
+import com.example.backend.repository.ProjectRepository;
 import com.example.backend.repository.UserRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
@@ -84,5 +88,79 @@ public class DataInitializer {
             userRepository.save(user);
             System.out.println(">>> Initialized " + role + " user: username='" + username + "', password='" + password + "'");
         }
+    }
+
+    @Bean
+    public CommandLineRunner initData(ProjectRepository projectRepository, FacilityRepository facilityRepository) {
+        return args -> {
+            // Seed Project if empty
+            if (projectRepository.count() == 0) {
+                Project project = new Project();
+                project.setName("DOH Region 1");
+                Project savedProject = projectRepository.saveAndFlush(project);
+                savedProject.setProjectCode(String.format("PRJ-%03d", savedProject.getId()));
+                projectRepository.save(savedProject);
+                System.out.println(">>> Initialized Project: id=" + savedProject.getId() + ", name='" + savedProject.getName() + "', code='" + savedProject.getProjectCode() + "'");
+
+                // Seed Facilities under this Project
+                if (facilityRepository.count() == 0) {
+                    createFacility(
+                            facilityRepository,
+                            savedProject,
+                            "Ilocos Training and Regional Medical Center",
+                            "Dr. Maria Santos",
+                            "itrmc@doh.gov.ph",
+                            "09123456789",
+                            "San Fernando, La Union",
+                            Facility.Status.Active
+                    );
+
+                    createFacility(
+                            facilityRepository,
+                            savedProject,
+                            "Mariano Marcos Memorial Hospital and Medical Center",
+                            "Dr. Juan Dela Cruz",
+                            "mmmhmc@doh.gov.ph",
+                            "09123456780",
+                            "Batac, Ilocos Norte",
+                            Facility.Status.Active
+                    );
+
+                    createFacility(
+                            facilityRepository,
+                            savedProject,
+                            "Region 1 Medical Center",
+                            "Dr. Jose Rizal",
+                            "r1mc@doh.gov.ph",
+                            "09123456781",
+                            "Dagupan City, Pangasinan",
+                            Facility.Status.Active
+                    );
+                }
+            }
+        };
+    }
+
+    private void createFacility(FacilityRepository facilityRepository,
+                                Project project,
+                                String name,
+                                String contactPerson,
+                                String email,
+                                String phone,
+                                String address,
+                                Facility.Status status) {
+        Facility facility = new Facility();
+        facility.setProject(project);
+        facility.setName(name);
+        facility.setContactPerson(contactPerson);
+        facility.setEmail(email);
+        facility.setPhone(phone);
+        facility.setAddress(address);
+        facility.setStatus(status);
+
+        Facility savedFacility = facilityRepository.saveAndFlush(facility);
+        savedFacility.setFacilityCode(String.format("FAC-%03d", savedFacility.getId()));
+        facilityRepository.save(savedFacility);
+        System.out.println(">>> Initialized Facility: id=" + savedFacility.getId() + ", name='" + savedFacility.getName() + "', code='" + savedFacility.getFacilityCode() + "'");
     }
 }

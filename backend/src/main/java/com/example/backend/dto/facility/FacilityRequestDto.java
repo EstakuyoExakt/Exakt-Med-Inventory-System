@@ -19,9 +19,6 @@ public class FacilityRequestDto {
     @Size(min = 2, max = 100, message = "Facility Name must be between 2 and 100 characters")
     private String name;
 
-    @NotBlank(message = "Facility Type is required")
-    private String type;
-
     @NotBlank(message = "Contact Person is required")
     private String contactPerson;
 

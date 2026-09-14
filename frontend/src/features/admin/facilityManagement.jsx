@@ -31,7 +31,6 @@ import { ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
 import useRole from "../../hooks/useRole";
 import {
-  FACILITY_TYPE_OPTIONS,
   DEFAULT_FACILITY_FORM,
 } from "../../utils/constants";
 
@@ -67,7 +66,6 @@ function FacilityManagement() {
 
   const [facilityList, setFacilityList] = useState(initialFacilities);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedType, setSelectedType] = useState("ALL");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -104,12 +102,7 @@ function FacilityManagement() {
     [currentProjectFacilities],
   );
 
-  // Extract unique facility types for filter dropdown
-  const facilityTypes = useMemo(() => {
-    return Array.from(new Set(currentProjectFacilities.map((f) => f.type)));
-  }, [currentProjectFacilities]);
-
-  // Filtered facilities based on search, type, and status for the current project
+  // Filtered facilities based on search and status for the current project
   const filteredFacilities = useMemo(() => {
     return currentProjectFacilities.filter((facility) => {
       const matchesSearch =
@@ -121,19 +114,15 @@ function FacilityManagement() {
           .toLowerCase()
           .includes(searchQuery.toLowerCase()) ||
         facility.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        facility.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (facility.address &&
           facility.address.toLowerCase().includes(searchQuery.toLowerCase()));
-
-      const matchesType =
-        selectedType === "ALL" || facility.type === selectedType;
 
       const matchesStatus =
         selectedStatus === "ALL" || facility.status === selectedStatus;
 
-      return matchesSearch && matchesType && matchesStatus;
+      return matchesSearch && matchesStatus;
     });
-  }, [currentProjectFacilities, searchQuery, selectedType, selectedStatus]);
+  }, [currentProjectFacilities, searchQuery, selectedStatus]);
 
   // Pagination calculation
   const totalPages = Math.ceil(filteredFacilities.length / itemsPerPage) || 1;
@@ -144,11 +133,6 @@ function FacilityManagement() {
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
-    setCurrentPage(1);
-  };
-
-  const handleTypeChange = (e) => {
-    setSelectedType(e.target.value);
     setCurrentPage(1);
   };
 
@@ -193,7 +177,6 @@ function FacilityManagement() {
     setFormData({
       name: facility.name || "",
       facilityCode: facility.facilityCode || "",
-      type: facility.type || "Main Hospital",
       contactPerson: facility.contactPerson || "",
       email: facility.email || "",
       phone: facility.phone || "",
@@ -247,10 +230,6 @@ function FacilityManagement() {
       }
     }
 
-    if (!formData.type) {
-      errors.type = "Facility type is required.";
-    }
-
     if (!formData.contactPerson.trim()) {
       errors.contactPerson = "Contact person is required.";
     }
@@ -288,7 +267,6 @@ function FacilityManagement() {
         id: Date.now(),
         name: formData.name.trim(),
         facilityCode: formData.facilityCode.trim().toUpperCase(),
-        type: formData.type,
         contactPerson: formData.contactPerson.trim(),
         email: formData.email.trim(),
         phone: formData.phone.trim() || "+63 2 0000 0000",
@@ -306,7 +284,6 @@ function FacilityManagement() {
                 ...f,
                 name: formData.name.trim(),
                 facilityCode: formData.facilityCode.trim().toUpperCase(),
-                type: formData.type,
                 contactPerson: formData.contactPerson.trim(),
                 email: formData.email.trim(),
                 phone: formData.phone.trim(),
@@ -449,20 +426,6 @@ function FacilityManagement() {
           </div>
 
           <div className="flex items-center gap-2.5 w-full md:w-auto">
-            {/* Type Filter */}
-            <select
-              value={selectedType}
-              onChange={handleTypeChange}
-              className="input py-2 text-xs w-full sm:w-44"
-            >
-              <option value="ALL">All Facility Types</option>
-              {facilityTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-
             {/* Status Filter */}
             <select
               value={selectedStatus}
@@ -483,9 +446,6 @@ function FacilityManagement() {
               <tr>
                 <th scope="col" className="px-6 py-3.5">
                   Facility Name
-                </th>
-                <th scope="col" className="px-6 py-3.5">
-                  Facility Type
                 </th>
                 <th scope="col" className="px-6 py-3.5">
                   Contact Person
@@ -518,13 +478,6 @@ function FacilityManagement() {
                           {facility.name}
                         </div>
                       </div>
-                    </td>
-
-                    {/* Facility Type Badge */}
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
-                        {facility.type}
-                      </span>
                     </td>
 
                     {/* Contact Person Details */}
@@ -707,26 +660,23 @@ function FacilityManagement() {
               )}
             </div>
 
-            {/* Facility Type */}
+            {/* Operational Status */}
             <div>
               <label
-                htmlFor="facility-type"
+                htmlFor="facility-status"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
               >
-                Facility Type <span className="text-red-500">*</span>
+                Operational Status <span className="text-red-500">*</span>
               </label>
               <select
-                id="facility-type"
-                name="type"
-                value={formData.type}
+                id="facility-status"
+                name="status"
+                value={formData.status}
                 onChange={handleInputChange}
                 className="input"
               >
-                {FACILITY_TYPE_OPTIONS.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
               </select>
             </div>
 
@@ -791,7 +741,7 @@ function FacilityManagement() {
             </div>
 
             {/* Phone Number */}
-            <div>
+            <div className="sm:col-span-2">
               <label
                 htmlFor="facility-phone"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
@@ -810,26 +760,6 @@ function FacilityManagement() {
                 />
                 <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
-            </div>
-
-            {/* Status */}
-            <div>
-              <label
-                htmlFor="facility-status"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Operational Status <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="facility-status"
-                name="status"
-                value={formData.status}
-                onChange={handleInputChange}
-                className="input"
-              >
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
             </div>
 
             {/* Physical Address */}
@@ -920,10 +850,6 @@ function FacilityManagement() {
                       }`}
                     />
                     {selectedFacility.status}
-                  </span>
-                  <span className="text-xs text-gray-400">•</span>
-                  <span className="text-xs text-gray-500 font-medium">
-                    {selectedFacility.type}
                   </span>
                 </div>
               </div>

@@ -1436,7 +1436,7 @@ function SkuManagement() {
                   .filter((f) => f.name !== currentFacilityName)
                   .map((f) => (
                     <option key={f.id} value={f.name}>
-                      {f.name} ({f.type})
+                      {f.name}
                     </option>
                   ))}
               </select>

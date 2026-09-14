@@ -45,7 +45,6 @@ import { ROLE_DETAILS, ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
 import useRole from "../../hooks/useRole";
 import {
-  FACILITY_TYPE_OPTIONS,
   DEFAULT_FACILITY_FORM,
   DEFAULT_USER_FORM,
 } from "../../utils/constants";
@@ -213,20 +212,8 @@ function SelectFacility() {
     }, 400);
   };
 
-  const getFacilityIcon = (type) => {
-    switch (type) {
-      case "Central Warehouse":
-      case "Cold Storage Facility":
-        return <Warehouse className="w-5 h-5 text-amber-600" />;
-      case "Main Hospital":
-      case "Branch Hospital":
-      case "Specialty Hospital":
-        return <Hospital className="w-5 h-5 text-blue-600" />;
-      case "Emergency Center":
-        return <ShieldAlert className="w-5 h-5 text-red-600" />;
-      default:
-        return <Stethoscope className="w-5 h-5 text-emerald-600" />;
-    }
+  const getFacilityIcon = () => {
+    return <Building2 className="w-5 h-5 text-blue-600" />;
   };
 
   // Modal Handlers
@@ -258,10 +245,6 @@ function SelectFacility() {
       errors.name = "Facility name is required.";
     } else if (formData.name.trim().length < 2) {
       errors.name = "Facility name must be at least 2 characters.";
-    }
-
-    if (!formData.type?.trim()) {
-      errors.type = "Facility type is required.";
     }
 
     if (!formData.contactPerson?.trim()) {
@@ -311,7 +294,6 @@ function SelectFacility() {
       const payload = {
         projectId: targetProjectId,
         name: formData.name.trim(),
-        type: formData.type,
         contactPerson: formData.contactPerson.trim(),
         email: formData.email.trim(),
         phone: formData.phone.trim(),
@@ -352,7 +334,6 @@ function SelectFacility() {
     setEditFormData({
       name: fac.name || "",
       facilityCode: fac.facilityCode || "",
-      type: fac.type || "Main Hospital",
       contactPerson: fac.contactPerson || "",
       email: fac.email || "",
       phone: fac.phone || "",
@@ -390,10 +371,6 @@ function SelectFacility() {
       errors.name = "Facility name is required.";
     } else if (editFormData.name.trim().length < 2) {
       errors.name = "Facility name must be at least 2 characters.";
-    }
-
-    if (!editFormData.type?.trim()) {
-      errors.type = "Facility type is required.";
     }
 
     if (!editFormData.contactPerson?.trim()) {
@@ -447,7 +424,6 @@ function SelectFacility() {
       const payload = {
         projectId: targetProjectId,
         name: editFormData.name.trim(),
-        type: editFormData.type,
         contactPerson: editFormData.contactPerson.trim(),
         email: editFormData.email.trim(),
         phone: editFormData.phone.trim(),
@@ -910,9 +886,9 @@ function SelectFacility() {
               return (
                 <PortalEntityCard
                   key={facility.id}
-                  icon={getFacilityIcon(facility.type)}
+                  icon={getFacilityIcon()}
                   code={facility.facilityCode}
-                  badgeText={facility.type}
+                  badgeText="Healthcare Branch"
                   title={facility.name}
                   themeColor="blue"
                   status={facility.status}
@@ -1085,27 +1061,24 @@ function SelectFacility() {
               />
             </div>
 
-            {/* Facility Type */}
+            {/* Operational Status */}
             <div>
               <label
-                htmlFor="fac-type"
+                htmlFor="fac-status"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
               >
-                Facility Type <span className="text-red-500">*</span>
+                Operational Status
               </label>
               <select
-                id="fac-type"
-                name="type"
-                value={formData.type}
+                id="fac-status"
+                name="status"
+                value={formData.status}
                 onChange={handleInputChange}
                 className="input text-xs"
                 disabled={isCreatingFacility}
               >
-                {FACILITY_TYPE_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
               </select>
             </div>
 
@@ -1176,7 +1149,7 @@ function SelectFacility() {
             </div>
 
             {/* Phone */}
-            <div>
+            <div className="sm:col-span-2">
               <label
                 htmlFor="fac-phone"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
@@ -1204,27 +1177,6 @@ function SelectFacility() {
                   {formErrors.phone}
                 </p>
               )}
-            </div>
-
-            {/* Status */}
-            <div>
-              <label
-                htmlFor="fac-status"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Operational Status
-              </label>
-              <select
-                id="fac-status"
-                name="status"
-                value={formData.status}
-                onChange={handleInputChange}
-                className="input text-xs"
-                disabled={isCreatingFacility}
-              >
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
             </div>
 
             {/* Address */}
@@ -1366,27 +1318,24 @@ function SelectFacility() {
               />
             </div>
 
-            {/* Facility Type */}
+            {/* Operational Status */}
             <div>
               <label
-                htmlFor="edit-fac-type"
+                htmlFor="edit-fac-status"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
               >
-                Facility Type <span className="text-red-500">*</span>
+                Operational Status
               </label>
               <select
-                id="edit-fac-type"
-                name="type"
-                value={editFormData.type}
+                id="edit-fac-status"
+                name="status"
+                value={editFormData.status}
                 onChange={handleEditInputChange}
-                className="input text-xs font-medium"
+                className="input text-xs"
                 disabled={isUpdatingFacility}
               >
-                {FACILITY_TYPE_OPTIONS.map((typeOpt) => (
-                  <option key={typeOpt} value={typeOpt}>
-                    {typeOpt}
-                  </option>
-                ))}
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
               </select>
             </div>
 
@@ -1439,7 +1388,7 @@ function SelectFacility() {
             </div>
 
             {/* Contact Phone */}
-            <div>
+            <div className="sm:col-span-2">
               <label
                 htmlFor="edit-fac-phone"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
@@ -1460,27 +1409,6 @@ function SelectFacility() {
                   {editFormErrors.phone}
                 </p>
               )}
-            </div>
-
-            {/* Status */}
-            <div>
-              <label
-                htmlFor="edit-fac-status"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Operational Status
-              </label>
-              <select
-                id="edit-fac-status"
-                name="status"
-                value={editFormData.status}
-                onChange={handleEditInputChange}
-                className="input text-xs"
-                disabled={isUpdatingFacility}
-              >
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
             </div>
 
             {/* Address */}

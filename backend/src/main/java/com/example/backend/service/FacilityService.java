@@ -35,7 +35,6 @@ public class FacilityService {
         Facility facility = new Facility();
         facility.setProject(project);
         facility.setName(request.getName());
-        facility.setType(request.getType());
         facility.setContactPerson(request.getContactPerson());
         facility.setEmail(request.getEmail());
         facility.setPhone(request.getPhone());
@@ -87,7 +86,6 @@ public class FacilityService {
         }
 
         existingFacility.setName(request.getName());
-        existingFacility.setType(request.getType());
         existingFacility.setContactPerson(request.getContactPerson());
         existingFacility.setEmail(request.getEmail());
         existingFacility.setPhone(request.getPhone());
@@ -119,7 +117,6 @@ public class FacilityService {
         }
         response.setFacilityCode(facility.getFacilityCode());
         response.setName(facility.getName());
-        response.setType(facility.getType());
         response.setContactPerson(facility.getContactPerson());
         response.setEmail(facility.getEmail());
         response.setPhone(facility.getPhone());

@@ -25,21 +25,9 @@ export const DEFAULT_USER_FORM = {
 // ==========================================
 // Facility Management & Selection
 // ==========================================
-export const FACILITY_TYPE_OPTIONS = [
-  "Main Hospital",
-  "Branch Hospital",
-  "Central Warehouse",
-  "Outpatient Clinic",
-  "Emergency Center",
-  "Specialty Hospital",
-  "Diagnostic Center",
-  "Cold Storage Facility",
-];
-
 export const DEFAULT_FACILITY_FORM = {
   name: "",
   facilityCode: "",
-  type: "Main Hospital",
   contactPerson: "",
   email: "",
   phone: "",

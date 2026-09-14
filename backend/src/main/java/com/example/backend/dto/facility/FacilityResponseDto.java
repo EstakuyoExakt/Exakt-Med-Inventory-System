@@ -19,7 +19,6 @@ public class FacilityResponseDto {
     private String projectName;
     private String facilityCode;
     private String name;
-    private String type;
     private String contactPerson;
     private String email;
     private String phone;

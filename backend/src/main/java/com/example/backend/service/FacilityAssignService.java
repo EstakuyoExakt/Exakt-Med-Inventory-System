@@ -165,7 +165,6 @@ public class FacilityAssignService {
                 f.getProject() != null ? f.getProject().getName() : null,
                 f.getFacilityCode(),
                 f.getName(),
-                f.getType(),
                 f.getContactPerson(),
                 f.getEmail(),
                 f.getPhone(),
