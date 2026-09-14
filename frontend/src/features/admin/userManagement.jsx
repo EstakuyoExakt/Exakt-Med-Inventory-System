@@ -1,10 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Users,
   Shield,
   Pill,
   Package,
-  Receipt,
   UserPlus,
   Mail,
   Phone,
@@ -17,6 +16,8 @@ import {
   Lock,
   Building2,
   User as UserIcon,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 
 // Components
@@ -25,8 +26,6 @@ import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 
-import { users as initialUsers } from "../../data/user";
-import { facilities } from "../../data/facility";
 import { ROLES, ROLE_DETAILS } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
 import useRole from "../../hooks/useRole";
@@ -35,65 +34,27 @@ import {
   canDeleteUser as checkCanDeleteUser,
 } from "../../utils/helpers";
 import { DEFAULT_USER_FORM } from "../../utils/constants";
+import userService from "../../services/user";
+import assignFacilityService from "../../services/assignFacility";
 
 function UserManagement() {
   const { facility, user: currentUser } = useAuth();
   const { isSuperAdmin } = useRole();
 
-  // Automatically detect current active facility
-  const currentFacility = useMemo(() => {
-    if (facility?.id || facility?.name) {
-      const matched = facilities.find(
-        (f) =>
-          f.id === facility.id ||
-          f.name?.toLowerCase() === facility.name?.toLowerCase(),
-      );
-      if (matched) return matched;
-      return facility;
-    }
-    return facilities[0] || { id: 1, name: "Exakt Central General Hospital" };
-  }, [facility]);
+  const currentFacilityId = facility?.id || null;
 
-  const currentFacilityName =
-    currentFacility?.name || "Exakt Central General Hospital";
-  const currentFacilityId = currentFacility?.id || 1;
+  const [userList, setUserList] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
-  const [userList, setUserList] = useState(initialUsers);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRole, setSelectedRole] = useState("ALL");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
-
-  // Filter users that are assigned to the current active facility
-  const currentFacilityUsers = useMemo(() => {
-    const activeFac = facilities.find(
-      (f) => f.id === currentFacilityId || f.name === currentFacilityName,
-    );
-
-    return userList.filter((u) => {
-      // Super Admin has global access to all facilities
-      if (u.role === ROLES.SUPER_ADMIN || u.role === "Super Admin") {
-        return true;
-      }
-
-      const inUserAssigned =
-        Array.isArray(u.assignedFacilities) &&
-        u.assignedFacilities.includes(currentFacilityId);
-
-      const inFacilityAssigned =
-        activeFac &&
-        Array.isArray(activeFac.assignedUserIds) &&
-        activeFac.assignedUserIds.includes(u.id);
-
-      const inProjectAssigned =
-        Array.isArray(u.assignedProjects) &&
-        activeFac?.projectId &&
-        u.assignedProjects.includes(activeFac.projectId);
-
-      return inUserAssigned || inFacilityAssigned || inProjectAssigned;
-    });
-  }, [userList, currentFacilityId, currentFacilityName]);
 
   // Modal State
   const [modalMode, setModalMode] = useState(null); // 'add' | 'view' | 'edit' | 'delete' | null
@@ -101,37 +62,89 @@ function UserManagement() {
   const [formData, setFormData] = useState(DEFAULT_USER_FORM);
   const [formErrors, setFormErrors] = useState({});
 
-  // Calculate totals for each role for the current active facility
-  const totalUsers = currentFacilityUsers.length;
+  // Fetch users from backend API (Facility-scoped)
+  const fetchUsers = useCallback(async () => {
+    if (!currentFacilityId) {
+      setUserList([]);
+      setIsLoading(false);
+      setFetchError("No facility selected. Please select a facility first.");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setFetchError("");
+      const data =
+        await assignFacilityService.getUsersByFacilityId(currentFacilityId);
+      if (Array.isArray(data)) {
+        setUserList(
+          data.map((u) => ({
+            ...u,
+            status:
+              u.status === true || u.status === "Active"
+                ? "Active"
+                : "Inactive",
+            createdAt: u.createdAt ? u.createdAt.split("T")[0] : "",
+          })),
+        );
+      } else {
+        setUserList([]);
+      }
+    } catch (err) {
+      console.error("Failed to load facility users:", err);
+      setFetchError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to load users for this facility.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentFacilityId]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  // Calculate totals for each role
+  const totalUsers = userList.length;
   const totalAdmins = useMemo(
     () =>
-      currentFacilityUsers.filter(
+      userList.filter(
         (u) =>
           u.role === ROLES.ADMIN ||
           u.role === ROLES.SUPER_ADMIN ||
           u.role === "Admin" ||
           u.role === "Super Admin",
       ).length,
-    [currentFacilityUsers],
+    [userList],
   );
   const totalPharmacists = useMemo(
     () =>
-      currentFacilityUsers.filter((u) => u.role === ROLES.PHARMACIST).length,
-    [currentFacilityUsers],
+      userList.filter(
+        (u) => u.role === ROLES.PHARMACIST || u.role === "Pharmacist",
+      ).length,
+    [userList],
   );
   const totalProcurements = useMemo(
     () =>
-      currentFacilityUsers.filter((u) => u.role === ROLES.PROCUREMENT).length,
-    [currentFacilityUsers],
+      userList.filter(
+        (u) => u.role === ROLES.PROCUREMENT || u.role === "Procurement",
+      ).length,
+    [userList],
   );
 
-  // Filtered users based on search, role, status, and active facility
+  // Filtered users based on search, role, and status
   const filteredUsers = useMemo(() => {
-    return currentFacilityUsers.filter((user) => {
+    return userList.filter((user) => {
+      const name = user.name || "";
+      const username = user.username || "";
+      const email = user.email || "";
+
       const matchesSearch =
-        user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchQuery.toLowerCase());
+        name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        email.toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesRole = selectedRole === "ALL" || user.role === selectedRole;
 
@@ -140,7 +153,7 @@ function UserManagement() {
 
       return matchesSearch && matchesRole && matchesStatus;
     });
-  }, [currentFacilityUsers, searchQuery, selectedRole, selectedStatus]);
+  }, [userList, searchQuery, selectedRole, selectedStatus]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
@@ -165,13 +178,38 @@ function UserManagement() {
     setCurrentPage(1);
   };
 
-  // Permission helpers imported from utils/helpers bound to currentUser
-  const canEditUser = (targetUser) => checkCanEditUser(targetUser, currentUser);
-  const canDeleteUser = (targetUser) => checkCanDeleteUser(targetUser, currentUser);
+  // Permission helpers bound to currentUser
+  const canEditUser = (targetUser) => {
+    const userForCheck = {
+      ...currentUser,
+      id:
+        currentUser?.id ??
+        userList.find((u) => u.username === currentUser?.username)?.id,
+    };
+    return checkCanEditUser(targetUser, userForCheck);
+  };
+
+  const canDeleteUser = (targetUser) => {
+    const userForCheck = {
+      ...currentUser,
+      id:
+        currentUser?.id ??
+        userList.find((u) => u.username === currentUser?.username)?.id,
+    };
+    return checkCanDeleteUser(targetUser, userForCheck);
+  };
 
   // Modal Open Handlers
   const handleOpenAddModal = () => {
-    setFormData(DEFAULT_USER_FORM);
+    setFormData({
+      name: "",
+      username: "",
+      email: "",
+      phone: "",
+      role: isSuperAdmin ? ROLES.ADMIN : ROLES.PHARMACIST,
+      status: "Active",
+      password: "exaktpassword",
+    });
     setFormErrors({});
     setSelectedUser(null);
     setModalMode("add");
@@ -192,7 +230,7 @@ function UserManagement() {
       phone: user.phone || "",
       role: user.role || ROLES.PHARMACIST,
       status: user.status || "Active",
-      password: user.password || "exaktpassword",
+      password: "",
     });
     setFormErrors({});
     setModalMode("edit");
@@ -201,6 +239,7 @@ function UserManagement() {
   const handleOpenDeleteModal = (user) => {
     if (!canDeleteUser(user)) return;
     setSelectedUser(user);
+    setDeleteError("");
     setModalMode("delete");
   };
 
@@ -208,6 +247,7 @@ function UserManagement() {
     setModalMode(null);
     setSelectedUser(null);
     setFormErrors({});
+    setDeleteError("");
   };
 
   // Form Field Change Handler
@@ -216,6 +256,9 @@ function UserManagement() {
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (formErrors[name]) {
       setFormErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+    if (formErrors.general) {
+      setFormErrors((prev) => ({ ...prev, general: "" }));
     }
   };
 
@@ -229,6 +272,8 @@ function UserManagement() {
 
     if (!formData.username.trim()) {
       errors.username = "Username is required.";
+    } else if (formData.username.trim().length < 3) {
+      errors.username = "Username must be at least 3 characters.";
     } else {
       const usernameExists = userList.some(
         (u) =>
@@ -263,66 +308,120 @@ function UserManagement() {
       errors.status = "Status is required.";
     }
 
+    if (modalMode === "add" && !formData.password?.trim()) {
+      errors.password = "Password is required for new users.";
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   // Save (Add or Edit) User
-  const handleSaveUser = (e) => {
+  const handleSaveUser = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
 
-    if (modalMode === "add") {
-      const newUser = {
-        id: Date.now(),
-        name: formData.name.trim(),
-        username: formData.username.trim(),
-        email: formData.email.trim(),
-        phone: formData.phone.trim() || "+63 900 000 0000",
-        role: formData.role,
-        status: formData.status,
-        password: formData.password || "exaktpassword",
-        assignedFacilities: [currentFacilityId],
-        createdAt: new Date().toISOString().split("T")[0],
-      };
-      setUserList((prev) => [newUser, ...prev]);
-    } else if (modalMode === "edit" && selectedUser) {
-      if (!canEditUser(selectedUser)) return;
-      setUserList((prev) =>
-        prev.map((u) =>
-          u.id === selectedUser.id
-            ? {
-                ...u,
-                name: formData.name.trim(),
-                username: formData.username.trim(),
-                email: formData.email.trim(),
-                phone: formData.phone.trim(),
-                role: formData.role,
-                status: formData.status,
-                password: formData.password || u.password,
-                assignedFacilities:
-                  u.assignedFacilities || [currentFacilityId],
-              }
-            : u,
-        ),
-      );
-    }
+    setIsSubmitting(true);
+    setFormErrors({});
 
-    handleCloseModal();
+    try {
+      if (modalMode === "add") {
+        const payload = {
+          name: formData.name.trim(),
+          username: formData.username.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone.trim() || "+63 900 000 0000",
+          role: formData.role,
+          status: formData.status === "Active",
+          password: formData.password || "exaktpassword",
+          facilityId:
+            formData.role === ROLES.PHARMACIST ||
+            formData.role === ROLES.PROCUREMENT
+              ? currentFacilityId
+              : null,
+        };
+
+        const createdUser = await userService.createUser(payload);
+
+        // Link newly created user to current active facility if not already linked
+        if (currentFacilityId && createdUser?.id) {
+          try {
+            await assignFacilityService.assignUsersToFacility(
+              Number(currentFacilityId),
+              { userIds: [createdUser.id] },
+            );
+          } catch (assignErr) {
+            console.warn(
+              `Failed to assign user ${createdUser.id} to facility ${currentFacilityId}:`,
+              assignErr,
+            );
+          }
+        }
+
+        await fetchUsers();
+        handleCloseModal();
+      } else if (modalMode === "edit" && selectedUser) {
+        if (!canEditUser(selectedUser)) return;
+
+        const payload = {
+          name: formData.name.trim(),
+          username: formData.username.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone.trim(),
+          role: formData.role,
+          status: formData.status === "Active",
+          facilityId:
+            formData.role === ROLES.PHARMACIST ||
+            formData.role === ROLES.PROCUREMENT
+              ? currentFacilityId || selectedUser.facilityId || null
+              : null,
+        };
+
+        if (formData.password && formData.password.trim()) {
+          payload.password = formData.password.trim();
+        }
+
+        await userService.updateUser(selectedUser.id, payload);
+        await fetchUsers();
+        handleCloseModal();
+      }
+    } catch (err) {
+      console.error("Failed to save user:", err);
+      const errMsg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "An unexpected error occurred while saving.";
+      setFormErrors((prev) => ({ ...prev, general: errMsg }));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Delete User Confirmation
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!selectedUser || !canDeleteUser(selectedUser)) return;
 
-    setUserList((prev) => prev.filter((u) => u.id !== selectedUser.id));
+    setIsDeleting(true);
+    setDeleteError("");
 
-    // If deleting the last item on the current page, adjust page if needed
-    if (paginatedUsers.length === 1 && currentPage > 1) {
-      setCurrentPage((prev) => prev - 1);
+    try {
+      await userService.deleteUser(selectedUser.id);
+      await fetchUsers();
+
+      if (paginatedUsers.length === 1 && currentPage > 1) {
+        setCurrentPage((prev) => prev - 1);
+      }
+      handleCloseModal();
+    } catch (err) {
+      console.error("Failed to delete user:", err);
+      const errMsg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "An unexpected error occurred while deleting the account.";
+      setDeleteError(errMsg);
+    } finally {
+      setIsDeleting(false);
     }
-
-    handleCloseModal();
   };
 
   return (
@@ -334,24 +433,50 @@ function UserManagement() {
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
               User Management
             </h1>
-            {/* Active Facility Indicator */}
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs font-bold text-blue-700">
-              <Building2 className="w-3.5 h-3.5" />
-              <span>{currentFacilityName}</span>
-            </span>
+            {facility?.name && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs font-bold text-blue-700">
+                <Building2 className="w-3.5 h-3.5" />
+                <span>{facility.name}</span>
+              </span>
+            )}
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            Manage system users, access roles, and credentials for <span className="font-semibold text-gray-700">{currentFacilityName}</span>
+            Manage system users, access roles, and credentials
+            {facility?.name ? (
+              <>
+                {" "}
+                for{" "}
+                <span className="font-semibold text-gray-700">
+                  {facility.name}
+                </span>
+              </>
+            ) : (
+              ""
+            )}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleOpenAddModal}
-          className="btn-primary self-start sm:self-auto shadow-sm"
-        >
-          <UserPlus className="w-4 h-4" />
-          <span>Add New User</span>
-        </button>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={fetchUsers}
+            disabled={isLoading}
+            className="btn-secondary p-2.5 text-gray-600 hover:text-blue-600"
+            title="Refresh Users"
+            aria-label="Refresh Users"
+          >
+            <RefreshCw
+              className={`w-4 h-4 ${isLoading ? "animate-spin text-blue-600" : ""}`}
+            />
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenAddModal}
+            className="btn-primary shadow-sm"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Add New User</span>
+          </button>
+        </div>
       </div>
 
       {/* 4 Total Stats Cards */}
@@ -506,7 +631,37 @@ function UserManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {paginatedUsers.length > 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td
+                    colSpan="6"
+                    className="px-6 py-12 text-center text-gray-400"
+                  >
+                    <Loader2 className="w-8 h-8 mx-auto mb-2 text-blue-600 animate-spin" />
+                    <p className="text-sm font-medium text-gray-600">
+                      Loading user accounts...
+                    </p>
+                  </td>
+                </tr>
+              ) : fetchError ? (
+                <tr>
+                  <td colSpan="6" className="px-6 py-12 text-center">
+                    <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-red-500" />
+                    <p className="text-sm font-semibold text-gray-900">
+                      Failed to load users
+                    </p>
+                    <p className="text-xs text-red-600 mt-1">{fetchError}</p>
+                    <button
+                      type="button"
+                      onClick={fetchUsers}
+                      className="btn-secondary mt-3 text-xs inline-flex items-center gap-1.5"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      Retry
+                    </button>
+                  </td>
+                </tr>
+              ) : paginatedUsers.length > 0 ? (
                 paginatedUsers.map((user) => {
                   const roleMeta = ROLE_DETAILS[user.role];
                   return (
@@ -518,7 +673,9 @@ function UserManagement() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 font-semibold text-white text-xs">
-                            {user.name.charAt(0)}
+                            {user.name
+                              ? user.name.charAt(0).toUpperCase()
+                              : "U"}
                           </div>
                           <div>
                             <div className="font-semibold text-gray-900 text-sm">
@@ -573,7 +730,7 @@ function UserManagement() {
 
                       {/* Created At */}
                       <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
-                        {user.createdAt}
+                        {user.createdAt || "—"}
                       </td>
 
                       {/* Actions */}
@@ -667,6 +824,13 @@ function UserManagement() {
         size="lg"
       >
         <form onSubmit={handleSaveUser} className="space-y-4">
+          {formErrors.general && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
+              <span>{formErrors.general}</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Full Name */}
             <div className="sm:col-span-2">
@@ -685,7 +849,9 @@ function UserManagement() {
                   onChange={handleInputChange}
                   placeholder="e.g. Dr. Jane Smith"
                   className={`input pl-10 ${
-                    formErrors.name ? "border-red-500 focus:border-red-500 focus:ring-red-500/30" : ""
+                    formErrors.name
+                      ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                      : ""
                   }`}
                 />
                 <UserIcon className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -715,7 +881,9 @@ function UserManagement() {
                   onChange={handleInputChange}
                   placeholder="jsmith"
                   className={`input pl-8 ${
-                    formErrors.username ? "border-red-500 focus:border-red-500 focus:ring-red-500/30" : ""
+                    formErrors.username
+                      ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                      : ""
                   }`}
                 />
               </div>
@@ -743,7 +911,9 @@ function UserManagement() {
                   onChange={handleInputChange}
                   placeholder="jane.smith@exaktmed.com"
                   className={`input pl-10 ${
-                    formErrors.email ? "border-red-500 focus:border-red-500 focus:ring-red-500/30" : ""
+                    formErrors.email
+                      ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                      : ""
                   }`}
                 />
                 <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -790,12 +960,27 @@ function UserManagement() {
                 onChange={handleInputChange}
                 className="input"
               >
-                {isSuperAdmin && (
-                  <option value={ROLES.SUPER_ADMIN}>Super Admin</option>
+                {isSuperAdmin ? (
+                  <>
+                    <option value={ROLES.SUPER_ADMIN}>Super Admin</option>
+                    <option value={ROLES.ADMIN}>Admin</option>
+                    <option value={ROLES.PHARMACIST}>Pharmacist Manager</option>
+                    <option value={ROLES.PROCUREMENT}>
+                      Procurement Officer
+                    </option>
+                  </>
+                ) : (
+                  <>
+                    {modalMode === "edit" &&
+                      selectedUser?.id === currentUser?.id && (
+                        <option value={ROLES.ADMIN}>Admin</option>
+                      )}
+                    <option value={ROLES.PHARMACIST}>Pharmacist Manager</option>
+                    <option value={ROLES.PROCUREMENT}>
+                      Procurement Officer
+                    </option>
+                  </>
                 )}
-                <option value={ROLES.ADMIN}>Admin</option>
-                <option value={ROLES.PHARMACIST}>Pharmacist Manager</option>
-                <option value={ROLES.PROCUREMENT}>Procurement Officer</option>
               </select>
             </div>
 
@@ -825,7 +1010,13 @@ function UserManagement() {
                 htmlFor="user-password"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
               >
-                {modalMode === "add" ? "Default Password" : "Reset Password"}
+                {modalMode === "add" ? (
+                  <>
+                    Default Password <span className="text-red-500">*</span>
+                  </>
+                ) : (
+                  "Reset Password"
+                )}
               </label>
               <div className="relative">
                 <input
@@ -834,16 +1025,30 @@ function UserManagement() {
                   name="password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  placeholder="••••••••"
-                  className="input pl-10"
+                  placeholder={
+                    modalMode === "add"
+                      ? "Temporary password"
+                      : "Leave blank to keep current password"
+                  }
+                  className={`input pl-10 ${
+                    formErrors.password
+                      ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                      : ""
+                  }`}
                 />
                 <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
-              <p className="text-[11px] text-gray-400 mt-1">
-                {modalMode === "add"
-                  ? "Standard temporary password for first login."
-                  : "Leave untouched to keep current password."}
-              </p>
+              {formErrors.password ? (
+                <p className="text-xs text-red-500 mt-1">
+                  {formErrors.password}
+                </p>
+              ) : (
+                <p className="text-[11px] text-gray-400 mt-1">
+                  {modalMode === "add"
+                    ? "Standard temporary password for first login."
+                    : "Leave blank to keep existing password."}
+                </p>
+              )}
             </div>
           </div>
 
@@ -852,12 +1057,24 @@ function UserManagement() {
             <button
               type="button"
               onClick={handleCloseModal}
+              disabled={isSubmitting}
               className="btn-secondary"
             >
               Cancel
             </button>
-            <button type="submit" className="btn-primary">
-              {modalMode === "add" ? (
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="btn-primary flex items-center gap-1.5"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>
+                    {modalMode === "add" ? "Creating..." : "Saving..."}
+                  </span>
+                </>
+              ) : modalMode === "add" ? (
                 <>
                   <UserPlus className="w-4 h-4" />
                   <span>Create User</span>
@@ -885,7 +1102,9 @@ function UserManagement() {
             {/* Header Avatar & Name */}
             <div className="flex items-center gap-4 p-4 rounded-xl bg-gray-50 border border-gray-100">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 font-bold text-white text-xl shadow-sm">
-                {selectedUser.name.charAt(0)}
+                {selectedUser.name
+                  ? selectedUser.name.charAt(0).toUpperCase()
+                  : "U"}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -898,7 +1117,8 @@ function UserManagement() {
                       "bg-gray-100 text-gray-700 border-gray-200"
                     }`}
                   >
-                    {selectedUser.role}
+                    {ROLE_DETAILS[selectedUser.role]?.label ||
+                      selectedUser.role}
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 font-mono mt-0.5">
@@ -993,7 +1213,7 @@ function UserManagement() {
                   <button
                     type="button"
                     onClick={() => handleOpenEditModal(selectedUser)}
-                    className="btn-primary text-xs"
+                    className="btn-primary text-xs flex items-center gap-1.5"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                     <span>Edit User</span>
@@ -1029,10 +1249,17 @@ function UserManagement() {
               </div>
             </div>
 
+            {deleteError && (
+              <div className="p-3 rounded-lg bg-red-100 border border-red-200 text-xs text-red-700 font-medium">
+                {deleteError}
+              </div>
+            )}
+
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
               <button
                 type="button"
                 onClick={handleCloseModal}
+                disabled={isDeleting}
                 className="btn-secondary text-xs"
               >
                 Cancel
@@ -1040,10 +1267,20 @@ function UserManagement() {
               <button
                 type="button"
                 onClick={handleConfirmDelete}
-                className="btn-danger text-xs"
+                disabled={isDeleting}
+                className="btn-danger text-xs flex items-center gap-1.5"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Account</span>
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Account</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
