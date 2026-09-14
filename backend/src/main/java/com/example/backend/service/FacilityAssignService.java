@@ -131,6 +131,66 @@ public class FacilityAssignService {
         return mapToResponseDto(link);
     }
 
+    // 5. GET ASSIGNED FACILITIES FOR CURRENT AUTHENTICATED USER
+    @PreAuthorize("isAuthenticated()")
+    public List<FacilityResponseDto> getMyAssignedFacilities() {
+        User currentUser = getCurrentUser();
+        List<UserFacilityLink> links = userFacilityLinkRepository.findByUserId(currentUser.getId());
+
+        return links.stream()
+                .map(UserFacilityLink::getFacility)
+                .distinct()
+                .map(this::mapFacilityToDtoWithAssignedUsers)
+                .collect(Collectors.toList());
+    }
+
+    // 6. GET ALL USERS ASSIGNED TO A SPECIFIC FACILITY
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
+    public List<UserResponseDto> getUsersByFacilityId(Long facilityId) {
+        return userFacilityLinkRepository.findByFacilityId(facilityId)
+                .stream()
+                .map(link -> {
+                    User u = link.getUser();
+                    return new UserResponseDto(
+                            u.getId(),
+                            u.getName(),
+                            u.getUsername(),
+                            u.getEmail(),
+                            u.getPhone(),
+                            u.getRole(),
+                            u.getStatus(),
+                            facilityId,
+                            u.getCreatedAt(),
+                            null
+                    );
+                })
+                .collect(Collectors.toList());
+    }
+
+    // Helper: Map Facility to FacilityResponseDto with populated assignedUserIds
+    private FacilityResponseDto mapFacilityToDtoWithAssignedUsers(Facility f) {
+        List<Long> assignedUserIds = userFacilityLinkRepository.findByFacilityId(f.getId())
+                .stream()
+                .map(link -> link.getUser().getId())
+                .collect(Collectors.toList());
+
+        FacilityResponseDto dto = new FacilityResponseDto();
+        dto.setId(f.getId());
+        dto.setProjectId(f.getProject() != null ? f.getProject().getId() : null);
+        dto.setProjectName(f.getProject() != null ? f.getProject().getName() : null);
+        dto.setFacilityCode(f.getFacilityCode());
+        dto.setName(f.getName());
+        dto.setContactPerson(f.getContactPerson());
+        dto.setEmail(f.getEmail());
+        dto.setPhone(f.getPhone());
+        dto.setAddress(f.getAddress());
+        dto.setStatus(f.getStatus());
+        dto.setCreatedAt(f.getCreatedAt());
+        dto.setUpdatedAt(f.getUpdatedAt());
+        dto.setAssignedUserIds(assignedUserIds);
+        return dto;
+    }
+
     // Helper: Retrieve the currently authenticated User entity
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

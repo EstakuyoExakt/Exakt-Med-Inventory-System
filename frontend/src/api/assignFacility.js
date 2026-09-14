@@ -6,6 +6,8 @@ const assignFacilityApi = {
   unassignUsersFromFacility: (facilityId) => `${API_URL}/${facilityId}`,
   getAllAssignments: `${API_URL}`,
   getAssignmentById: (id) => `${API_URL}/${id}`,
+  getMyAssignedFacilities: `${API_URL}/my-facilities`,
+  getUsersByFacilityId: (facilityId) => `${API_URL}/${facilityId}/users`,
 };
 
 export default assignFacilityApi;

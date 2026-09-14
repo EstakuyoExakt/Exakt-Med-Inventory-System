@@ -131,7 +131,7 @@ function SelectFacility() {
 
   // Fetch facilities from backend API:
   // - Super Admin: fetch all facilities for the selected active project
-  // - Admin & staff: fetch assignments directly to display only their assigned facilities
+  // - Admin & staff: fetch assigned facilities directly from backend
   const fetchFacilities = useCallback(async () => {
     if (isSuperAdmin) {
       const targetProjectId = activeProject?.id;
@@ -144,50 +144,9 @@ function SelectFacility() {
       try {
         setIsLoadingFacilities(true);
         setFetchFacilitiesError("");
-        const [facsData, assignmentsRes] = await Promise.allSettled([
-          facilityService.getFacilitiesByProjectId(targetProjectId),
-          assignFacilityService.getAllAssignments(),
-        ]);
-
-        const rawFacilities =
-          facsData.status === "fulfilled" && Array.isArray(facsData.value)
-            ? facsData.value
-            : [];
-
-        const assignments =
-          assignmentsRes.status === "fulfilled" &&
-          Array.isArray(assignmentsRes.value)
-            ? assignmentsRes.value
-            : [];
-
-        const facilityUserMap = {};
-        const facilityUsernameMap = {};
-        assignments.forEach((link) => {
-          const uid = link.user?.id;
-          const uname = link.user?.username?.toLowerCase();
-          const fid = link.facility?.id;
-          if (fid) {
-            if (uid) {
-              if (!facilityUserMap[fid]) facilityUserMap[fid] = [];
-              if (!facilityUserMap[fid].includes(uid))
-                facilityUserMap[fid].push(uid);
-            }
-            if (uname) {
-              if (!facilityUsernameMap[fid]) facilityUsernameMap[fid] = [];
-              if (!facilityUsernameMap[fid].includes(uname))
-                facilityUsernameMap[fid].push(uname);
-            }
-          }
-        });
-
-        const mergedFacilities = rawFacilities.map((fac) => ({
-          ...fac,
-          assignedUserIds: facilityUserMap[fac.id] || fac.assignedUserIds || [],
-          assignedUsernames:
-            facilityUsernameMap[fac.id] || fac.assignedUsernames || [],
-        }));
-
-        setFacilityList(mergedFacilities);
+        const facilities =
+          await facilityService.getFacilitiesByProjectId(targetProjectId);
+        setFacilityList(Array.isArray(facilities) ? facilities : []);
       } catch (err) {
         console.error("Failed to fetch facilities by project:", err);
         const errMsg =
@@ -204,60 +163,15 @@ function SelectFacility() {
       return;
     }
 
-    // Non-SuperAdmin (Admin, Pharmacist, Procurement): fetch their assigned facilities directly
+    // Admin & staff: fetch assigned facilities directly from backend
     try {
       setIsLoadingFacilities(true);
       setFetchFacilitiesError("");
-
-      const assignmentsRes = await assignFacilityService.getAllAssignments();
-      const assignments = Array.isArray(assignmentsRes) ? assignmentsRes : [];
-
-      const currentUsername = user?.username?.toLowerCase();
-      const facilityUserMap = {};
-      const facilityUsernameMap = {};
-      const myAssignedFacilitiesMap = new Map();
-
-      assignments.forEach((link) => {
-        const uid = link.user?.id;
-        const uname = link.user?.username?.toLowerCase();
-        const fid = link.facility?.id;
-        if (fid) {
-          if (uid) {
-            if (!facilityUserMap[fid]) facilityUserMap[fid] = [];
-            if (!facilityUserMap[fid].includes(uid))
-              facilityUserMap[fid].push(uid);
-          }
-          if (uname) {
-            if (!facilityUsernameMap[fid]) facilityUsernameMap[fid] = [];
-            if (!facilityUsernameMap[fid].includes(uname))
-              facilityUsernameMap[fid].push(uname);
-          }
-        }
-
-        const isMatch =
-          (user?.id && uid === user.id) ||
-          (currentUsername && uname === currentUsername);
-
-        if (isMatch && link.facility && link.facility.id) {
-          if (!myAssignedFacilitiesMap.has(link.facility.id)) {
-            myAssignedFacilitiesMap.set(link.facility.id, {
-              ...link.facility,
-              isAssignedToCurrentUser: true,
-            });
-          }
-        }
-      });
-
-      const myFacilities = Array.from(myAssignedFacilitiesMap.values()).map(
-        (fac) => ({
-          ...fac,
-          assignedUserIds: facilityUserMap[fac.id] || fac.assignedUserIds || [],
-          assignedUsernames:
-            facilityUsernameMap[fac.id] || fac.assignedUsernames || [],
-        }),
-      );
-
-      setFacilityList(myFacilities);
+      const facilities = await assignFacilityService.getMyAssignedFacilities();
+      const list = Array.isArray(facilities)
+        ? facilities.map((fac) => ({ ...fac, isAssignedToCurrentUser: true }))
+        : [];
+      setFacilityList(list);
     } catch (err) {
       console.error("Failed to fetch assigned facilities:", err);
       const errMsg =
@@ -271,79 +185,23 @@ function SelectFacility() {
     } finally {
       setIsLoadingFacilities(false);
     }
-  }, [isSuperAdmin, activeProject?.id, user]);
+  }, [isSuperAdmin, activeProject?.id]);
 
-  // Fetch users and assignments from backend API
-  const fetchUsersAndAssignments = useCallback(async () => {
+  // Fetch users list for account creation & facility assignment
+  const fetchUsers = useCallback(async () => {
     if (!isSuperAdminOrAdmin) return;
     try {
-      const [usersRes, assignmentsRes] = await Promise.allSettled([
-        userService.getAllUsers(),
-        assignFacilityService.getAllAssignments(),
-      ]);
-
-      const backendUsers =
-        usersRes.status === "fulfilled" && Array.isArray(usersRes.value)
-          ? usersRes.value
-          : [];
-
-      const backendAssignments =
-        assignmentsRes.status === "fulfilled" &&
-        Array.isArray(assignmentsRes.value)
-          ? assignmentsRes.value
-          : [];
-
-      const facilityUserMap = {};
-      const facilityUsernameMap = {};
-      const userFacilityMap = {};
-
-      backendAssignments.forEach((link) => {
-        const uid = link.user?.id;
-        const uname = link.user?.username?.toLowerCase();
-        const fid = link.facility?.id;
-        if (fid) {
-          if (uid) {
-            if (!facilityUserMap[fid]) facilityUserMap[fid] = [];
-            if (!facilityUserMap[fid].includes(uid))
-              facilityUserMap[fid].push(uid);
-          }
-          if (uname) {
-            if (!facilityUsernameMap[fid]) facilityUsernameMap[fid] = [];
-            if (!facilityUsernameMap[fid].includes(uname))
-              facilityUsernameMap[fid].push(uname);
-          }
-        }
-
-        if (uid && fid) {
-          if (!userFacilityMap[uid]) userFacilityMap[uid] = [];
-          if (!userFacilityMap[uid].includes(fid))
-            userFacilityMap[uid].push(fid);
-        }
-      });
-
-      if (backendUsers.length > 0) {
+      const backendUsers = await userService.getAllUsers();
+      if (Array.isArray(backendUsers)) {
         setUserList(
           backendUsers.map((u) => ({
             ...u,
             status: u.status ? "Active" : "Inactive",
-            assignedFacilities: [
-              ...(userFacilityMap[u.id] || []),
-              ...(u.facilityId ? [u.facilityId] : []),
-            ],
           })),
         );
       }
-
-      setFacilityList((prevFacilities) =>
-        prevFacilities.map((fac) => ({
-          ...fac,
-          assignedUserIds: facilityUserMap[fac.id] || fac.assignedUserIds || [],
-          assignedUsernames:
-            facilityUsernameMap[fac.id] || fac.assignedUsernames || [],
-        })),
-      );
     } catch (err) {
-      console.error("Failed to load users or assignments:", err);
+      console.error("Failed to load users:", err);
     }
   }, [isSuperAdminOrAdmin]);
 
@@ -358,46 +216,21 @@ function SelectFacility() {
     }
 
     if (isSuperAdminOrAdmin) {
-      fetchUsersAndAssignments();
+      fetchUsers();
     }
   }, [
     activeProject?.id,
     isSuperAdmin,
     isSuperAdminOrAdmin,
     fetchFacilities,
-    fetchUsersAndAssignments,
+    fetchUsers,
   ]);
 
-  // Filter facilities assigned to the user (Super Admins see all for project; Admins and others see assigned only)
+  // Facilities assigned to the user (Super Admins: all for active project; Admins/staff: backend provides assigned only)
   const userAssignedFacilities = useMemo(() => {
     if (!user) return [];
-
-    // Super Admins: access to all facilities loaded for this project
-    if (isSuperAdmin) {
-      return facilityList;
-    }
-
-    const currentUsername = user.username?.toLowerCase();
-
-    // Admins and staff: access to their assigned facilities only
-    return facilityList.filter((facility) => {
-      if (facility.isAssignedToCurrentUser) return true;
-      if (user.id && facility.assignedUserIds?.includes(user.id)) return true;
-      if (
-        currentUsername &&
-        facility.assignedUsernames?.includes(currentUsername)
-      ) {
-        return true;
-      }
-      if (
-        Array.isArray(user.assignedFacilities) &&
-        user.assignedFacilities.includes(facility.id)
-      ) {
-        return true;
-      }
-      return false;
-    });
-  }, [user, isSuperAdmin, facilityList]);
+    return facilityList;
+  }, [user, facilityList]);
 
   const projectHasNoFacilities = userAssignedFacilities.length === 0;
 
@@ -759,46 +592,75 @@ function SelectFacility() {
   // Helper: Get users assigned to a specific facility
   const getAssignedUsers = (facilityId) => {
     const fac = facilityList.find((f) => f.id === Number(facilityId));
-    return userList.filter((u) => {
-      if (u.role === ROLES.SUPER_ADMIN || u.role === "Super Admin")
-        return false;
-      const inUserFacilities =
-        Array.isArray(u.assignedFacilities) &&
-        u.assignedFacilities.includes(Number(facilityId));
-      const inFacilityUsers =
-        fac &&
-        Array.isArray(fac.assignedUserIds) &&
-        fac.assignedUserIds.includes(u.id);
-      return inUserFacilities || inFacilityUsers;
-    });
+    if (!fac || !Array.isArray(fac.assignedUserIds)) return [];
+    return userList.filter(
+      (u) =>
+        u.role !== ROLES.SUPER_ADMIN &&
+        u.role !== "Super Admin" &&
+        fac.assignedUserIds.includes(u.id),
+    );
   };
 
   // --- Assign Users Modal Handlers ---
-  const handleOpenAssignUsersModal = (facility) => {
+  const handleOpenAssignUsersModal = async (facility) => {
     if (!isSuperAdminOrAdmin) return;
-    const targetFacility = facility || filteredFacilities[0] || facilityList[0];
+    const targetFacility =
+      facility ||
+      userAssignedFacilities[0] ||
+      filteredFacilities[0] ||
+      facilityList[0];
     if (!targetFacility) return;
 
-    setSelectedFacilityIdForAssignment(targetFacility.id);
-
-    const currentlyAssignedUserIds = getAssignedUsers(targetFacility.id).map(
-      (u) => u.id,
-    );
-    setSelectedUserIds(currentlyAssignedUserIds);
+    const fid = targetFacility.id;
+    setSelectedFacilityIdForAssignment(fid);
     setUserSearchTerm("");
     setAssignSuccessMsg("");
     setAssignErrorMsg("");
     setIsAssignUserModalOpen(true);
+
+    // Immediate selection from cached assignedUserIds if available
+    if (Array.isArray(targetFacility.assignedUserIds)) {
+      setSelectedUserIds(targetFacility.assignedUserIds);
+    }
+
+    // Fetch on-demand assigned users specifically for this facility
+    try {
+      const assignedUsers = await assignFacilityService.getUsersByFacilityId(fid);
+      const userIds = Array.isArray(assignedUsers)
+        ? assignedUsers.map((u) => u.id)
+        : [];
+      setSelectedUserIds(userIds);
+      setFacilityList((prev) =>
+        prev.map((f) => (f.id === fid ? { ...f, assignedUserIds: userIds } : f)),
+      );
+    } catch (err) {
+      console.error("Failed to load facility assigned users:", err);
+    }
   };
 
-  const handleFacilityChangeInModal = (facilityId) => {
+  const handleFacilityChangeInModal = async (facilityId) => {
     const fid = Number(facilityId);
     setSelectedFacilityIdForAssignment(fid);
-
-    const currentlyAssignedUserIds = getAssignedUsers(fid).map((u) => u.id);
-    setSelectedUserIds(currentlyAssignedUserIds);
     setAssignSuccessMsg("");
     setAssignErrorMsg("");
+
+    const targetFac = facilityList.find((f) => f.id === fid);
+    if (targetFac && Array.isArray(targetFac.assignedUserIds)) {
+      setSelectedUserIds(targetFac.assignedUserIds);
+    }
+
+    try {
+      const assignedUsers = await assignFacilityService.getUsersByFacilityId(fid);
+      const userIds = Array.isArray(assignedUsers)
+        ? assignedUsers.map((u) => u.id)
+        : [];
+      setSelectedUserIds(userIds);
+      setFacilityList((prev) =>
+        prev.map((f) => (f.id === fid ? { ...f, assignedUserIds: userIds } : f)),
+      );
+    } catch (err) {
+      console.error("Failed to load facility assigned users:", err);
+    }
   };
 
   const handleToggleUser = (userId) => {

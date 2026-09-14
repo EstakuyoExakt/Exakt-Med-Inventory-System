@@ -58,6 +58,28 @@ const assignFacilityService = {
     });
     return response.data;
   },
+
+  getMyAssignedFacilities: async (config = {}) => {
+    const response = await axios.get(
+      assignFacilityApi.getMyAssignedFacilities,
+      {
+        ...config,
+        headers: getAuthHeaders(config),
+      },
+    );
+    return response.data;
+  },
+
+  getUsersByFacilityId: async (facilityId, config = {}) => {
+    const response = await axios.get(
+      assignFacilityApi.getUsersByFacilityId(facilityId),
+      {
+        ...config,
+        headers: getAuthHeaders(config),
+      },
+    );
+    return response.data;
+  },
 };
 
 export default assignFacilityService;

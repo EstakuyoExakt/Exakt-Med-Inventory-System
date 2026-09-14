@@ -6,6 +6,7 @@ import com.example.backend.entity.Facility;
 import com.example.backend.entity.Project;
 import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.ProjectRepository;
+import com.example.backend.repository.UserFacilityLinkRepository;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,10 +19,14 @@ public class FacilityService {
 
     private final FacilityRepository facilityRepository;
     private final ProjectRepository projectRepository;
+    private final UserFacilityLinkRepository userFacilityLinkRepository;
 
-    public FacilityService(FacilityRepository facilityRepository, ProjectRepository projectRepository) {
+    public FacilityService(FacilityRepository facilityRepository,
+                           ProjectRepository projectRepository,
+                           UserFacilityLinkRepository userFacilityLinkRepository) {
         this.facilityRepository = facilityRepository;
         this.projectRepository = projectRepository;
+        this.userFacilityLinkRepository = userFacilityLinkRepository;
     }
 
     // 1. CREATE FACILITY (SuperAdmin and Admin)
@@ -125,6 +130,13 @@ public class FacilityService {
         response.setCreatedAt(facility.getCreatedAt());
         response.setUpdatedAt(facility.getUpdatedAt());
         response.setMessage(message);
+
+        List<Long> assignedUserIds = userFacilityLinkRepository.findByFacilityId(facility.getId())
+                .stream()
+                .map(link -> link.getUser().getId())
+                .collect(Collectors.toList());
+        response.setAssignedUserIds(assignedUserIds);
+
         return response;
     }
 }

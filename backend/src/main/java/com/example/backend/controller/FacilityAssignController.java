@@ -2,6 +2,8 @@ package com.example.backend.controller;
 
 import com.example.backend.dto.assign.FacilityAssignRequestDto;
 import com.example.backend.dto.assign.FacilityAssignResponseDto;
+import com.example.backend.dto.facility.FacilityResponseDto;
+import com.example.backend.dto.user.UserResponseDto;
 import com.example.backend.service.FacilityAssignService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -47,5 +49,17 @@ public class FacilityAssignController {
     @GetMapping("/{id}")
     public ResponseEntity<FacilityAssignResponseDto> getAssignmentById(@PathVariable Long id) {
         return ResponseEntity.ok(facilityAssignService.getAssignmentById(id));
+    }
+
+    // 5. GET ASSIGNED FACILITIES FOR CURRENT AUTHENTICATED USER
+    @GetMapping("/my-facilities")
+    public ResponseEntity<List<FacilityResponseDto>> getMyAssignedFacilities() {
+        return ResponseEntity.ok(facilityAssignService.getMyAssignedFacilities());
+    }
+
+    // 6. GET ALL USERS ASSIGNED TO A SPECIFIC FACILITY
+    @GetMapping("/{facilityId}/users")
+    public ResponseEntity<List<UserResponseDto>> getUsersByFacilityId(@PathVariable Long facilityId) {
+        return ResponseEntity.ok(facilityAssignService.getUsersByFacilityId(facilityId));
     }
 }
