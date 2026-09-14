@@ -1,7 +1,7 @@
 import { Navigate, Outlet } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
 
-function ProtectedRoute({ allowedRoles }) {
+function ProtectedRoute({ allowedRoles, redirectTo = "/unauthorized" }) {
   const { user, isAuthenticated } = useAuth();
 
   // If not logged in, redirect to login page
@@ -9,13 +9,13 @@ function ProtectedRoute({ allowedRoles }) {
     return <Navigate to="/" replace />;
   }
 
-  // If role-restricted and user's role is not included, redirect to unauthorized
+  // If role-restricted and user's role is not included, redirect
   if (
     allowedRoles &&
     allowedRoles.length > 0 &&
     !allowedRoles.includes(user.role)
   ) {
-    return <Navigate to="/unauthorized" replace />;
+    return <Navigate to={redirectTo} replace />;
   }
 
   // Render child routes

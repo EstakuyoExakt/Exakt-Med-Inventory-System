@@ -120,80 +120,158 @@ function SelectFacility() {
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [createUserErrorMsg, setCreateUserErrorMsg] = useState("");
 
-  // If not logged in, redirect back to login. If Admin has no project selected, redirect to select-project
+  // If Super Admin has no project selected, redirect to select-project
   useEffect(() => {
-    if (!isAuthenticated || !user) {
-      navigate("/", { replace: true });
-      return;
-    }
-    if (isAdmin && !activeProject) {
+    if (isSuperAdmin && !activeProject) {
       navigate("/select-project", { replace: true });
     }
-  }, [isAuthenticated, user, isAdmin, activeProject, navigate]);
+  }, [isSuperAdmin, activeProject, navigate]);
 
   const isSuperAdminOrAdmin = isAdmin;
 
-  // Fetch facilities from backend API for the active project
+  // Fetch facilities from backend API:
+  // - Super Admin: fetch all facilities for the selected active project
+  // - Admin & staff: fetch assignments directly to display only their assigned facilities
   const fetchFacilities = useCallback(async () => {
-    const targetProjectId = activeProject?.id;
-    if (!targetProjectId) {
-      setFacilityList([]);
-      setIsLoadingFacilities(false);
+    if (isSuperAdmin) {
+      const targetProjectId = activeProject?.id;
+      if (!targetProjectId) {
+        setFacilityList([]);
+        setIsLoadingFacilities(false);
+        return;
+      }
+
+      try {
+        setIsLoadingFacilities(true);
+        setFetchFacilitiesError("");
+        const [facsData, assignmentsRes] = await Promise.allSettled([
+          facilityService.getFacilitiesByProjectId(targetProjectId),
+          assignFacilityService.getAllAssignments(),
+        ]);
+
+        const rawFacilities =
+          facsData.status === "fulfilled" && Array.isArray(facsData.value)
+            ? facsData.value
+            : [];
+
+        const assignments =
+          assignmentsRes.status === "fulfilled" &&
+          Array.isArray(assignmentsRes.value)
+            ? assignmentsRes.value
+            : [];
+
+        const facilityUserMap = {};
+        const facilityUsernameMap = {};
+        assignments.forEach((link) => {
+          const uid = link.user?.id;
+          const uname = link.user?.username?.toLowerCase();
+          const fid = link.facility?.id;
+          if (fid) {
+            if (uid) {
+              if (!facilityUserMap[fid]) facilityUserMap[fid] = [];
+              if (!facilityUserMap[fid].includes(uid))
+                facilityUserMap[fid].push(uid);
+            }
+            if (uname) {
+              if (!facilityUsernameMap[fid]) facilityUsernameMap[fid] = [];
+              if (!facilityUsernameMap[fid].includes(uname))
+                facilityUsernameMap[fid].push(uname);
+            }
+          }
+        });
+
+        const mergedFacilities = rawFacilities.map((fac) => ({
+          ...fac,
+          assignedUserIds: facilityUserMap[fac.id] || fac.assignedUserIds || [],
+          assignedUsernames:
+            facilityUsernameMap[fac.id] || fac.assignedUsernames || [],
+        }));
+
+        setFacilityList(mergedFacilities);
+      } catch (err) {
+        console.error("Failed to fetch facilities by project:", err);
+        const errMsg =
+          err.response?.data?.message ||
+          err.response?.data?.error ||
+          err.message ||
+          "Failed to load facilities from server.";
+        setFetchFacilitiesError(
+          typeof errMsg === "string" ? errMsg : "Failed to load facilities.",
+        );
+      } finally {
+        setIsLoadingFacilities(false);
+      }
       return;
     }
 
+    // Non-SuperAdmin (Admin, Pharmacist, Procurement): fetch their assigned facilities directly
     try {
       setIsLoadingFacilities(true);
       setFetchFacilitiesError("");
-      const [facsData, assignmentsRes] = await Promise.allSettled([
-        facilityService.getFacilitiesByProjectId(targetProjectId),
-        isSuperAdminOrAdmin
-          ? assignFacilityService.getAllAssignments()
-          : Promise.resolve([]),
-      ]);
 
-      const rawFacilities =
-        facsData.status === "fulfilled" && Array.isArray(facsData.value)
-          ? facsData.value
-          : [];
+      const assignmentsRes = await assignFacilityService.getAllAssignments();
+      const assignments = Array.isArray(assignmentsRes) ? assignmentsRes : [];
 
-      const assignments =
-        assignmentsRes.status === "fulfilled" &&
-        Array.isArray(assignmentsRes.value)
-          ? assignmentsRes.value
-          : [];
-
+      const currentUsername = user?.username?.toLowerCase();
       const facilityUserMap = {};
+      const facilityUsernameMap = {};
+      const myAssignedFacilitiesMap = new Map();
+
       assignments.forEach((link) => {
         const uid = link.user?.id;
+        const uname = link.user?.username?.toLowerCase();
         const fid = link.facility?.id;
-        if (uid && fid) {
-          if (!facilityUserMap[fid]) facilityUserMap[fid] = [];
-          if (!facilityUserMap[fid].includes(uid))
-            facilityUserMap[fid].push(uid);
+        if (fid) {
+          if (uid) {
+            if (!facilityUserMap[fid]) facilityUserMap[fid] = [];
+            if (!facilityUserMap[fid].includes(uid))
+              facilityUserMap[fid].push(uid);
+          }
+          if (uname) {
+            if (!facilityUsernameMap[fid]) facilityUsernameMap[fid] = [];
+            if (!facilityUsernameMap[fid].includes(uname))
+              facilityUsernameMap[fid].push(uname);
+          }
+        }
+
+        const isMatch =
+          (user?.id && uid === user.id) ||
+          (currentUsername && uname === currentUsername);
+
+        if (isMatch && link.facility && link.facility.id) {
+          if (!myAssignedFacilitiesMap.has(link.facility.id)) {
+            myAssignedFacilitiesMap.set(link.facility.id, {
+              ...link.facility,
+              isAssignedToCurrentUser: true,
+            });
+          }
         }
       });
 
-      const mergedFacilities = rawFacilities.map((fac) => ({
-        ...fac,
-        assignedUserIds: facilityUserMap[fac.id] || fac.assignedUserIds || [],
-      }));
+      const myFacilities = Array.from(myAssignedFacilitiesMap.values()).map(
+        (fac) => ({
+          ...fac,
+          assignedUserIds: facilityUserMap[fac.id] || fac.assignedUserIds || [],
+          assignedUsernames:
+            facilityUsernameMap[fac.id] || fac.assignedUsernames || [],
+        }),
+      );
 
-      setFacilityList(mergedFacilities);
+      setFacilityList(myFacilities);
     } catch (err) {
-      console.error("Failed to fetch facilities by project:", err);
+      console.error("Failed to fetch assigned facilities:", err);
       const errMsg =
         err.response?.data?.message ||
         err.response?.data?.error ||
         err.message ||
-        "Failed to load facilities from server.";
+        "Failed to load assigned facilities.";
       setFetchFacilitiesError(
-        typeof errMsg === "string" ? errMsg : "Failed to load facilities.",
+        typeof errMsg === "string" ? errMsg : "Failed to load assigned facilities.",
       );
     } finally {
       setIsLoadingFacilities(false);
     }
-  }, [activeProject?.id, isSuperAdminOrAdmin]);
+  }, [isSuperAdmin, activeProject?.id, user]);
 
   // Fetch users and assignments from backend API
   const fetchUsersAndAssignments = useCallback(async () => {
@@ -216,16 +294,27 @@ function SelectFacility() {
           : [];
 
       const facilityUserMap = {};
+      const facilityUsernameMap = {};
       const userFacilityMap = {};
 
       backendAssignments.forEach((link) => {
         const uid = link.user?.id;
+        const uname = link.user?.username?.toLowerCase();
         const fid = link.facility?.id;
-        if (uid && fid) {
-          if (!facilityUserMap[fid]) facilityUserMap[fid] = [];
-          if (!facilityUserMap[fid].includes(uid))
-            facilityUserMap[fid].push(uid);
+        if (fid) {
+          if (uid) {
+            if (!facilityUserMap[fid]) facilityUserMap[fid] = [];
+            if (!facilityUserMap[fid].includes(uid))
+              facilityUserMap[fid].push(uid);
+          }
+          if (uname) {
+            if (!facilityUsernameMap[fid]) facilityUsernameMap[fid] = [];
+            if (!facilityUsernameMap[fid].includes(uname))
+              facilityUsernameMap[fid].push(uname);
+          }
+        }
 
+        if (uid && fid) {
           if (!userFacilityMap[uid]) userFacilityMap[uid] = [];
           if (!userFacilityMap[uid].includes(fid))
             userFacilityMap[uid].push(fid);
@@ -249,6 +338,8 @@ function SelectFacility() {
         prevFacilities.map((fac) => ({
           ...fac,
           assignedUserIds: facilityUserMap[fac.id] || fac.assignedUserIds || [],
+          assignedUsernames:
+            facilityUsernameMap[fac.id] || fac.assignedUsernames || [],
         })),
       );
     } catch (err) {
@@ -257,44 +348,56 @@ function SelectFacility() {
   }, [isSuperAdminOrAdmin]);
 
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (isSuperAdmin) {
       if (activeProject?.id) {
         fetchFacilities();
       }
-      if (isSuperAdminOrAdmin) {
-        fetchUsersAndAssignments();
-      }
+    } else {
+      // Admins and staff go directly to select-facility without choosing a project
+      fetchFacilities();
+    }
+
+    if (isSuperAdminOrAdmin) {
+      fetchUsersAndAssignments();
     }
   }, [
-    isAuthenticated,
-    user,
     activeProject?.id,
+    isSuperAdmin,
     isSuperAdminOrAdmin,
     fetchFacilities,
     fetchUsersAndAssignments,
   ]);
 
-  // Filter facilities assigned to the user (and scoped by active project)
+  // Filter facilities assigned to the user (Super Admins see all for project; Admins and others see assigned only)
   const userAssignedFacilities = useMemo(() => {
     if (!user) return [];
 
-    // Super Admins & Admins: access to all facilities loaded for this project
-    if (isSuperAdmin || isAdmin) {
+    // Super Admins: access to all facilities loaded for this project
+    if (isSuperAdmin) {
       return facilityList;
     }
 
-    // If user has an assignedFacilities list, treat it as the primary source of truth
-    if (Array.isArray(user.assignedFacilities)) {
-      return facilityList.filter((facility) =>
-        user.assignedFacilities.includes(facility.id),
-      );
-    }
+    const currentUsername = user.username?.toLowerCase();
 
-    // Fallback: Filter by assignedUserIds on facility if user has no assignedFacilities defined
-    return facilityList.filter((facility) =>
-      facility.assignedUserIds?.includes(user.id),
-    );
-  }, [user, isSuperAdmin, isAdmin, facilityList]);
+    // Admins and staff: access to their assigned facilities only
+    return facilityList.filter((facility) => {
+      if (facility.isAssignedToCurrentUser) return true;
+      if (user.id && facility.assignedUserIds?.includes(user.id)) return true;
+      if (
+        currentUsername &&
+        facility.assignedUsernames?.includes(currentUsername)
+      ) {
+        return true;
+      }
+      if (
+        Array.isArray(user.assignedFacilities) &&
+        user.assignedFacilities.includes(facility.id)
+      ) {
+        return true;
+      }
+      return false;
+    });
+  }, [user, isSuperAdmin, facilityList]);
 
   const projectHasNoFacilities = userAssignedFacilities.length === 0;
 
@@ -317,6 +420,13 @@ function SelectFacility() {
     setSelectedFacilityId(facility.id);
     setIsSubmitting(true);
 
+    if (!activeProject && facility.projectId) {
+      setProject({
+        id: facility.projectId,
+        name: facility.projectName || "",
+      });
+    }
+
     setTimeout(() => {
       selectFacility(facility);
     }, 400);
@@ -328,7 +438,7 @@ function SelectFacility() {
 
   // Modal Handlers
   const handleOpenAddModal = () => {
-    if (!isSuperAdminOrAdmin) return;
+    if (!isSuperAdmin) return;
     setFormData(DEFAULT_FACILITY_FORM);
     setFormErrors({});
     setAddSuccessMsg("");
@@ -387,7 +497,7 @@ function SelectFacility() {
 
   const handleCreateFacilitySubmit = async (e) => {
     e.preventDefault();
-    if (!isSuperAdminOrAdmin) return;
+    if (!isSuperAdmin) return;
     if (!validateFacilityForm()) return;
 
     const targetProjectId = Number(activeProject?.id);
@@ -439,7 +549,7 @@ function SelectFacility() {
 
   // --- EDIT FACILITY HANDLERS ---
   const handleOpenEditModal = (fac) => {
-    if (!isSuperAdminOrAdmin) return;
+    if (!isSuperAdmin) return;
     setEditingFacility(fac);
     setEditFormData({
       name: fac.name || "",
@@ -514,7 +624,7 @@ function SelectFacility() {
 
   const handleUpdateFacilitySubmit = async (e) => {
     e.preventDefault();
-    if (!isSuperAdminOrAdmin) return;
+    if (!isSuperAdmin) return;
     if (!editingFacility) return;
     if (!validateEditFacilityForm()) return;
 
@@ -583,7 +693,7 @@ function SelectFacility() {
 
   // --- DELETE FACILITY HANDLERS ---
   const handleOpenDeleteModal = (fac) => {
-    if (!isSuperAdminOrAdmin) return;
+    if (!isSuperAdmin) return;
     setFacilityToDelete(fac);
     setDeleteFacilityError("");
     setIsDeleteModalOpen(true);
@@ -596,7 +706,7 @@ function SelectFacility() {
   };
 
   const handleConfirmDeleteFacility = async () => {
-    if (!isSuperAdminOrAdmin || !facilityToDelete) return;
+    if (!isSuperAdmin || !facilityToDelete) return;
     const targetId = facilityToDelete.id;
 
     try {
@@ -1006,8 +1116,8 @@ function SelectFacility() {
           title="Select Your Operating Facility"
           description={`Welcome back, ${user.name}. Please choose an assigned hospital branch or medical warehouse to access your workspace.`}
         >
-          {/* Admin & Super Admin Mother Project indicator and switcher */}
-          {isSuperAdminOrAdmin && activeProject && (
+          {/* Super Admin Mother Project indicator and switcher */}
+          {isSuperAdmin && activeProject && (
             <div className="pt-2 flex items-center justify-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 border border-purple-200 text-purple-700 text-xs font-semibold rounded-lg">
                 <Layers className="w-3.5 h-3.5" />
@@ -1060,15 +1170,17 @@ function SelectFacility() {
                 <Users className="w-3.5 h-3.5 text-blue-600" />
                 <span>Assign Users</span>
               </button>
-              <button
-                type="button"
-                onClick={handleOpenAddModal}
-                className="btn-primary py-2 px-3.5 text-xs shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer"
-                title="Create New Facility"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Create Facility</span>
-              </button>
+              <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN]}>
+                <button
+                  type="button"
+                  onClick={handleOpenAddModal}
+                  className="btn-primary py-2 px-3.5 text-xs shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer"
+                  title="Create New Facility"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Facility</span>
+                </button>
+              </RoleGuard>
             </div>
           </RoleGuard>
         </PortalToolbar>
@@ -1126,7 +1238,7 @@ function SelectFacility() {
                   onSelect={() => handleSelect(facility)}
                   onEdit={() => handleOpenEditModal(facility)}
                   onDelete={() => handleOpenDeleteModal(facility)}
-                  editRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]}
+                  editRoles={[ROLES.SUPER_ADMIN]}
                   editTitle="Edit Facility"
                   deleteTitle="Delete Facility"
                   assignedLabel="Assigned Users"
@@ -1171,28 +1283,28 @@ function SelectFacility() {
           <EmptyState
             icon={Building2}
             title={
-              projectHasNoFacilities && isSuperAdminOrAdmin
+              projectHasNoFacilities && isSuperAdmin && activeProject
                 ? "No Facilities in Project"
                 : "No Facilities Found"
             }
             description={
               searchQuery
                 ? "No assigned facilities match your search query."
-                : projectHasNoFacilities && activeProject
+                : isSuperAdmin && activeProject && projectHasNoFacilities
                   ? `The project "${activeProject.name}" currently contains no facilities. Create a facility to get started.`
-                  : "No assigned facilities are currently linked to your user account."
+                  : "No assigned facilities are currently linked to your user account. Please contact an administrator."
             }
             actionText={
               searchQuery
                 ? "Clear Search"
-                : isSuperAdminOrAdmin
+                : isSuperAdmin
                   ? "Create Facility"
                   : null
             }
             onAction={
               searchQuery
                 ? () => setSearchQuery("")
-                : isSuperAdminOrAdmin
+                : isSuperAdmin
                   ? handleOpenAddModal
                   : null
             }

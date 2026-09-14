@@ -49,11 +49,26 @@ function App() {
         }`}
       >
         <Routes>
-          {/* Public / Auth Routes */}
+          {/* Public Routes */}
           <Route path="/" element={<Login />} />
-          <Route path="/select-project" element={<SelectProject />} />
-          <Route path="/select-facility" element={<SelectFacility />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
+
+          {/* Super Admin Only: Project Selection */}
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={[ROLES.SUPER_ADMIN]}
+                redirectTo="/select-facility"
+              />
+            }
+          >
+            <Route path="/select-project" element={<SelectProject />} />
+          </Route>
+
+          {/* Authenticated: Facility Selection (All Roles) */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/select-facility" element={<SelectFacility />} />
+          </Route>
 
           {/* Admin Protected Routes */}
           <Route

@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class FacilityAssignService {
-
+    
     private final UserRepository userRepository;
     private final FacilityRepository facilityRepository;
     private final UserFacilityLinkRepository userFacilityLinkRepository;
@@ -115,7 +115,7 @@ public class FacilityAssignService {
     }
 
     // 3. GET ALL FACILITY ASSIGNMENTS (SuperAdmin and Admin)
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
+    @PreAuthorize("isAuthenticated()")
     public List<FacilityAssignResponseDto> getAllAssignments() {
         return userFacilityLinkRepository.findAll()
                 .stream()
@@ -124,7 +124,7 @@ public class FacilityAssignService {
     }
 
     // 4. GET ONE FACILITY ASSIGNMENT BY ID (SuperAdmin and Admin)
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
+    @PreAuthorize("isAuthenticated()")
     public FacilityAssignResponseDto getAssignmentById(Long id) {
         UserFacilityLink link = userFacilityLinkRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Assignment not found with id: " + id));

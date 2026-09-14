@@ -85,6 +85,17 @@ export function AuthProvider({ children }) {
     localStorage.setItem("currentUser", JSON.stringify(userData));
     setUser(userData);
 
+    // // Reset facility and project context on login
+    // localStorage.removeItem("currentFacility");
+    // setFacilityState(null);
+    // if (
+    //   userData.role !== ROLES.SUPER_ADMIN &&
+    //   userData.role !== "Super Admin"
+    // ) {
+    //   localStorage.removeItem("currentProject");
+    //   setProjectState(null);
+    // }
+
     const targetRoute = ROLE_DETAILS[userData?.role]?.initialRoute;
     navigate(targetRoute, { replace: true });
 

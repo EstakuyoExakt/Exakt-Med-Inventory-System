@@ -74,19 +74,6 @@ function SelectProject() {
   const [deleteError, setDeleteError] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // If not authenticated, redirect to login
-  useEffect(() => {
-    if (!isAuthenticated || !user) {
-      navigate("/", { replace: true });
-      return;
-    }
-
-    // Only Admin and Super Admin accounts use project selection; other roles go to facility selection
-    if (!isAdmin) {
-      navigate("/select-facility", { replace: true });
-    }
-  }, [isAuthenticated, user, isAdmin, navigate]);
-
   // Fetch projects from backend API
   const fetchProjects = useCallback(async () => {
     try {
@@ -394,13 +381,17 @@ function SelectProject() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-500">
             <Loader2 className="w-8 h-8 animate-spin text-purple-600 mb-3" />
-            <p className="text-sm font-medium">Loading projects from server...</p>
+            <p className="text-sm font-medium">
+              Loading projects from server...
+            </p>
           </div>
         ) : fetchError ? (
           <div className="p-6 bg-red-50 border border-red-200 rounded-2xl text-center space-y-3">
             <AlertCircle className="w-8 h-8 text-red-500 mx-auto" />
             <div>
-              <p className="font-semibold text-red-900">Unable to load projects</p>
+              <p className="font-semibold text-red-900">
+                Unable to load projects
+              </p>
               <p className="text-xs text-red-700 mt-1">{fetchError}</p>
             </div>
             <button
@@ -533,8 +524,8 @@ function SelectProject() {
                 Super Administrator Authority
               </p>
               <p className="mt-0.5 text-purple-700">
-                Create a new overarching mother project network. Child facilities
-                can be assigned under this project.
+                Create a new overarching mother project network. Child
+                facilities can be assigned under this project.
               </p>
             </div>
           </div>

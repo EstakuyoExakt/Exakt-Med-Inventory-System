@@ -19,7 +19,7 @@ export const ROLE_DETAILS = {
     description:
       "Facility system access, user management, and supplier settings",
     badgeColor: "bg-purple-100 text-purple-700 border-purple-200",
-    initialRoute: "/select-project",
+    initialRoute: "/select-facility",
     defaultRoute: "/admin/users",
   },
   [ROLES.PHARMACIST]: {
