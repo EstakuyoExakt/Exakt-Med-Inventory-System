@@ -4,7 +4,6 @@ const API_URL = `${BASE_URL}/api/projects`;
 const projectApi = {
   createProject: `${API_URL}`,
   getAllProjects: `${API_URL}`,
-  getProjectById: (id) => `${API_URL}/${id}`,
   updateProject: (id) => `${API_URL}/${id}`,
   deleteProject: (id) => `${API_URL}/${id}`,
 };

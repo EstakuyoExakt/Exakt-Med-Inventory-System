@@ -33,12 +33,6 @@ public class ProjectController {
         return ResponseEntity.ok(projectService.getAllProjects());
     }
 
-    // 3. GET PROJECT BY ID
-    @GetMapping("/{id}")
-    public ResponseEntity<ProjectResponseDto> getProjectById(@PathVariable Long id) {
-        return ResponseEntity.ok(projectService.getProjectById(id));
-    }
-
     // 4. UPDATE PROJECT
     @PutMapping("/{id}")
     public ResponseEntity<ProjectResponseDto> updateProject(

@@ -1,7 +1,6 @@
 package com.example.backend.controller;
 
 import com.example.backend.dto.assign.FacilityAssignRequestDto;
-import com.example.backend.dto.assign.FacilityAssignResponseDto;
 import com.example.backend.dto.facility.FacilityResponseDto;
 import com.example.backend.dto.user.UserResponseDto;
 import com.example.backend.service.FacilityAssignService;
@@ -39,19 +38,7 @@ public class FacilityAssignController {
         return ResponseEntity.ok(result);
     }
 
-    // 3. GET ALL FACILITY ASSIGNMENTS
-    @GetMapping
-    public ResponseEntity<List<FacilityAssignResponseDto>> getAllAssignments() {
-        return ResponseEntity.ok(facilityAssignService.getAllAssignments());
-    }
-
-    // 4. GET ONE FACILITY ASSIGNMENT BY ID
-    @GetMapping("/{id}")
-    public ResponseEntity<FacilityAssignResponseDto> getAssignmentById(@PathVariable Long id) {
-        return ResponseEntity.ok(facilityAssignService.getAssignmentById(id));
-    }
-
-    // 5. GET ASSIGNED FACILITIES FOR CURRENT AUTHENTICATED USER
+    // 3. GET ASSIGNED FACILITIES FOR CURRENT AUTHENTICATED USER
     @GetMapping("/my-facilities")
     public ResponseEntity<List<FacilityResponseDto>> getMyAssignedFacilities() {
         return ResponseEntity.ok(facilityAssignService.getMyAssignedFacilities());

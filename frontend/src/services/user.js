@@ -18,13 +18,6 @@ const userService = {
     return response.data;
   },
 
-  getUserById: async (id, config = {}) => {
-    const response = await axios.get(userApi.getUserById(id), {
-      ...config,
-      headers: getAuthHeaders(config),
-    });
-    return response.data;
-  },
 
   createUser: async (userData, config = {}) => {
     const response = await axios.post(userApi.createUser, userData, {

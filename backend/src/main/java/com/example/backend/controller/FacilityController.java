@@ -33,11 +33,7 @@ public class FacilityController {
         return ResponseEntity.ok(facilityService.getFacilitiesByProjectId(projectId));
     }
 
-    // 3. GET FACILITY BY ID
-    @GetMapping("/{id}")
-    public ResponseEntity<FacilityResponseDto> getFacilityById(@PathVariable Long id) {
-        return ResponseEntity.ok(facilityService.getFacilityById(id));
-    }
+
 
     // 4. UPDATE FACILITY
     @PutMapping("/{id}")

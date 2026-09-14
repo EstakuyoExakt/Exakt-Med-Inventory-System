@@ -60,22 +60,6 @@ public class ProjectService {
                 .collect(Collectors.toList());
     }
 
-    // 3. GET PROJECT BY ID (SuperAdmin only) - Includes associated facilities
-    @PreAuthorize("hasRole('SuperAdmin')")
-    public ProjectResponseDto getProjectById(Long id) {
-        Project project = projectRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Project not found with id: " + id));
-
-        List<FacilityResponseDto> facilities = facilityRepository.findByProjectId(project.getId())
-                .stream()
-                .map(this::mapFacilityToDto)
-                .collect(Collectors.toList());
-
-        ProjectResponseDto dto = mapToResponseDto(project, "Project Fetched Successfully");
-        dto.setFacilities(facilities);
-        return dto;
-    }
-
     // 4. UPDATE PROJECT (SuperAdmin only)
     @PreAuthorize("hasRole('SuperAdmin')")
     public ProjectResponseDto updateProject(Long id, ProjectRequestDto request) {

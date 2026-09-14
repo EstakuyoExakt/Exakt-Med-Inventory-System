@@ -90,14 +90,6 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 
-    // 3. GET USER BY ID
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
-    public UserResponseDto getUserById(Long id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
-        return mapToResponseDto(user, "User fetched successfully");
-    }
-
     // 4. UPDATE USER
     @Transactional
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")

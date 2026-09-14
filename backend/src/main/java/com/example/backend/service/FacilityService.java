@@ -68,14 +68,6 @@ public class FacilityService {
                 .collect(Collectors.toList());
     }
 
-    // 3. GET FACILITY BY ID (SuperAdmin and Admin)
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
-    public FacilityResponseDto getFacilityById(Long id) {
-        Facility facility = facilityRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Facility not found with id: " + id));
-        return mapToResponseDto(facility, "Facility Fetched Successfully");
-    }
-
     // 4. UPDATE FACILITY (SuperAdmin and Admin)
     @Transactional
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")

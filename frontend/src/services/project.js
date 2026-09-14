@@ -18,13 +18,6 @@ const projectService = {
     return response.data;
   },
 
-  getProjectById: async (id, config = {}) => {
-    const response = await axios.get(projectApi.getProjectById(id), {
-      ...config,
-      headers: getAuthHeaders(config),
-    });
-    return response.data;
-  },
 
   createProject: async (projectData, config = {}) => {
     const response = await axios.post(projectApi.createProject, projectData, {

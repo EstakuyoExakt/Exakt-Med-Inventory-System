@@ -18,13 +18,6 @@ const facilityService = {
     return response.data;
   },
 
-  getFacilityById: async (id, config = {}) => {
-    const response = await axios.get(facilityApi.getFacilityById(id), {
-      ...config,
-      headers: getAuthHeaders(config),
-    });
-    return response.data;
-  },
 
   createFacility: async (facilityData, config = {}) => {
     const response = await axios.post(facilityApi.createFacility, facilityData, {

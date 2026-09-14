@@ -1,7 +1,6 @@
 package com.example.backend.service;
 
 import com.example.backend.dto.assign.FacilityAssignRequestDto;
-import com.example.backend.dto.assign.FacilityAssignResponseDto;
 import com.example.backend.dto.facility.FacilityResponseDto;
 import com.example.backend.dto.user.UserResponseDto;
 import com.example.backend.entity.Facility;
@@ -114,22 +113,7 @@ public class FacilityAssignService {
         return "Successfully unassigned user IDs " + unassignedUserIds + " from facility '" + facility.getName() + "'";
     }
 
-    // 3. GET ALL FACILITY ASSIGNMENTS (SuperAdmin and Admin)
-    @PreAuthorize("isAuthenticated()")
-    public List<FacilityAssignResponseDto> getAllAssignments() {
-        return userFacilityLinkRepository.findAll()
-                .stream()
-                .map(this::mapToResponseDto)
-                .collect(Collectors.toList());
-    }
 
-    // 4. GET ONE FACILITY ASSIGNMENT BY ID (SuperAdmin and Admin)
-    @PreAuthorize("isAuthenticated()")
-    public FacilityAssignResponseDto getAssignmentById(Long id) {
-        UserFacilityLink link = userFacilityLinkRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Assignment not found with id: " + id));
-        return mapToResponseDto(link);
-    }
 
     // 5. GET ASSIGNED FACILITIES FOR CURRENT AUTHENTICATED USER
     @PreAuthorize("isAuthenticated()")
@@ -202,44 +186,4 @@ public class FacilityAssignService {
                 .orElseThrow(() -> new AccessDeniedException("Authenticated user not found"));
     }
 
-    // Helper: Map UserFacilityLink to FacilityAssignResponseDto
-    private FacilityAssignResponseDto mapToResponseDto(UserFacilityLink link) {
-        User u = link.getUser();
-        UserResponseDto userDto = new UserResponseDto(
-                u.getId(),
-                u.getName(),
-                u.getUsername(),
-                u.getEmail(),
-                u.getPhone(),
-                u.getRole(),
-                u.getStatus(),
-                link.getFacility().getId(),
-                u.getCreatedAt(),
-                null
-        );
-
-        Facility f = link.getFacility();
-        FacilityResponseDto facilityDto = new FacilityResponseDto(
-                f.getId(),
-                f.getProject() != null ? f.getProject().getId() : null,
-                f.getProject() != null ? f.getProject().getName() : null,
-                f.getFacilityCode(),
-                f.getName(),
-                f.getContactPerson(),
-                f.getEmail(),
-                f.getPhone(),
-                f.getAddress(),
-                f.getStatus(),
-                f.getCreatedAt(),
-                f.getUpdatedAt(),
-                null
-        );
-
-        return new FacilityAssignResponseDto(
-                link.getId(),
-                userDto,
-                facilityDto,
-                link.getAssignedAt()
-        );
-    }
 }

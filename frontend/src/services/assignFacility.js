@@ -43,21 +43,6 @@ const assignFacilityService = {
     return response.data;
   },
 
-  getAllAssignments: async (config = {}) => {
-    const response = await axios.get(assignFacilityApi.getAllAssignments, {
-      ...config,
-      headers: getAuthHeaders(config),
-    });
-    return response.data;
-  },
-
-  getAssignmentById: async (id, config = {}) => {
-    const response = await axios.get(assignFacilityApi.getAssignmentById(id), {
-      ...config,
-      headers: getAuthHeaders(config),
-    });
-    return response.data;
-  },
 
   getMyAssignedFacilities: async (config = {}) => {
     const response = await axios.get(
