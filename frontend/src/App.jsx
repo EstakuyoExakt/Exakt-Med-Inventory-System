@@ -7,7 +7,6 @@ import SelectProject from "./features/authentication/selectProject";
 import Unauthorized from "./features/authentication/unauthorized";
 
 // Admin Pages
-import FacilityManagement from "./features/admin/facilityManagement";
 import SupplierManagement from "./features/admin/supplierManagement";
 import UserManagement from "./features/admin/userManagement";
 import Accounting from "./features/admin/accounting";
@@ -64,7 +63,6 @@ function App() {
           >
             <Route path="/admin/users" element={<UserManagement />} />
             <Route path="/admin/suppliers" element={<SupplierManagement />} />
-            <Route path="/admin/facilities" element={<FacilityManagement />} />
             <Route
               path="/admin/requested-orders"
               element={<RequestedOrders />}

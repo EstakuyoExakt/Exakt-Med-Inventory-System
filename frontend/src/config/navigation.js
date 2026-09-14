@@ -1,7 +1,6 @@
 import {
   LayoutDashboard,
   Users,
-  Building2,
   Truck,
   Pill,
   Package,
@@ -24,12 +23,6 @@ export const NAVIGATION_ITEMS = [
     title: "Supplier Management",
     path: "/admin/suppliers",
     icon: Truck,
-    roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
-  },
-  {
-    title: "Facility Management",
-    path: "/admin/facilities",
-    icon: Building2,
     roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
   },
   {
