@@ -49,7 +49,6 @@ export const PAYMENT_TERMS_OPTIONS = [
 
 export const DEFAULT_SUPPLIER_FORM = {
   name: "",
-  supplierCode: "",
   contactPerson: "",
   email: "",
   phone: "",

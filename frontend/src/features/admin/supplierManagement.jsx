@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Truck,
   CheckCircle2,
@@ -16,6 +16,7 @@ import {
   CreditCard,
   MapPin,
   User as UserIcon,
+  Loader2,
 } from "lucide-react";
 
 // Components
@@ -24,8 +25,7 @@ import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 
-import { suppliers as initialSuppliers } from "../../data/supplier";
-import { facilities } from "../../data/facility";
+import supplierService from "../../services/supplier";
 import useAuth from "../../hooks/useAuth";
 import {
   PAYMENT_TERMS_OPTIONS,
@@ -35,31 +35,52 @@ import {
 function SupplierManagement() {
   const { facility } = useAuth();
 
-  // Automatically detect current active facility
+  // Active facility from auth context (no mock fallback)
   const currentFacilityName = useMemo(() => {
-    return (
-      facility?.name || facilities[0]?.name || "Exakt Central General Hospital"
-    );
+    return facility?.name || "";
   }, [facility]);
 
-  const [supplierList, setSupplierList] = useState(initialSuppliers);
+  const [supplierList, setSupplierList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  // Filter suppliers that service/belong to the current active facility
-  const currentFacilitySuppliers = useMemo(() => {
-    return supplierList.filter((s) => {
-      if (s.facilities && Array.isArray(s.facilities)) {
-        return s.facilities.includes(currentFacilityName);
-      }
-      return (
-        (s.primaryFacility || s.facility || facilities[0]?.name) ===
-        currentFacilityName
+  // Fetch suppliers from backend for active facility
+  const fetchSuppliers = useCallback(async () => {
+    if (!facility?.id) {
+      setSupplierList([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await supplierService.getAllSuppliers(facility.id);
+      setSupplierList(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load suppliers:", err);
+      setError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to load suppliers from server.",
       );
-    });
-  }, [supplierList, currentFacilityName]);
+      setSupplierList([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [facility?.id]);
+
+  useEffect(() => {
+    fetchSuppliers();
+  }, [fetchSuppliers]);
+
+  // Suppliers are fetched scoped to the active facility
+  const currentFacilitySuppliers = supplierList;
 
   // Modal State
   const [modalMode, setModalMode] = useState(null); // 'add' | 'view' | 'edit' | 'delete' | null
@@ -83,9 +104,6 @@ function SupplierManagement() {
     return currentFacilitySuppliers.filter((supplier) => {
       const matchesSearch =
         supplier.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        supplier.supplierCode
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
         supplier.contactPerson
           .toLowerCase()
           .includes(searchQuery.toLowerCase()) ||
@@ -117,24 +135,10 @@ function SupplierManagement() {
     setCurrentPage(1);
   };
 
-  // Generate next supplier code suggestion
-  const generateNextSupplierCode = () => {
-    const maxNum = supplierList.reduce((max, s) => {
-      const match = s.supplierCode?.match(/SUP-(\d+)/i);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        return num > max ? num : max;
-      }
-      return max;
-    }, 0);
-    return `SUP-${String(maxNum + 1).padStart(3, "0")}`;
-  };
-
   // Modal Open Handlers
   const handleOpenAddModal = () => {
     setFormData({
       ...DEFAULT_SUPPLIER_FORM,
-      supplierCode: generateNextSupplierCode(),
     });
     setFormErrors({});
     setSelectedSupplier(null);
@@ -150,7 +154,6 @@ function SupplierManagement() {
     setSelectedSupplier(supplier);
     setFormData({
       name: supplier.name || "",
-      supplierCode: supplier.supplierCode || "",
       contactPerson: supplier.contactPerson || "",
       email: supplier.email || "",
       phone: supplier.phone || "",
@@ -190,20 +193,6 @@ function SupplierManagement() {
       errors.name = "Supplier name is required.";
     }
 
-    if (!formData.supplierCode.trim()) {
-      errors.supplierCode = "Supplier code is required.";
-    } else {
-      const codeExists = supplierList.some(
-        (s) =>
-          s.supplierCode.toLowerCase() ===
-            formData.supplierCode.trim().toLowerCase() &&
-          (!selectedSupplier || s.id !== selectedSupplier.id),
-      );
-      if (codeExists) {
-        errors.supplierCode = "Supplier code already exists.";
-      }
-    }
-
     if (!formData.contactPerson.trim()) {
       errors.contactPerson = "Contact person name is required.";
     }
@@ -236,65 +225,99 @@ function SupplierManagement() {
   };
 
   // Save (Add or Edit) Supplier
-  const handleSaveSupplier = (e) => {
+  const handleSaveSupplier = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
 
-    if (modalMode === "add") {
-      const newSupplier = {
-        id: Date.now(),
-        name: formData.name.trim(),
-        supplierCode: formData.supplierCode.trim().toUpperCase(),
-        contactPerson: formData.contactPerson.trim(),
-        email: formData.email.trim(),
-        phone: formData.phone.trim() || "+63 2 0000 0000",
-        address: formData.address.trim() || "Metro Manila, Philippines",
-        paymentTerms: formData.paymentTerms,
-        status: formData.status,
-        totalBatchesSupplied: 0,
-        primaryFacility: currentFacilityName,
-        facilities: [currentFacilityName],
-        createdAt: new Date().toISOString().split("T")[0],
-      };
-      setSupplierList((prev) => [newSupplier, ...prev]);
-    } else if (modalMode === "edit" && selectedSupplier) {
-      setSupplierList((prev) =>
-        prev.map((s) =>
-          s.id === selectedSupplier.id
-            ? {
-                ...s,
-                name: formData.name.trim(),
-                supplierCode: formData.supplierCode.trim().toUpperCase(),
-                contactPerson: formData.contactPerson.trim(),
-                email: formData.email.trim(),
-                phone: formData.phone.trim(),
-                address: formData.address.trim(),
-                paymentTerms: formData.paymentTerms,
-                status: formData.status,
-                totalBatchesSupplied:
-                  selectedSupplier.totalBatchesSupplied ?? 0,
-              }
-            : s,
-        ),
-      );
-    }
+    try {
+      setIsSubmitting(true);
+      const targetFacilityId = facility?.id || selectedSupplier?.facilityId;
 
-    handleCloseModal();
+      if (!targetFacilityId) {
+        setFormErrors({
+          general:
+            "No active facility selected. Please select a facility first.",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (modalMode === "add") {
+        const payload = {
+          facilityId: targetFacilityId,
+          name: formData.name.trim(),
+          contactPerson: formData.contactPerson.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone.trim() || null,
+          address: formData.address.trim() || null,
+          paymentTerms: formData.paymentTerms,
+          status: formData.status,
+        };
+        await supplierService.createSupplier(payload);
+      } else if (modalMode === "edit" && selectedSupplier) {
+        const payload = {
+          facilityId: targetFacilityId,
+          name: formData.name.trim(),
+          contactPerson: formData.contactPerson.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone.trim() || null,
+          address: formData.address.trim() || null,
+          paymentTerms: formData.paymentTerms,
+          status: formData.status,
+        };
+        await supplierService.updateSupplier(selectedSupplier.id, payload);
+      }
+
+      await fetchSuppliers();
+      handleCloseModal();
+    } catch (err) {
+      console.error("Failed to save supplier:", err);
+      const serverMessage =
+        err?.response?.data?.message || err?.response?.data?.error;
+      const validationDetails = err?.response?.data?.details;
+
+      if (validationDetails && typeof validationDetails === "object") {
+        setFormErrors(validationDetails);
+      } else if (serverMessage) {
+        if (serverMessage.toLowerCase().includes("email")) {
+          setFormErrors({ email: serverMessage });
+        } else {
+          setFormErrors({ general: serverMessage });
+        }
+      } else {
+        setFormErrors({
+          general: "Failed to save supplier. Please try again.",
+        });
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Delete Supplier Confirmation
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!selectedSupplier) return;
 
-    setSupplierList((prev) =>
-      prev.filter((s) => s.id !== selectedSupplier.id),
-    );
+    try {
+      setIsSubmitting(true);
+      await supplierService.deleteSupplier(selectedSupplier.id);
+      await fetchSuppliers();
 
-    if (paginatedSuppliers.length === 1 && currentPage > 1) {
-      setCurrentPage((prev) => prev - 1);
+      if (paginatedSuppliers.length === 1 && currentPage > 1) {
+        setCurrentPage((prev) => prev - 1);
+      }
+
+      handleCloseModal();
+    } catch (err) {
+      console.error("Failed to delete supplier:", err);
+      alert(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to delete supplier.",
+      );
+    } finally {
+      setIsSubmitting(false);
     }
-
-    handleCloseModal();
   };
 
   return (
@@ -307,13 +330,30 @@ function SupplierManagement() {
               Supplier Management
             </h1>
             {/* Active Facility Indicator */}
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs font-bold text-blue-700">
-              <Building2 className="w-3.5 h-3.5" />
-              <span>{currentFacilityName}</span>
-            </span>
+            {currentFacilityName ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs font-bold text-blue-700">
+                <Building2 className="w-3.5 h-3.5" />
+                <span>{currentFacilityName}</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-xs font-bold text-amber-700">
+                <Building2 className="w-3.5 h-3.5" />
+                <span>No Facility Selected</span>
+              </span>
+            )}
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            Manage pharmaceutical vendors, distributors, and delivery terms for <span className="font-semibold text-gray-700">{currentFacilityName}</span>
+            {currentFacilityName ? (
+              <>
+                Manage pharmaceutical vendors, distributors, and delivery terms
+                for{" "}
+                <span className="font-semibold text-gray-700">
+                  {currentFacilityName}
+                </span>
+              </>
+            ) : (
+              "Please select a facility from the navigation portal to manage its suppliers."
+            )}
           </p>
         </div>
         <button
@@ -325,6 +365,23 @@ function SupplierManagement() {
           <span>Add New Supplier</span>
         </button>
       </div>
+
+      {/* Error Banner */}
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={fetchSuppliers}
+            className="text-xs font-semibold text-red-700 underline hover:text-red-900"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* 3 Total Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -401,7 +458,7 @@ function SupplierManagement() {
                 setSearchQuery("");
                 setCurrentPage(1);
               }}
-              placeholder="Search by name, code, contact person..."
+              placeholder="Search by name, contact person, email..."
             />
           </div>
 
@@ -441,7 +498,38 @@ function SupplierManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {paginatedSuppliers.length > 0 ? (
+              {!facility?.id ? (
+                <tr>
+                  <td
+                    colSpan="5"
+                    className="px-6 py-12 text-center text-gray-400"
+                  >
+                    <Building2 className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm font-medium text-gray-700">
+                      No facility selected
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Please select an active facility to view its suppliers
+                    </p>
+                  </td>
+                </tr>
+              ) : loading ? (
+                <tr>
+                  <td
+                    colSpan="5"
+                    className="px-6 py-12 text-center text-gray-400"
+                  >
+                    <Loader2 className="w-8 h-8 mx-auto mb-2 text-blue-500 animate-spin" />
+                    <p className="text-sm font-medium text-gray-700">
+                      Loading suppliers...
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Fetching live supplier data
+                      {currentFacilityName ? ` for ${currentFacilityName}` : ""}
+                    </p>
+                  </td>
+                </tr>
+              ) : paginatedSuppliers.length > 0 ? (
                 paginatedSuppliers.map((supplier) => (
                   <tr
                     key={supplier.id}
@@ -605,34 +693,6 @@ function SupplierManagement() {
               )}
             </div>
 
-            {/* Supplier Code */}
-            <div>
-              <label
-                htmlFor="supplier-code"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Supplier Code <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="supplier-code"
-                type="text"
-                name="supplierCode"
-                value={formData.supplierCode}
-                onChange={handleInputChange}
-                placeholder="SUP-001"
-                className={`input uppercase font-mono ${
-                  formErrors.supplierCode
-                    ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
-                    : ""
-                }`}
-              />
-              {formErrors.supplierCode && (
-                <p className="text-xs text-red-500 mt-1">
-                  {formErrors.supplierCode}
-                </p>
-              )}
-            </div>
-
             {/* Contact Person */}
             <div>
               <label
@@ -739,7 +799,7 @@ function SupplierManagement() {
             </div>
 
             {/* Status */}
-            <div>
+            <div className="col-span-2">
               <label
                 htmlFor="supplier-status"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
@@ -781,17 +841,35 @@ function SupplierManagement() {
             </div>
           </div>
 
+          {/* General form error if returned from backend */}
+          {formErrors.general && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
+              <span>{formErrors.general}</span>
+            </div>
+          )}
+
           {/* Modal Action Buttons */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
             <button
               type="button"
               onClick={handleCloseModal}
+              disabled={isSubmitting}
               className="btn-secondary"
             >
               Cancel
             </button>
-            <button type="submit" className="btn-primary">
-              {modalMode === "add" ? (
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="btn-primary"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : modalMode === "add" ? (
                 <>
                   <Plus className="w-4 h-4" />
                   <span>Add Supplier</span>
@@ -826,9 +904,6 @@ function SupplierManagement() {
                   <h3 className="text-base font-bold text-gray-900 truncate">
                     {selectedSupplier.name}
                   </h3>
-                  <span className="font-mono text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-semibold">
-                    {selectedSupplier.supplierCode}
-                  </span>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   <span
@@ -884,15 +959,6 @@ function SupplierManagement() {
                 </p>
               </div>
 
-              <div className="p-3 rounded-lg border border-gray-100 bg-white space-y-1">
-                <span className="text-gray-400 font-medium flex items-center gap-1.5">
-                  <Package className="w-3.5 h-3.5" /> Batches Delivered
-                </span>
-                <p className="font-semibold text-gray-900">
-                  {selectedSupplier.totalBatchesSupplied ?? 0} batches
-                </p>
-              </div>
-
               <div className="p-3 rounded-lg border border-gray-100 bg-white space-y-1 sm:col-span-2">
                 <span className="text-gray-400 font-medium flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5" /> Business Address
@@ -916,32 +982,24 @@ function SupplierManagement() {
                   <Calendar className="w-3.5 h-3.5" /> Registration Date
                 </span>
                 <p className="font-semibold text-gray-900">
-                  {selectedSupplier.createdAt || "N/A"}
+                  {selectedSupplier.createdAt
+                    ? selectedSupplier.createdAt.split("T")[0]
+                    : "N/A"}
                 </p>
               </div>
             </div>
 
-            {/* Serviced Facilities Section */}
-            {selectedSupplier.facilities && selectedSupplier.facilities.length > 0 && (
+            {/* Linked Facility Section */}
+            {selectedSupplier.facilityName && (
               <div className="p-3 rounded-lg border border-gray-100 bg-gray-50/70 space-y-1.5 text-xs">
                 <span className="text-gray-500 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Serviced Facilities ({selectedSupplier.facilities.length})</span>
+                  <span>Assigned Facility</span>
                 </span>
                 <div className="flex flex-wrap gap-1.5 pt-0.5">
-                  {selectedSupplier.facilities.map((facName) => (
-                    <span
-                      key={facName}
-                      className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ${
-                        facName === currentFacilityName
-                          ? "bg-blue-50 text-blue-700 border-blue-200 font-semibold"
-                          : "bg-white text-gray-700 border-gray-200"
-                      }`}
-                    >
-                      {facName}
-                      {facName === currentFacilityName && " (Active)"}
-                    </span>
-                  ))}
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border bg-blue-50 text-blue-700 border-blue-200 font-semibold">
+                    {selectedSupplier.facilityName}
+                  </span>
                 </div>
               </div>
             )}
@@ -985,11 +1043,8 @@ function SupplierManagement() {
                 </p>
                 <p className="text-red-700">
                   This will permanently remove the record for{" "}
-                  <span className="font-bold">{selectedSupplier.name}</span> (
-                  <span className="font-mono font-semibold">
-                    {selectedSupplier.supplierCode}
-                  </span>
-                  ). This action cannot be undone.
+                  <span className="font-bold">{selectedSupplier.name}</span>.
+                  This action cannot be undone.
                 </p>
               </div>
             </div>
@@ -998,6 +1053,7 @@ function SupplierManagement() {
               <button
                 type="button"
                 onClick={handleCloseModal}
+                disabled={isSubmitting}
                 className="btn-secondary text-xs"
               >
                 Cancel
@@ -1005,10 +1061,20 @@ function SupplierManagement() {
               <button
                 type="button"
                 onClick={handleConfirmDelete}
+                disabled={isSubmitting}
                 className="btn-danger text-xs"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Supplier</span>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Supplier</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

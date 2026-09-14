@@ -765,7 +765,7 @@ function OrderRequest() {
                   .filter((s) => s.status === "Active")
                   .map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name} ({s.supplierCode})
+                      {s.name}
                     </option>
                   ))}
               </select>
