@@ -24,9 +24,9 @@ public class SupplierService {
         this.facilityRepository = facilityRepository;
     }
 
-    // 1. CREATE SUPPLIER (SuperAdmin and Admin)
+    // 1. CREATE SUPPLIER (SuperAdmin only)
     @Transactional
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
+    @PreAuthorize("hasRole('SuperAdmin')")
     public SupplierResponseDto createSupplier(SupplierRequestDto request) {
         Facility facility = facilityRepository.findById(request.getFacilityId())
                 .orElseThrow(() -> new RuntimeException("Facility not found with id: " + request.getFacilityId()));
@@ -108,8 +108,8 @@ public class SupplierService {
         return mapToResponseDto(updatedSupplier, "Supplier updated successfully");
     }
 
-    // 5. DELETE SUPPLIER (SuperAdmin and Admin)
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
+    // 5. DELETE SUPPLIER (SuperAdmin only)
+    @PreAuthorize("hasRole('SuperAdmin')")
     public void deleteSupplier(Long id) {
         if (!supplierRepository.existsById(id)) {
             throw new RuntimeException("Supplier not found with id: " + id);

@@ -27,6 +27,9 @@ import Modal from "../../components/common/modal";
 
 import supplierService from "../../services/supplier";
 import useAuth from "../../hooks/useAuth";
+import useRole from "../../hooks/useRole";
+import RoleGuard from "../../components/guard/roleGuard";
+import { ROLES } from "../../config/roles";
 import {
   PAYMENT_TERMS_OPTIONS,
   DEFAULT_SUPPLIER_FORM,
@@ -34,6 +37,7 @@ import {
 
 function SupplierManagement() {
   const { facility } = useAuth();
+  const { isSuperAdmin } = useRole();
 
   // Active facility from auth context (no mock fallback)
   const currentFacilityName = useMemo(() => {
@@ -137,6 +141,7 @@ function SupplierManagement() {
 
   // Modal Open Handlers
   const handleOpenAddModal = () => {
+    if (!isSuperAdmin) return;
     setFormData({
       ...DEFAULT_SUPPLIER_FORM,
     });
@@ -166,6 +171,7 @@ function SupplierManagement() {
   };
 
   const handleOpenDeleteModal = (supplier) => {
+    if (!isSuperAdmin) return;
     setSelectedSupplier(supplier);
     setModalMode("delete");
   };
@@ -296,8 +302,7 @@ function SupplierManagement() {
 
   // Delete Supplier Confirmation
   const handleConfirmDelete = async () => {
-    if (!selectedSupplier) return;
-
+    if (!isSuperAdmin || !selectedSupplier) return;
     try {
       setIsSubmitting(true);
       await supplierService.deleteSupplier(selectedSupplier.id);
@@ -356,14 +361,16 @@ function SupplierManagement() {
             )}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleOpenAddModal}
-          className="btn-primary self-start sm:self-auto shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add New Supplier</span>
-        </button>
+        <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN]}>
+          <button
+            type="button"
+            onClick={handleOpenAddModal}
+            className="btn-primary self-start sm:self-auto shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add New Supplier</span>
+          </button>
+        </RoleGuard>
       </div>
 
       {/* Error Banner */}
@@ -608,15 +615,17 @@ function SupplierManagement() {
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenDeleteModal(supplier)}
-                          className="btn-danger p-1.5"
-                          title="Delete Supplier"
-                          aria-label="Delete Supplier"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN]}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDeleteModal(supplier)}
+                            className="btn-danger p-1.5"
+                            title="Delete Supplier"
+                            aria-label="Delete Supplier"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </RoleGuard>
                       </div>
                     </td>
                   </tr>
@@ -1027,12 +1036,13 @@ function SupplierManagement() {
       </Modal>
 
       {/* --- DELETE SUPPLIER CONFIRMATION MODAL --- */}
-      <Modal
-        isOpen={modalMode === "delete" && Boolean(selectedSupplier)}
-        onClose={handleCloseModal}
-        title="Delete Supplier"
-        size="sm"
-      >
+      {isSuperAdmin && (
+        <Modal
+          isOpen={modalMode === "delete" && Boolean(selectedSupplier)}
+          onClose={handleCloseModal}
+          title="Delete Supplier"
+          size="sm"
+        >
         {selectedSupplier && (
           <div className="space-y-4">
             <div className="flex items-start gap-3.5 p-3.5 rounded-xl bg-red-50 border border-red-100 text-red-800">
@@ -1080,6 +1090,7 @@ function SupplierManagement() {
           </div>
         )}
       </Modal>
+      )}
     </div>
   );
 }
