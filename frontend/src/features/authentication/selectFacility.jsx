@@ -187,9 +187,9 @@ function SelectFacility() {
     }
   }, [isSuperAdmin, activeProject?.id]);
 
-  // Fetch users list for account creation & facility assignment
+  // Fetch users list for account creation & facility assignment (SuperAdmin only)
   const fetchUsers = useCallback(async () => {
-    if (!isSuperAdminOrAdmin) return;
+    if (!isSuperAdmin) return;
     try {
       const backendUsers = await userService.getAllUsers();
       if (Array.isArray(backendUsers)) {
@@ -203,7 +203,7 @@ function SelectFacility() {
     } catch (err) {
       console.error("Failed to load users:", err);
     }
-  }, [isSuperAdminOrAdmin]);
+  }, [isSuperAdmin]);
 
   useEffect(() => {
     if (isSuperAdmin) {
@@ -215,13 +215,12 @@ function SelectFacility() {
       fetchFacilities();
     }
 
-    if (isSuperAdminOrAdmin) {
+    if (isSuperAdmin) {
       fetchUsers();
     }
   }, [
     activeProject?.id,
     isSuperAdmin,
-    isSuperAdminOrAdmin,
     fetchFacilities,
     fetchUsers,
   ]);
@@ -772,9 +771,9 @@ function SelectFacility() {
     }
   };
 
-  // --- Create User Form Handlers ---
+  // --- Create User Form Handlers (SuperAdmin only) ---
   const handleOpenCreateUserModal = () => {
-    if (!isSuperAdminOrAdmin) return;
+    if (!isSuperAdmin) return;
     setUserFormData(DEFAULT_USER_FORM);
     const initialFacs = currentSavedFacility
       ? [currentSavedFacility.id]
@@ -846,7 +845,7 @@ function SelectFacility() {
 
   const handleCreateUserSubmit = async (e) => {
     e.preventDefault();
-    if (!isSuperAdminOrAdmin) return;
+    if (!isSuperAdmin) return;
     if (!validateUserForm()) return;
 
     try {
@@ -1008,7 +1007,7 @@ function SelectFacility() {
           totalCount={userAssignedFacilities.length}
           itemLabel="assigned branches"
         >
-          <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]}>
+          <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN]}>
             <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
               <button
                 type="button"

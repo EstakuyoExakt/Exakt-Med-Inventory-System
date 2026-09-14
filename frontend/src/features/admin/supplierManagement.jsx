@@ -433,9 +433,6 @@ function SupplierManagement() {
                   Payment Terms
                 </th>
                 <th scope="col" className="px-6 py-3.5">
-                  Batches Delivered
-                </th>
-                <th scope="col" className="px-6 py-3.5">
                   Status
                 </th>
                 <th scope="col" className="px-6 py-3.5 text-right">
@@ -480,17 +477,6 @@ function SupplierManagement() {
                       <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
                         {supplier.paymentTerms}
                       </span>
-                    </td>
-
-                    {/* Batches Supplied */}
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-800">
-                        <Package className="w-4 h-4 text-blue-500" />
-                        <span>{supplier.totalBatchesSupplied}</span>
-                        <span className="text-xs text-gray-400 font-normal">
-                          batches
-                        </span>
-                      </div>
                     </td>
 
                     {/* Status Badge */}
@@ -550,7 +536,7 @@ function SupplierManagement() {
               ) : (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan="5"
                     className="px-6 py-12 text-center text-gray-400"
                   >
                     <Truck className="w-8 h-8 mx-auto mb-2 text-gray-300" />

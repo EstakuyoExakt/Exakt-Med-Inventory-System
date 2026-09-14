@@ -70,13 +70,21 @@ function App() {
             <Route path="/select-facility" element={<SelectFacility />} />
           </Route>
 
+          {/* Super Admin Protected Routes */}
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN]} />
+            }
+          >
+            <Route path="/admin/users" element={<UserManagement />} />
+          </Route>
+
           {/* Admin Protected Routes */}
           <Route
             element={
               <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.SUPER_ADMIN]} />
             }
           >
-            <Route path="/admin/users" element={<UserManagement />} />
             <Route path="/admin/suppliers" element={<SupplierManagement />} />
             <Route
               path="/admin/requested-orders"

@@ -17,7 +17,7 @@ export const NAVIGATION_ITEMS = [
     title: "User Management",
     path: "/admin/users",
     icon: Users,
-    roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
+    roles: [ROLES.SUPER_ADMIN],
   },
   {
     title: "Supplier Management",

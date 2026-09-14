@@ -17,10 +17,10 @@ export const ROLE_DETAILS = {
   [ROLES.ADMIN]: {
     label: "Administrator",
     description:
-      "Facility system access, user management, and supplier settings",
+      "Facility system access and supplier settings",
     badgeColor: "bg-purple-100 text-purple-700 border-purple-200",
     initialRoute: "/select-facility",
-    defaultRoute: "/admin/users",
+    defaultRoute: "/admin/suppliers",
   },
   [ROLES.PHARMACIST]: {
     label: "Pharmacist Manager",

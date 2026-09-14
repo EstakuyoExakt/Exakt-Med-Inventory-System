@@ -37,20 +37,12 @@ public class UserService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    // 1. CREATE USER
+    // 1. CREATE USER (SuperAdmin only)
     @Transactional
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
+    @PreAuthorize("hasRole('SuperAdmin')")
     public UserResponseDto createUser(UserRequestDto request) {
         if (userRepository.findByUsername(request.getUsername()).isPresent()) {
             throw new RuntimeException("Username already exists: " + request.getUsername());
-        }
-
-        // An Admin cannot create SuperAdmin or Admin accounts
-        User currentUser = getCurrentUser();
-        if (currentUser.getRole() == User.Role.Admin) {
-            if (request.getRole() == User.Role.SuperAdmin || request.getRole() == User.Role.Admin) {
-                throw new AccessDeniedException("Admins cannot create SuperAdmin or Admin accounts");
-            }
         }
 
         User user = new User();
@@ -81,8 +73,8 @@ public class UserService {
         return mapToResponseDto(savedUser, linkedFacilityId, "User created successfully");
     }
 
-    // 2. GET ALL USERS
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
+    // 2. GET ALL USERS (SuperAdmin only)
+    @PreAuthorize("hasRole('SuperAdmin')")
     public List<UserResponseDto> getAllUsers() {
         return userRepository.findAll()
                 .stream()
@@ -90,29 +82,18 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 
-    // 4. UPDATE USER
+    // 4. UPDATE USER (SuperAdmin only)
     @Transactional
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
+    @PreAuthorize("hasRole('SuperAdmin')")
     public UserResponseDto updateUser(Long id, UserRequestDto request) {
         User targetUser = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
 
         User currentUser = getCurrentUser();
 
-        // If the logged-in user is an Admin:
-        // Do not allow updating fellow Admins or SuperAdmins (unless updating themselves)
-        if (currentUser.getRole() == User.Role.Admin) {
-            boolean isTargetAdminOrSuperAdmin = targetUser.getRole() == User.Role.Admin || targetUser.getRole() == User.Role.SuperAdmin;
-            boolean isSelf = targetUser.getId().equals(currentUser.getId());
-
-            if (isTargetAdminOrSuperAdmin && !isSelf) {
-                throw new AccessDeniedException("Admins are not allowed to update other Admin or SuperAdmin accounts");
-            }
-
-            // Also prevent Admin from promoting anyone to Admin or SuperAdmin
-            if (request.getRole() != null && (request.getRole() == User.Role.Admin || request.getRole() == User.Role.SuperAdmin) && !isSelf) {
-                throw new AccessDeniedException("Admins cannot assign Admin or SuperAdmin roles");
-            }
+        // SuperAdmin accounts cannot be updated by other SuperAdmins (unless updating themselves)
+        if (targetUser.getRole() == User.Role.SuperAdmin && !targetUser.getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("SuperAdmin accounts cannot be edited by other users");
         }
 
         // Update fields
@@ -152,21 +133,16 @@ public class UserService {
         return mapToResponseDto(updatedUser, "User updated successfully");
     }
 
-    // 5. DELETE USER
+    // 5. DELETE USER (SuperAdmin only)
     @Transactional
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
+    @PreAuthorize("hasRole('SuperAdmin')")
     public void deleteUser(Long id) {
         User targetUser = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
 
-        User currentUser = getCurrentUser();
-
-        // If the logged-in user is an Admin:
-        // Do not allow deleting fellow Admins or SuperAdmins
-        if (currentUser.getRole() == User.Role.Admin) {
-            if (targetUser.getRole() == User.Role.Admin || targetUser.getRole() == User.Role.SuperAdmin) {
-                throw new AccessDeniedException("Admins are not allowed to delete Admin or SuperAdmin accounts");
-            }
+        // SuperAdmin accounts can never be deleted
+        if (targetUser.getRole() == User.Role.SuperAdmin) {
+            throw new AccessDeniedException("SuperAdmin accounts cannot be deleted");
         }
 
         // Remove any facility links first
