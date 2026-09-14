@@ -46,10 +46,13 @@ import { users as initialUsers } from "../../data/user";
 import { ROLE_DETAILS, ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
 import useRole from "../../hooks/useRole";
+import useError from "../../hooks/useError";
 import {
   DEFAULT_FACILITY_FORM,
   DEFAULT_USER_FORM,
 } from "../../utils/constants";
+import { validateFacilityForm } from "../../validators/facility.validator";
+import { validateUserForm } from "../../validators/user.validator";
 
 function SelectFacility() {
   const navigate = useNavigate();
@@ -86,14 +89,26 @@ function SelectFacility() {
   // Modal state for adding a facility
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [formData, setFormData] = useState(DEFAULT_FACILITY_FORM);
-  const [formErrors, setFormErrors] = useState({});
+  const {
+    errors: formErrors,
+    setErrors: setFormErrors,
+    clearErrors: clearAddFacilityErrors,
+    handleInputChange: handleAddFacilityChange,
+    handleApiError: handleAddFacilityApiError,
+  } = useError();
   const [addSuccessMsg, setAddSuccessMsg] = useState("");
 
   // Modal & form state for editing a facility
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingFacility, setEditingFacility] = useState(null);
   const [editFormData, setEditFormData] = useState(DEFAULT_FACILITY_FORM);
-  const [editFormErrors, setEditFormErrors] = useState({});
+  const {
+    errors: editFormErrors,
+    setErrors: setEditFormErrors,
+    clearErrors: clearEditFacilityErrors,
+    handleInputChange: handleEditFacilityChange,
+    handleApiError: handleEditFacilityApiError,
+  } = useError();
   const [editSuccessMsg, setEditSuccessMsg] = useState("");
 
   // Modal state for deleting a facility
@@ -115,7 +130,13 @@ function SelectFacility() {
   const [userFormData, setUserFormData] = useState(DEFAULT_USER_FORM);
   const [selectedFacilitiesForNewUser, setSelectedFacilitiesForNewUser] =
     useState([]);
-  const [userFormErrors, setUserFormErrors] = useState({});
+  const {
+    errors: userFormErrors,
+    setErrors: setUserFormErrors,
+    clearErrors: clearCreateUserErrors,
+    handleInputChange: handleCreateUserChange,
+    handleApiError: handleCreateUserApiError,
+  } = useError();
   const [createUserSuccessMsg, setCreateUserSuccessMsg] = useState("");
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [createUserErrorMsg, setCreateUserErrorMsg] = useState("");
@@ -272,7 +293,7 @@ function SelectFacility() {
   const handleOpenAddModal = () => {
     if (!isSuperAdmin) return;
     setFormData(DEFAULT_FACILITY_FORM);
-    setFormErrors({});
+    clearAddFacilityErrors();
     setAddSuccessMsg("");
     setIsAddModalOpen(true);
   };
@@ -280,57 +301,24 @@ function SelectFacility() {
   const handleCloseAddModal = () => {
     setIsAddModalOpen(false);
     setFormData(DEFAULT_FACILITY_FORM);
-    setFormErrors({});
+    clearAddFacilityErrors();
   };
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (formErrors[name] || formErrors.general) {
-      setFormErrors((prev) => ({ ...prev, [name]: "", general: "" }));
-    }
-  };
-
-  const validateFacilityForm = () => {
-    const errors = {};
-    if (!formData.name?.trim()) {
-      errors.name = "Facility name is required.";
-    } else if (formData.name.trim().length < 2) {
-      errors.name = "Facility name must be at least 2 characters.";
-    }
-
-    if (!formData.contactPerson?.trim()) {
-      errors.contactPerson = "Contact person is required.";
-    }
-
-    if (!formData.email?.trim()) {
-      errors.email = "Email address is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      errors.email = "Please enter a valid email address.";
-    }
-
-    if (!formData.phone?.trim()) {
-      errors.phone = "Phone number is required.";
-    }
-
-    if (!formData.address?.trim()) {
-      errors.address = "Physical address is required.";
-    }
-
-    const currentProjectId = Number(activeProject?.id);
-    if (!currentProjectId) {
-      errors.general =
-        "An active project is required to create a facility. Please select a project first.";
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    handleAddFacilityChange(e, setFormData);
   };
 
   const handleCreateFacilitySubmit = async (e) => {
     e.preventDefault();
     if (!isSuperAdmin) return;
-    if (!validateFacilityForm()) return;
+    const { isValid, errors } = validateFacilityForm(formData, {
+      activeProjectId: activeProject?.id,
+      checkProjectId: true,
+    });
+    if (!isValid) {
+      setFormErrors(errors);
+      return;
+    }
 
     const targetProjectId = Number(activeProject?.id);
     if (!targetProjectId) {
@@ -363,17 +351,7 @@ function SelectFacility() {
         setAddSuccessMsg("");
       }, 700);
     } catch (err) {
-      console.error("Failed to create facility:", err);
-      const errMsg =
-        err.response?.data?.message ||
-        err.response?.data?.error ||
-        err.message ||
-        "Failed to create facility. Please try again.";
-      setFormErrors((prev) => ({
-        ...prev,
-        general:
-          typeof errMsg === "string" ? errMsg : "Failed to create facility.",
-      }));
+      handleAddFacilityApiError(err, "Failed to create facility. Please try again.");
     } finally {
       setIsCreatingFacility(false);
     }
@@ -397,7 +375,7 @@ function SelectFacility() {
           ? String(activeProject.id)
           : "",
     });
-    setEditFormErrors({});
+    clearEditFacilityErrors();
     setEditSuccessMsg("");
     setIsEditModalOpen(true);
   };
@@ -405,69 +383,29 @@ function SelectFacility() {
   const handleCloseEditModal = () => {
     setIsEditModalOpen(false);
     setEditingFacility(null);
-    setEditFormErrors({});
+    clearEditFacilityErrors();
     setEditSuccessMsg("");
   };
 
   const handleEditInputChange = (e) => {
-    const { name, value } = e.target;
-    setEditFormData((prev) => ({ ...prev, [name]: value }));
-    if (editFormErrors[name] || editFormErrors.general) {
-      setEditFormErrors((prev) => ({ ...prev, [name]: "", general: "" }));
-    }
-  };
-
-  const validateEditFacilityForm = () => {
-    const errors = {};
-    if (!editFormData.name?.trim()) {
-      errors.name = "Facility name is required.";
-    } else if (editFormData.name.trim().length < 2) {
-      errors.name = "Facility name must be at least 2 characters.";
-    }
-
-    if (!editFormData.contactPerson?.trim()) {
-      errors.contactPerson = "Contact person is required.";
-    }
-
-    if (!editFormData.email?.trim()) {
-      errors.email = "Email address is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editFormData.email.trim())) {
-      errors.email = "Please enter a valid email address.";
-    }
-
-    if (!editFormData.phone?.trim()) {
-      errors.phone = "Phone number is required.";
-    }
-
-    if (!editFormData.address?.trim()) {
-      errors.address = "Physical address is required.";
-    }
-
-    const resolvedProjectId = Number(
-      editFormData.projectId || editingFacility?.projectId || activeProject?.id,
-    );
-    if (!resolvedProjectId) {
-      errors.projectId = "Please select a mother project.";
-    }
-
-    setEditFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    handleEditFacilityChange(e, setEditFormData);
   };
 
   const handleUpdateFacilitySubmit = async (e) => {
     e.preventDefault();
     if (!isSuperAdmin) return;
     if (!editingFacility) return;
-    if (!validateEditFacilityForm()) return;
 
+    const { errors } = validateFacilityForm(editFormData);
     const targetProjectId = Number(
       editFormData.projectId || editingFacility.projectId || activeProject?.id,
     );
+    const finalErrors = { ...errors };
     if (!targetProjectId) {
-      setEditFormErrors((prev) => ({
-        ...prev,
-        projectId: "Project selection is required.",
-      }));
+      finalErrors.projectId = "Project selection is required.";
+    }
+    if (Object.keys(finalErrors).length > 0) {
+      setEditFormErrors(finalErrors);
       return;
     }
 
@@ -507,17 +445,7 @@ function SelectFacility() {
         setEditSuccessMsg("");
       }, 700);
     } catch (err) {
-      console.error("Failed to update facility:", err);
-      const errMsg =
-        err.response?.data?.message ||
-        err.response?.data?.error ||
-        err.message ||
-        "Failed to update facility. Please try again.";
-      setEditFormErrors((prev) => ({
-        ...prev,
-        general:
-          typeof errMsg === "string" ? errMsg : "Failed to update facility.",
-      }));
+      handleEditFacilityApiError(err, "Failed to update facility. Please try again.");
     } finally {
       setIsUpdatingFacility(false);
     }
@@ -781,18 +709,14 @@ function SelectFacility() {
         ? [filteredFacilities[0].id]
         : [];
     setSelectedFacilitiesForNewUser(initialFacs);
-    setUserFormErrors({});
+    clearCreateUserErrors();
     setCreateUserSuccessMsg("");
     setCreateUserErrorMsg("");
     setIsCreateUserModalOpen(true);
   };
 
   const handleUserInputChange = (e) => {
-    const { name, value } = e.target;
-    setUserFormData((prev) => ({ ...prev, [name]: value }));
-    if (userFormErrors[name]) {
-      setUserFormErrors((prev) => ({ ...prev, [name]: "" }));
-    }
+    handleCreateUserChange(e, setUserFormData);
   };
 
   const handleToggleFacilityForNewUser = (facilityId) => {
@@ -802,51 +726,18 @@ function SelectFacility() {
     );
   };
 
-  const validateUserForm = () => {
-    const errors = {};
-    if (!userFormData.name?.trim()) {
-      errors.name = "Full name is required.";
-    }
-
-    if (!userFormData.username?.trim()) {
-      errors.username = "Username is required.";
-    } else {
-      const exists = userList.some(
-        (u) =>
-          u.username?.toLowerCase() ===
-          userFormData.username.trim().toLowerCase(),
-      );
-      if (exists) {
-        errors.username = "Username is already taken.";
-      }
-    }
-
-    if (!userFormData.email?.trim()) {
-      errors.email = "Email address is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userFormData.email.trim())) {
-      errors.email = "Please enter a valid email address.";
-    } else {
-      const exists = userList.some(
-        (u) =>
-          u.email?.toLowerCase() === userFormData.email.trim().toLowerCase(),
-      );
-      if (exists) {
-        errors.email = "Email address is already registered.";
-      }
-    }
-
-    if (!userFormData.password || userFormData.password.length < 6) {
-      errors.password = "Password must be at least 6 characters.";
-    }
-
-    setUserFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
   const handleCreateUserSubmit = async (e) => {
     e.preventDefault();
     if (!isSuperAdmin) return;
-    if (!validateUserForm()) return;
+    const { isValid, errors } = validateUserForm(userFormData, {
+      userList,
+      isEdit: false,
+      checkRoleAndStatus: false,
+    });
+    if (!isValid) {
+      setUserFormErrors(errors);
+      return;
+    }
 
     try {
       setIsCreatingUser(true);

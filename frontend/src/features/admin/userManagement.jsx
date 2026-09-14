@@ -29,6 +29,8 @@ import Modal from "../../components/common/modal";
 import { ROLES, ROLE_DETAILS } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
 import useRole from "../../hooks/useRole";
+import useError from "../../hooks/useError";
+import { validateUserForm } from "../../validators/user.validator";
 import {
   canEditUser as checkCanEditUser,
   canDeleteUser as checkCanDeleteUser,
@@ -60,7 +62,13 @@ function UserManagement() {
   const [modalMode, setModalMode] = useState(null); // 'add' | 'view' | 'edit' | 'delete' | null
   const [selectedUser, setSelectedUser] = useState(null);
   const [formData, setFormData] = useState(DEFAULT_USER_FORM);
-  const [formErrors, setFormErrors] = useState({});
+  const {
+    errors: formErrors,
+    setErrors: setFormErrors,
+    clearErrors,
+    handleInputChange: errorInputChange,
+    handleApiError,
+  } = useError();
 
   // Fetch users from backend API (Facility-scoped)
   const fetchUsers = useCallback(async () => {
@@ -210,7 +218,7 @@ function UserManagement() {
       status: "Active",
       password: "exaktpassword",
     });
-    setFormErrors({});
+    clearErrors();
     setSelectedUser(null);
     setModalMode("add");
   };
@@ -232,7 +240,7 @@ function UserManagement() {
       status: user.status || "Active",
       password: "",
     });
-    setFormErrors({});
+    clearErrors();
     setModalMode("edit");
   };
 
@@ -246,83 +254,31 @@ function UserManagement() {
   const handleCloseModal = () => {
     setModalMode(null);
     setSelectedUser(null);
-    setFormErrors({});
+    clearErrors();
     setDeleteError("");
   };
 
   // Form Field Change Handler
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (formErrors[name]) {
-      setFormErrors((prev) => ({ ...prev, [name]: "" }));
-    }
-    if (formErrors.general) {
-      setFormErrors((prev) => ({ ...prev, general: "" }));
-    }
-  };
-
-  // Form Validation
-  const validateForm = () => {
-    const errors = {};
-
-    if (!formData.name.trim()) {
-      errors.name = "Full name is required.";
-    }
-
-    if (!formData.username.trim()) {
-      errors.username = "Username is required.";
-    } else if (formData.username.trim().length < 3) {
-      errors.username = "Username must be at least 3 characters.";
-    } else {
-      const usernameExists = userList.some(
-        (u) =>
-          u.username.toLowerCase() === formData.username.trim().toLowerCase() &&
-          (!selectedUser || u.id !== selectedUser.id),
-      );
-      if (usernameExists) {
-        errors.username = "Username is already taken.";
-      }
-    }
-
-    if (!formData.email.trim()) {
-      errors.email = "Email address is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      errors.email = "Please enter a valid email address.";
-    } else {
-      const emailExists = userList.some(
-        (u) =>
-          u.email.toLowerCase() === formData.email.trim().toLowerCase() &&
-          (!selectedUser || u.id !== selectedUser.id),
-      );
-      if (emailExists) {
-        errors.email = "Email address is already in use.";
-      }
-    }
-
-    if (!formData.role) {
-      errors.role = "Role is required.";
-    }
-
-    if (!formData.status) {
-      errors.status = "Status is required.";
-    }
-
-    if (modalMode === "add" && !formData.password?.trim()) {
-      errors.password = "Password is required for new users.";
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    errorInputChange(e, setFormData);
   };
 
   // Save (Add or Edit) User
   const handleSaveUser = async (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    const { isValid, errors: validationErrors } = validateUserForm(formData, {
+      userList,
+      excludeId: selectedUser?.id,
+      isEdit: modalMode === "edit",
+      checkRoleAndStatus: true,
+    });
+    if (!isValid) {
+      setFormErrors(validationErrors);
+      return;
+    }
 
     setIsSubmitting(true);
-    setFormErrors({});
+    clearErrors();
 
     try {
       if (modalMode === "add") {
@@ -386,12 +342,7 @@ function UserManagement() {
         handleCloseModal();
       }
     } catch (err) {
-      console.error("Failed to save user:", err);
-      const errMsg =
-        err?.response?.data?.message ||
-        err?.message ||
-        "An unexpected error occurred while saving.";
-      setFormErrors((prev) => ({ ...prev, general: errMsg }));
+      handleApiError(err, "An unexpected error occurred while saving.");
     } finally {
       setIsSubmitting(false);
     }

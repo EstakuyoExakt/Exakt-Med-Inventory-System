@@ -29,6 +29,8 @@ import projectService from "../../services/project";
 import { ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
 import useRole from "../../hooks/useRole";
+import useError from "../../hooks/useError";
+import { validateProjectForm } from "../../validators/project.validator";
 import {
   getUserAssignedProjects,
   filterProjectsByQuery,
@@ -58,14 +60,24 @@ function SelectProject() {
   // Modal & Form state for creating a new project
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
-  const [formError, setFormError] = useState("");
+  const {
+    errors: addErrors,
+    setErrors: setAddErrors,
+    clearErrors: clearAddErrors,
+    handleApiError: handleAddApiError,
+  } = useError();
   const [isCreating, setIsCreating] = useState(false);
 
   // Modal & Form state for editing an existing project
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [editProjectName, setEditProjectName] = useState("");
-  const [editFormError, setEditFormError] = useState("");
+  const {
+    errors: editErrors,
+    setErrors: setEditErrors,
+    clearErrors: clearEditErrors,
+    handleApiError: handleEditApiError,
+  } = useError();
   const [isUpdating, setIsUpdating] = useState(false);
 
   // Modal & state for deleting a project
@@ -128,7 +140,7 @@ function SelectProject() {
   // --- Create Project Handlers ---
   const handleOpenAddModal = () => {
     setNewProjectName("");
-    setFormError("");
+    clearAddErrors();
     setIsAddModalOpen(true);
   };
 
@@ -137,27 +149,18 @@ function SelectProject() {
     if (!isSuperAdmin) return;
 
     const trimmed = newProjectName.trim();
-    if (!trimmed) {
-      setFormError("Project name is required.");
-      return;
-    }
-
-    if (trimmed.length < 2) {
-      setFormError("Project name must be at least 2 characters long.");
-      return;
-    }
-
-    const nameExists = projectList.some(
-      (p) => p.name?.toLowerCase() === trimmed.toLowerCase(),
+    const { isValid, errors } = validateProjectForm(
+      { name: trimmed },
+      { projectList, isEdit: false }
     );
-    if (nameExists) {
-      setFormError("A project with this name already exists.");
+    if (!isValid) {
+      setAddErrors(errors);
       return;
     }
 
     try {
       setIsCreating(true);
-      setFormError("");
+      clearAddErrors();
       const createdProject = await projectService.createProject({
         name: trimmed,
       });
@@ -169,17 +172,9 @@ function SelectProject() {
 
       setIsAddModalOpen(false);
       setNewProjectName("");
-      setFormError("");
+      clearAddErrors();
     } catch (err) {
-      console.error("Error creating project:", err);
-      const errMsg =
-        err.response?.data?.message ||
-        err.response?.data?.error ||
-        err.message ||
-        "Failed to create project. Please try again.";
-      setFormError(
-        typeof errMsg === "string" ? errMsg : "Failed to create project.",
-      );
+      handleAddApiError(err, "Failed to create project. Please try again.");
     } finally {
       setIsCreating(false);
     }
@@ -190,7 +185,7 @@ function SelectProject() {
     if (!isSuperAdmin) return;
     setEditingProject(project);
     setEditProjectName(project.name || "");
-    setEditFormError("");
+    clearEditErrors();
     setIsEditModalOpen(true);
   };
 
@@ -198,7 +193,7 @@ function SelectProject() {
     setIsEditModalOpen(false);
     setEditingProject(null);
     setEditProjectName("");
-    setEditFormError("");
+    clearEditErrors();
   };
 
   const handleUpdateProject = async (e) => {
@@ -207,29 +202,18 @@ function SelectProject() {
     if (!editingProject) return;
 
     const trimmed = editProjectName.trim();
-    if (!trimmed) {
-      setEditFormError("Project name is required.");
-      return;
-    }
-
-    if (trimmed.length < 2) {
-      setEditFormError("Project name must be at least 2 characters long.");
-      return;
-    }
-
-    const nameExists = projectList.some(
-      (p) =>
-        p.id !== editingProject.id &&
-        p.name?.toLowerCase() === trimmed.toLowerCase(),
+    const { isValid, errors } = validateProjectForm(
+      { name: trimmed },
+      { projectList, excludeId: editingProject.id, isEdit: true }
     );
-    if (nameExists) {
-      setEditFormError("Another project with this name already exists.");
+    if (!isValid) {
+      setEditErrors(errors);
       return;
     }
 
     try {
       setIsUpdating(true);
-      setEditFormError("");
+      clearEditErrors();
       const updatedProject = await projectService.updateProject(
         editingProject.id,
         {
@@ -261,15 +245,7 @@ function SelectProject() {
 
       handleCloseEditModal();
     } catch (err) {
-      console.error("Error updating project:", err);
-      const errMsg =
-        err.response?.data?.message ||
-        err.response?.data?.error ||
-        err.message ||
-        "Failed to update project. Please try again.";
-      setEditFormError(
-        typeof errMsg === "string" ? errMsg : "Failed to update project.",
-      );
+      handleEditApiError(err, "Failed to update project. Please try again.");
     } finally {
       setIsUpdating(false);
     }
@@ -530,10 +506,10 @@ function SelectProject() {
             </div>
           </div>
 
-          {formError && (
+          {(addErrors.name || addErrors.general) && (
             <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
-              <span>{formError}</span>
+              <span>{addErrors.name || addErrors.general}</span>
             </div>
           )}
 
@@ -551,7 +527,7 @@ function SelectProject() {
               value={newProjectName}
               onChange={(e) => {
                 setNewProjectName(e.target.value);
-                if (formError) setFormError("");
+                clearAddErrors();
               }}
               placeholder="e.g. Pasig Regional Medical Network"
               className="input text-xs"
@@ -606,10 +582,10 @@ function SelectProject() {
             </div>
           </div>
 
-          {editFormError && (
+          {(editErrors.name || editErrors.general) && (
             <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
-              <span>{editFormError}</span>
+              <span>{editErrors.name || editErrors.general}</span>
             </div>
           )}
 
@@ -627,7 +603,7 @@ function SelectProject() {
               value={editProjectName}
               onChange={(e) => {
                 setEditProjectName(e.target.value);
-                if (editFormError) setEditFormError("");
+                clearEditErrors();
               }}
               placeholder="e.g. Pasig Regional Medical Network"
               className="input text-xs"

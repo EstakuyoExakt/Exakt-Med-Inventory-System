@@ -25,6 +25,8 @@ import Modal from "../../components/common/modal";
 import { getExpiryStatus } from "../../utils/helpers";
 import { QUARANTINE_REASONS } from "../../utils/constants";
 import useAuth from "../../hooks/useAuth";
+import useError from "../../hooks/useError";
+import { validateBatchForm } from "../../validators/batch.validator";
 
 // Data Imports
 import { batches as initialBatches } from "../../data/batches";
@@ -108,7 +110,11 @@ function BatchManagement() {
     quarantineNotes: "",
   });
 
-  const [formErrors, setFormErrors] = useState({});
+  const {
+    errors: formErrors,
+    setErrors: setFormErrors,
+    clearErrors,
+  } = useError();
 
   // Helper map for SKU metadata lookup
   const skuMetaMap = useMemo(() => {
@@ -242,7 +248,7 @@ function BatchManagement() {
       quarantineReason: QUARANTINE_REASONS[0],
       quarantineNotes: "",
     });
-    setFormErrors({});
+    clearErrors();
     setSelectedBatch(null);
     setModalMode("receive");
   };
@@ -256,7 +262,7 @@ function BatchManagement() {
   const handleCloseModal = () => {
     setModalMode(null);
     setSelectedBatch(null);
-    setFormErrors({});
+    clearErrors();
   };
 
   // When PO is chosen in dropdown, auto-populate details while keeping location on currentFacility
@@ -285,46 +291,17 @@ function BatchManagement() {
   // Submit Received Batch
   const handleSaveReceivedBatch = (e) => {
     e.preventDefault();
-    const errors = {};
 
+    const { errors } = validateBatchForm(receiveFormData, {
+      batchList,
+    });
+    const finalErrors = { ...errors };
     if (!receiveFormData.poNumber) {
-      errors.poNumber = "Please select a Purchase Order (PO).";
-    }
-    if (!receiveFormData.batchNumber.trim()) {
-      errors.batchNumber = "Batch number is required.";
-    } else {
-      const exists = batchList.some(
-        (b) =>
-          b.batchNumber.toLowerCase() ===
-          receiveFormData.batchNumber.trim().toLowerCase(),
-      );
-      if (exists)
-        errors.batchNumber = "Batch number already exists in inventory.";
-    }
-    if (!receiveFormData.manufacturingDate) {
-      errors.manufacturingDate = "Manufacturing date is required.";
-    }
-    if (!receiveFormData.expiryDate) {
-      errors.expiryDate = "Expiry date is required.";
-    }
-    if (
-      receiveFormData.manufacturingDate &&
-      receiveFormData.expiryDate &&
-      new Date(receiveFormData.expiryDate) <=
-        new Date(receiveFormData.manufacturingDate)
-    ) {
-      errors.expiryDate = "Expiry date must be after manufacturing date.";
-    }
-    if (Number(receiveFormData.quantity) <= 0) {
-      errors.quantity = "Received quantity must be greater than 0.";
+      finalErrors.poNumber = "Please select a Purchase Order (PO).";
     }
 
-    if (receiveFormData.isQuarantined && !receiveFormData.quarantineReason) {
-      errors.quarantineReason = "Please specify a quarantine reason.";
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
+    if (Object.keys(finalErrors).length > 0) {
+      setFormErrors(finalErrors);
       return;
     }
 

@@ -28,8 +28,10 @@ import Modal from "../../components/common/modal";
 import supplierService from "../../services/supplier";
 import useAuth from "../../hooks/useAuth";
 import useRole from "../../hooks/useRole";
+import useError from "../../hooks/useError";
 import RoleGuard from "../../components/guard/roleGuard";
 import { ROLES } from "../../config/roles";
+import { validateSupplierForm } from "../../validators/supplier.validator";
 import {
   PAYMENT_TERMS_OPTIONS,
   DEFAULT_SUPPLIER_FORM,
@@ -90,7 +92,13 @@ function SupplierManagement() {
   const [modalMode, setModalMode] = useState(null); // 'add' | 'view' | 'edit' | 'delete' | null
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [formData, setFormData] = useState(DEFAULT_SUPPLIER_FORM);
-  const [formErrors, setFormErrors] = useState({});
+  const {
+    errors: formErrors,
+    setErrors: setFormErrors,
+    clearErrors,
+    handleInputChange: errorInputChange,
+    handleApiError,
+  } = useError();
 
   // Calculate 3 Total Metric Counts for Active Facility
   const totalSuppliers = currentFacilitySuppliers.length;
@@ -145,7 +153,7 @@ function SupplierManagement() {
     setFormData({
       ...DEFAULT_SUPPLIER_FORM,
     });
-    setFormErrors({});
+    clearErrors();
     setSelectedSupplier(null);
     setModalMode("add");
   };
@@ -166,7 +174,7 @@ function SupplierManagement() {
       paymentTerms: supplier.paymentTerms || "Net 30",
       status: supplier.status || "Active",
     });
-    setFormErrors({});
+    clearErrors();
     setModalMode("edit");
   };
 
@@ -179,61 +187,25 @@ function SupplierManagement() {
   const handleCloseModal = () => {
     setModalMode(null);
     setSelectedSupplier(null);
-    setFormErrors({});
+    clearErrors();
   };
 
   // Form Field Change Handler
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (formErrors[name]) {
-      setFormErrors((prev) => ({ ...prev, [name]: "" }));
-    }
-  };
-
-  // Form Validation
-  const validateForm = () => {
-    const errors = {};
-
-    if (!formData.name.trim()) {
-      errors.name = "Supplier name is required.";
-    }
-
-    if (!formData.contactPerson.trim()) {
-      errors.contactPerson = "Contact person name is required.";
-    }
-
-    if (!formData.email.trim()) {
-      errors.email = "Email address is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      errors.email = "Please enter a valid email address.";
-    } else {
-      const emailExists = supplierList.some(
-        (s) =>
-          s.email.toLowerCase() === formData.email.trim().toLowerCase() &&
-          (!selectedSupplier || s.id !== selectedSupplier.id),
-      );
-      if (emailExists) {
-        errors.email = "Email address is already used by another supplier.";
-      }
-    }
-
-    if (!formData.paymentTerms) {
-      errors.paymentTerms = "Payment terms are required.";
-    }
-
-    if (!formData.status) {
-      errors.status = "Status is required.";
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    errorInputChange(e, setFormData);
   };
 
   // Save (Add or Edit) Supplier
   const handleSaveSupplier = async (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    const { isValid, errors: validationErrors } = validateSupplierForm(formData, {
+      supplierList,
+      excludeId: selectedSupplier?.id,
+    });
+    if (!isValid) {
+      setFormErrors(validationErrors);
+      return;
+    }
 
     try {
       setIsSubmitting(true);
@@ -277,24 +249,7 @@ function SupplierManagement() {
       await fetchSuppliers();
       handleCloseModal();
     } catch (err) {
-      console.error("Failed to save supplier:", err);
-      const serverMessage =
-        err?.response?.data?.message || err?.response?.data?.error;
-      const validationDetails = err?.response?.data?.details;
-
-      if (validationDetails && typeof validationDetails === "object") {
-        setFormErrors(validationDetails);
-      } else if (serverMessage) {
-        if (serverMessage.toLowerCase().includes("email")) {
-          setFormErrors({ email: serverMessage });
-        } else {
-          setFormErrors({ general: serverMessage });
-        }
-      } else {
-        setFormErrors({
-          general: "Failed to save supplier. Please try again.",
-        });
-      }
+      handleApiError(err, "Failed to save supplier. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -1006,7 +961,7 @@ function SupplierManagement() {
                   <span>Assigned Facility</span>
                 </span>
                 <div className="flex flex-wrap gap-1.5 pt-0.5">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border bg-blue-50 text-blue-700 border-blue-200 font-semibold">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border bg-blue-50 text-blue-700 border-blue-200">
                     {selectedSupplier.facilityName}
                   </span>
                 </div>
@@ -1043,53 +998,53 @@ function SupplierManagement() {
           title="Delete Supplier"
           size="sm"
         >
-        {selectedSupplier && (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3.5 p-3.5 rounded-xl bg-red-50 border border-red-100 text-red-800">
-              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-              <div className="text-xs space-y-1">
-                <p className="font-semibold text-red-900">
-                  Are you sure you want to delete this supplier?
-                </p>
-                <p className="text-red-700">
-                  This will permanently remove the record for{" "}
-                  <span className="font-bold">{selectedSupplier.name}</span>.
-                  This action cannot be undone.
-                </p>
+          {selectedSupplier && (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3.5 p-3.5 rounded-xl bg-red-50 border border-red-100 text-red-800">
+                <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                <div className="text-xs space-y-1">
+                  <p className="font-semibold text-red-900">
+                    Are you sure you want to delete this supplier?
+                  </p>
+                  <p className="text-red-700">
+                    This will permanently remove the record for{" "}
+                    <span className="font-bold">{selectedSupplier.name}</span>.
+                    This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  disabled={isSubmitting}
+                  className="btn-secondary text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  disabled={isSubmitting}
+                  className="btn-danger text-xs"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Supplier</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={handleCloseModal}
-                disabled={isSubmitting}
-                className="btn-secondary text-xs"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDelete}
-                disabled={isSubmitting}
-                className="btn-danger text-xs"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Deleting...</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delete Supplier</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+          )}
+        </Modal>
       )}
     </div>
   );

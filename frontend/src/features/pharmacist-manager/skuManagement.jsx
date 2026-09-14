@@ -37,6 +37,8 @@ import {
 } from "../../utils/constants";
 import { getStockStatus } from "../../utils/helpers";
 import useAuth from "../../hooks/useAuth";
+import useError from "../../hooks/useError";
+import { validateSkuForm } from "../../validators/sku.validator";
 
 const extractPackSize = (packagingUnit) => {
   const match = packagingUnit ? packagingUnit.match(/\b(\d+)\b/) : null;
@@ -80,7 +82,12 @@ function SkuManagement() {
   const [modalMode, setModalMode] = useState(null);
   const [selectedSku, setSelectedSku] = useState(null);
   const [formData, setFormData] = useState(DEFAULT_SKU_FORM_DATA);
-  const [formErrors, setFormErrors] = useState({});
+  const {
+    errors: formErrors,
+    setErrors: setFormErrors,
+    clearErrors,
+    clearError,
+  } = useError();
 
   // Batch Management Action Form States in SKU Management
   const [adjustFormData, setAdjustFormData] = useState(
@@ -227,7 +234,7 @@ function SkuManagement() {
       type: defaultMed ? defaultMed.type : "Antibiotics",
       sku: initialSkuCode,
     });
-    setFormErrors({});
+    clearErrors();
     setSelectedSku(null);
     setModalMode("add");
   };
@@ -253,7 +260,7 @@ function SkuManagement() {
       maximumLevel: skuItem.maximumLevel,
       status: skuItem.status || "Active",
     });
-    setFormErrors({});
+    clearErrors();
     setModalMode("edit");
   };
 
@@ -267,7 +274,7 @@ function SkuManagement() {
   const handleOpenAdjustModal = (skuItem) => {
     setSelectedSku(skuItem);
     setAdjustFormData(DEFAULT_STOCK_ADJUSTMENT);
-    setFormErrors({});
+    clearErrors();
     setModalMode("adjust");
   };
 
@@ -282,14 +289,14 @@ function SkuManagement() {
       transferQuantity: Math.min(50, skuItem.currentStock || 10),
       notes: "",
     });
-    setFormErrors({});
+    clearErrors();
     setModalMode("transfer");
   };
 
   const handleCloseModal = () => {
     setModalMode(null);
     setSelectedSku(null);
-    setFormErrors({});
+    clearErrors();
   };
 
   // Form Field Change Handler
@@ -316,62 +323,21 @@ function SkuManagement() {
       return updated;
     });
 
-    if (formErrors[name]) {
-      setFormErrors((prev) => ({ ...prev, [name]: "" }));
-    }
-  };
-
-  // Form Validation
-  const validateForm = () => {
-    const errors = {};
-
-    if (!formData.medicineId) {
-      errors.medicineId = "Please select a medicine from the library.";
-    }
-
-    if (!formData.sku.trim()) {
-      errors.sku = "SKU code is required.";
-    } else {
-      const skuExists = currentFacilitySkus.some(
-        (s) =>
-          s.sku.toLowerCase() === formData.sku.trim().toLowerCase() &&
-          (!selectedSku || s.id !== selectedSku.id),
-      );
-      if (skuExists) {
-        errors.sku = `SKU code already exists in ${currentFacilityName}.`;
-      }
-    }
-
-    if (!formData.dosageForm) {
-      errors.dosageForm = "Dosage form is required.";
-    }
-
-    if (!formData.packagingUnit) {
-      errors.packagingUnit = "Packaging unit is required.";
-    }
-
-    if (Number(formData.minimumLevel) < 0) {
-      errors.minimumLevel = "Minimum level cannot be negative.";
-    }
-
-    if (Number(formData.reorderLevel) <= Number(formData.minimumLevel)) {
-      errors.reorderLevel =
-        "Reorder level must be greater than minimum level threshold.";
-    }
-
-    if (Number(formData.maximumLevel) <= Number(formData.reorderLevel)) {
-      errors.maximumLevel =
-        "Maximum capacity must be greater than reorder level threshold.";
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    clearError(name);
   };
 
   // Save (Add or Edit) SKU
   const handleSaveSku = (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    const { isValid, errors: validationErrors } = validateSkuForm(formData, {
+      currentFacilitySkus,
+      excludeId: selectedSku?.id,
+      currentFacilityName,
+    });
+    if (!isValid) {
+      setFormErrors(validationErrors);
+      return;
+    }
 
     if (modalMode === "add") {
       const newSkuItem = {
