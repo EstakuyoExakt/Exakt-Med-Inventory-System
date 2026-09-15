@@ -26,6 +26,7 @@ import Card from "../../components/common/card";
 import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
+import SuccessModal from "../../components/common/successModal";
 
 // Data Imports
 import { initialSkus } from "../../data/skuManagement";
@@ -1047,27 +1048,16 @@ function OrderRequest() {
       {/* ======================================================== */}
       {/* 2. MODAL: ORDER SUCCESS CONFIRMATION                     */}
       {/* ======================================================== */}
-      <Modal
+      <SuccessModal
         isOpen={modalMode === "success" && Boolean(submittedOrder)}
         onClose={handleCloseModal}
         title="Purchase Order Requisition Submitted"
+        message="Consolidated purchase order reference has been generated and dispatched to the supplier."
         size="xl"
+        confirmText="Done"
       >
         {submittedOrder && (
-          <div className="space-y-4">
-            <div className="text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 mx-auto">
-                <CheckCircle2 className="w-7 h-7" />
-              </div>
-              <h3 className="text-base font-bold text-gray-900 mt-2">
-                Purchase Order Requisition Created
-              </h3>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Consolidated purchase order reference has been generated and
-                dispatched to the supplier.
-              </p>
-            </div>
-
+          <div className="space-y-4 text-left">
             {/* PO Summary Card */}
             <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 text-xs space-y-2">
               <div className="flex justify-between border-b border-gray-200/60 pb-1.5">
@@ -1139,19 +1129,9 @@ function OrderRequest() {
                 </table>
               </div>
             </div>
-
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={handleCloseModal}
-                className="btn-primary w-full justify-center text-xs py-2"
-              >
-                Done
-              </button>
-            </div>
           </div>
         )}
-      </Modal>
+      </SuccessModal>
 
       {/* ======================================================== */}
       {/* 3. MODAL: VIEW SKU THRESHOLD DETAILS                     */}

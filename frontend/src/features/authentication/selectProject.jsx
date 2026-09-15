@@ -16,6 +16,7 @@ import {
 
 // Common Components
 import Modal from "../../components/common/modal";
+import DeleteModal from "../../components/common/deleteModal";
 import RoleGuard from "../../components/guard/roleGuard";
 import PortalHeader from "./components/portalHeader";
 import PortalFooter from "./components/portalFooter";
@@ -639,65 +640,21 @@ function SelectProject() {
       </Modal>
 
       {/* Super Admin Delete Project Confirmation Modal */}
-      <Modal
+      <DeleteModal
         isOpen={isDeleteModalOpen}
-        onClose={() => !isDeleting && handleCloseDeleteModal()}
+        onClose={handleCloseDeleteModal}
+        onConfirm={handleConfirmDeleteProject}
         title="Delete Project"
-        size="sm"
-      >
-        {projectToDelete && (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800">
-              <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="font-semibold text-red-900 text-sm">
-                  Are you sure you want to delete this project?
-                </p>
-                <p className="text-red-700">
-                  This will permanently remove the record for{" "}
-                  <span className="font-bold">{projectToDelete.name}</span> (
-                  <span className="font-mono font-semibold">
-                    {projectToDelete.projectCode ||
-                      `PRJ-00${projectToDelete.id}`}
-                  </span>
-                  ). This action cannot be undone.
-                </p>
-              </div>
-            </div>
-
-            {deleteError && (
-              <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
-                <span>{deleteError}</span>
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
-              <button
-                type="button"
-                disabled={isDeleting}
-                onClick={handleCloseDeleteModal}
-                className="btn-secondary text-xs"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={isDeleting}
-                onClick={handleConfirmDeleteProject}
-                className="btn-danger text-xs flex items-center gap-1.5"
-              >
-                {isDeleting ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Trash2 className="w-3.5 h-3.5" />
-                )}
-                <span>{isDeleting ? "Deleting..." : "Delete Project"}</span>
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+        itemName={projectToDelete?.name}
+        itemCode={
+          projectToDelete?.projectCode ||
+          (projectToDelete?.id ? `PRJ-00${projectToDelete.id}` : "")
+        }
+        itemType="project"
+        isDeleting={isDeleting}
+        error={deleteError}
+        confirmText="Delete Project"
+      />
     </div>
   );
 }

@@ -33,6 +33,8 @@ import EmptyState from "./components/emptyState";
 import SearchableChecklist from "./components/searchableChecklist";
 import PortalEntityCard from "./components/portalEntityCard";
 import Modal from "../../components/common/modal";
+import DeleteModal from "../../components/common/deleteModal";
+import SuccessModal from "../../components/common/successModal";
 import RoleGuard from "../../components/guard/roleGuard";
 
 // Services, Data & Hooks
@@ -114,9 +116,16 @@ function SelectFacility() {
     useState(null);
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [userSearchTerm, setUserSearchTerm] = useState("");
-  const [assignSuccessMsg, setAssignSuccessMsg] = useState("");
   const [isSavingAssignments, setIsSavingAssignments] = useState(false);
   const [assignErrorMsg, setAssignErrorMsg] = useState("");
+
+  // SuccessModal state for assignment confirmation
+  const [isAssignSuccessModalOpen, setIsAssignSuccessModalOpen] =
+    useState(false);
+  const [assignSuccessData, setAssignSuccessData] = useState({
+    facilityName: "",
+    count: 0,
+  });
 
   // If Super Admin has no project selected, redirect to select-project
   useEffect(() => {
@@ -510,7 +519,6 @@ function SelectFacility() {
     const fid = targetFacility.id;
     setSelectedFacilityIdForAssignment(fid);
     setUserSearchTerm("");
-    setAssignSuccessMsg("");
     setAssignErrorMsg("");
     setIsAssignUserModalOpen(true);
 
@@ -537,7 +545,6 @@ function SelectFacility() {
   const handleFacilityChangeInModal = async (facilityId) => {
     const fid = Number(facilityId);
     setSelectedFacilityIdForAssignment(fid);
-    setAssignSuccessMsg("");
     setAssignErrorMsg("");
 
     const targetFac = facilityList.find((f) => f.id === fid);
@@ -589,7 +596,6 @@ function SelectFacility() {
     try {
       setIsSavingAssignments(true);
       setAssignErrorMsg("");
-      setAssignSuccessMsg("");
 
       // Call backend assign/unassign endpoints
       if (usersToAssign.length > 0) {
@@ -645,14 +651,13 @@ function SelectFacility() {
         }),
       );
 
-      setAssignSuccessMsg(
-        `Updated user assignments for ${targetFac?.name || "facility"}!`,
-      );
-
-      setTimeout(() => {
-        setIsAssignUserModalOpen(false);
-        setAssignSuccessMsg("");
-      }, 700);
+      // Close assign modal and open SuccessModal
+      setIsAssignUserModalOpen(false);
+      setAssignSuccessData({
+        facilityName: targetFac?.name || "the facility",
+        count: selectedUserIds.length,
+      });
+      setIsAssignSuccessModalOpen(true);
     } catch (err) {
       console.error("Failed to save facility assignments:", err);
       const errMsg =
@@ -1372,71 +1377,34 @@ function SelectFacility() {
       </Modal>
 
       {/* Super Admin & Admin Delete Facility Confirmation Modal */}
-      <Modal
+      <DeleteModal
         isOpen={isDeleteModalOpen}
-        onClose={() => !isDeletingFacility && handleCloseDeleteModal()}
+        onClose={handleCloseDeleteModal}
+        onConfirm={handleConfirmDeleteFacility}
         title="Delete Facility"
-        size="sm"
-      >
-        {facilityToDelete && (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800">
-              <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="font-semibold text-red-900 text-sm">
-                  Are you sure you want to delete this facility?
-                </p>
-                <p className="text-red-700">
-                  This will permanently delete{" "}
-                  <strong className="font-bold text-red-900">
-                    {facilityToDelete.name}
-                  </strong>{" "}
-                  (
-                  <span className="font-mono font-semibold">
-                    {facilityToDelete.facilityCode}
-                  </span>
-                  ) from this network. If it is currently selected in your
-                  active session, it will be unselected. This action cannot be
-                  undone.
-                </p>
-              </div>
-            </div>
-
-            {deleteFacilityError && (
-              <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
-                <span>{deleteFacilityError}</span>
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
-              <button
-                type="button"
-                disabled={isDeletingFacility}
-                onClick={handleCloseDeleteModal}
-                className="btn-secondary text-xs cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={isDeletingFacility}
-                onClick={handleConfirmDeleteFacility}
-                className="btn-danger text-xs flex items-center gap-1.5 cursor-pointer"
-              >
-                {isDeletingFacility ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Trash2 className="w-3.5 h-3.5" />
-                )}
-                <span>
-                  {isDeletingFacility ? "Deleting..." : "Delete Facility"}
-                </span>
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+        itemName={facilityToDelete?.name}
+        itemCode={facilityToDelete?.facilityCode}
+        itemType="facility"
+        message={
+          facilityToDelete && (
+            <>
+              This will permanently delete{" "}
+              <strong className="font-bold text-red-900">
+                {facilityToDelete.name}
+              </strong>{" "}
+              (
+              <span className="font-mono font-semibold">
+                {facilityToDelete.facilityCode}
+              </span>
+              ) from this network. If it is currently selected in your active
+              session, it will be unselected. This action cannot be undone.
+            </>
+          )
+        }
+        isDeleting={isDeletingFacility}
+        error={deleteFacilityError}
+        confirmText="Delete Facility"
+      />
 
       {/* Super Admin & Admin Assign Users Modal */}
       <Modal
@@ -1459,13 +1427,6 @@ function SelectFacility() {
               </p>
             </div>
           </div>
-
-          {assignSuccessMsg && (
-            <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl animate-fade-in">
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-              <span className="font-semibold">{assignSuccessMsg}</span>
-            </div>
-          )}
 
           {assignErrorMsg && (
             <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl animate-fade-in">
@@ -1603,6 +1564,16 @@ function SelectFacility() {
           </div>
         </form>
       </Modal>
+
+      {/* Staff Assignments Success Modal */}
+      <SuccessModal
+        isOpen={isAssignSuccessModalOpen}
+        onClose={() => setIsAssignSuccessModalOpen(false)}
+        title="Staff Assignments Updated!"
+        message={`User delegation for ${assignSuccessData.facilityName} has been saved successfully.`}
+        details={`${assignSuccessData.count} staff member(s) now have authorized access to operate in ${assignSuccessData.facilityName}.`}
+        confirmText="Done"
+      />
     </div>
   );
 }

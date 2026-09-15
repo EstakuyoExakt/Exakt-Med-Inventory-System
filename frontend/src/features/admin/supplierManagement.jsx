@@ -24,6 +24,7 @@ import Card from "../../components/common/card";
 import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
+import DeleteModal from "../../components/common/deleteModal";
 
 import supplierService from "../../services/supplier";
 import useAuth from "../../hooks/useAuth";
@@ -992,59 +993,16 @@ function SupplierManagement() {
 
       {/* --- DELETE SUPPLIER CONFIRMATION MODAL --- */}
       {isSuperAdmin && (
-        <Modal
+        <DeleteModal
           isOpen={modalMode === "delete" && Boolean(selectedSupplier)}
           onClose={handleCloseModal}
+          onConfirm={handleConfirmDelete}
           title="Delete Supplier"
-          size="sm"
-        >
-          {selectedSupplier && (
-            <div className="space-y-4">
-              <div className="flex items-start gap-3.5 p-3.5 rounded-xl bg-red-50 border border-red-100 text-red-800">
-                <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-                <div className="text-xs space-y-1">
-                  <p className="font-semibold text-red-900">
-                    Are you sure you want to delete this supplier?
-                  </p>
-                  <p className="text-red-700">
-                    This will permanently remove the record for{" "}
-                    <span className="font-bold">{selectedSupplier.name}</span>.
-                    This action cannot be undone.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  disabled={isSubmitting}
-                  className="btn-secondary text-xs"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmDelete}
-                  disabled={isSubmitting}
-                  className="btn-danger text-xs"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Deleting...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Delete Supplier</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-        </Modal>
+          itemName={selectedSupplier?.name}
+          itemType="supplier"
+          isDeleting={isSubmitting}
+          confirmText="Delete Supplier"
+        />
       )}
     </div>
   );

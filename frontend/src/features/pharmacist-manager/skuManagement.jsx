@@ -20,6 +20,7 @@ import Card from "../../components/common/card";
 import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
+import DeleteModal from "../../components/common/deleteModal";
 
 // Data & Constants Imports
 import {
@@ -1629,54 +1630,29 @@ function SkuManagement() {
       {/* ======================================================== */}
       {/* 5. DELETE SKU CONFIRMATION MODAL                         */}
       {/* ======================================================== */}
-      <Modal
+      <DeleteModal
         isOpen={modalMode === "delete" && Boolean(selectedSku)}
         onClose={handleCloseModal}
+        onConfirm={handleConfirmDelete}
         title="Delete Stock-Keeping Unit"
-        size="sm"
-      >
-        {selectedSku && (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3.5 p-3.5 rounded-xl bg-red-50 border border-red-100 text-red-800">
-              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-              <div className="text-xs space-y-1">
-                <p className="font-semibold text-red-900">
-                  Are you sure you want to delete this SKU?
-                </p>
-                <p className="text-red-700">
-                  This will remove SKU{" "}
-                  <span className="font-bold font-mono">{selectedSku.sku}</span>{" "}
-                  (
-                  <span className="font-semibold">{selectedSku.brandName}</span>
-                  ) from{" "}
-                  <span className="font-bold">
-                    {selectedSku.facility || currentFacilityName}
-                  </span>
-                  .
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={handleCloseModal}
-                className="btn-secondary text-xs"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDelete}
-                className="btn-danger text-xs"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete SKU</span>
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+        itemName={selectedSku?.brandName}
+        itemCode={selectedSku?.sku}
+        itemType="SKU"
+        message={
+          selectedSku && (
+            <>
+              This will remove SKU{" "}
+              <span className="font-bold font-mono">{selectedSku.sku}</span> (
+              <span className="font-semibold">{selectedSku.brandName}</span>) from{" "}
+              <span className="font-bold">
+                {selectedSku.facility || currentFacilityName}
+              </span>
+              .
+            </>
+          )
+        }
+        confirmText="Delete SKU"
+      />
     </div>
   );
 }
