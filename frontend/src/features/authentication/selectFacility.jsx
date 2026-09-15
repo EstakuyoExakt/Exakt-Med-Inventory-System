@@ -21,10 +21,7 @@ import {
   Pencil,
   Trash2,
   Check,
-  UserPlus,
   Users,
-  Lock,
-  Shield,
   RefreshCw,
 } from "lucide-react";
 
@@ -43,16 +40,12 @@ import facilityService from "../../services/facility";
 import assignFacilityService from "../../services/assignFacility";
 import userService from "../../services/user";
 import { users as initialUsers } from "../../data/user";
-import { ROLE_DETAILS, ROLES } from "../../config/roles";
+import { ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
 import useRole from "../../hooks/useRole";
 import useError from "../../hooks/useError";
-import {
-  DEFAULT_FACILITY_FORM,
-  DEFAULT_USER_FORM,
-} from "../../utils/constants";
+import { DEFAULT_FACILITY_FORM } from "../../utils/constants";
 import { validateFacilityForm } from "../../validators/facility.validator";
-import { validateUserForm } from "../../validators/user.validator";
 
 function SelectFacility() {
   const navigate = useNavigate();
@@ -124,22 +117,6 @@ function SelectFacility() {
   const [assignSuccessMsg, setAssignSuccessMsg] = useState("");
   const [isSavingAssignments, setIsSavingAssignments] = useState(false);
   const [assignErrorMsg, setAssignErrorMsg] = useState("");
-
-  // Modal & Form state for creating a new user
-  const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
-  const [userFormData, setUserFormData] = useState(DEFAULT_USER_FORM);
-  const [selectedFacilitiesForNewUser, setSelectedFacilitiesForNewUser] =
-    useState([]);
-  const {
-    errors: userFormErrors,
-    setErrors: setUserFormErrors,
-    clearErrors: clearCreateUserErrors,
-    handleInputChange: handleCreateUserChange,
-    handleApiError: handleCreateUserApiError,
-  } = useError();
-  const [createUserSuccessMsg, setCreateUserSuccessMsg] = useState("");
-  const [isCreatingUser, setIsCreatingUser] = useState(false);
-  const [createUserErrorMsg, setCreateUserErrorMsg] = useState("");
 
   // If Super Admin has no project selected, redirect to select-project
   useEffect(() => {
@@ -508,14 +485,6 @@ function SelectFacility() {
     );
   }, [userList]);
 
-  // Helper: Roles allowed for user creation based on current logged in user
-  const availableRolesForCreation = useMemo(() => {
-    if (isSuperAdmin) {
-      return [ROLES.ADMIN, ROLES.PHARMACIST, ROLES.PROCUREMENT];
-    }
-    return [ROLES.PHARMACIST, ROLES.PROCUREMENT];
-  }, [isSuperAdmin]);
-
   // Helper: Get users assigned to a specific facility
   const getAssignedUsers = (facilityId) => {
     const fac = facilityList.find((f) => f.id === Number(facilityId));
@@ -699,152 +668,6 @@ function SelectFacility() {
     }
   };
 
-  // --- Create User Form Handlers (SuperAdmin only) ---
-  const handleOpenCreateUserModal = () => {
-    if (!isSuperAdmin) return;
-    setUserFormData(DEFAULT_USER_FORM);
-    const initialFacs = currentSavedFacility
-      ? [currentSavedFacility.id]
-      : filteredFacilities[0]
-        ? [filteredFacilities[0].id]
-        : [];
-    setSelectedFacilitiesForNewUser(initialFacs);
-    clearCreateUserErrors();
-    setCreateUserSuccessMsg("");
-    setCreateUserErrorMsg("");
-    setIsCreateUserModalOpen(true);
-  };
-
-  const handleUserInputChange = (e) => {
-    handleCreateUserChange(e, setUserFormData);
-  };
-
-  const handleToggleFacilityForNewUser = (facilityId) => {
-    const fid = Number(facilityId);
-    setSelectedFacilitiesForNewUser((prev) =>
-      prev.includes(fid) ? prev.filter((id) => id !== fid) : [...prev, fid],
-    );
-  };
-
-  const handleCreateUserSubmit = async (e) => {
-    e.preventDefault();
-    if (!isSuperAdmin) return;
-    const { isValid, errors } = validateUserForm(userFormData, {
-      userList,
-      isEdit: false,
-      checkRoleAndStatus: false,
-    });
-    if (!isValid) {
-      setUserFormErrors(errors);
-      return;
-    }
-
-    try {
-      setIsCreatingUser(true);
-      setCreateUserErrorMsg("");
-      setCreateUserSuccessMsg("");
-
-      const primaryFacilityId =
-        selectedFacilitiesForNewUser.length > 0
-          ? Number(selectedFacilitiesForNewUser[0])
-          : null;
-
-      const payload = {
-        name: userFormData.name.trim(),
-        username: userFormData.username.trim(),
-        password: userFormData.password,
-        email: userFormData.email.trim(),
-        phone: userFormData.phone.trim() || "+63 900 000 0000",
-        role: userFormData.role,
-        status: userFormData.status === "Active",
-        facilityId:
-          userFormData.role === ROLES.PHARMACIST ||
-          userFormData.role === ROLES.PROCUREMENT
-            ? primaryFacilityId
-            : null,
-      };
-
-      const createdUser = await userService.createUser(payload);
-
-      // If additional facilities were selected beyond the primary one, or if role is Admin and facilities were selected
-      const additionalFacilities =
-        userFormData.role === ROLES.PHARMACIST ||
-        userFormData.role === ROLES.PROCUREMENT
-          ? selectedFacilitiesForNewUser.slice(1)
-          : selectedFacilitiesForNewUser;
-
-      if (additionalFacilities.length > 0 && createdUser?.id) {
-        for (const facId of additionalFacilities) {
-          try {
-            await assignFacilityService.assignUsersToFacility(Number(facId), {
-              userIds: [createdUser.id],
-            });
-          } catch (assignErr) {
-            console.warn(
-              `Failed to assign user ${createdUser.id} to facility ${facId}:`,
-              assignErr,
-            );
-          }
-        }
-      }
-
-      const formattedNewUser = {
-        id: createdUser.id,
-        name: createdUser.name,
-        username: createdUser.username,
-        email: createdUser.email,
-        phone: createdUser.phone,
-        role: createdUser.role,
-        status: createdUser.status ? "Active" : "Inactive",
-        assignedFacilities: selectedFacilitiesForNewUser.map(Number),
-        createdAt: createdUser.createdAt || new Date().toISOString(),
-      };
-
-      setUserList((prev) => [formattedNewUser, ...prev]);
-
-      if (selectedFacilitiesForNewUser.length > 0) {
-        const selectedNumericFids = selectedFacilitiesForNewUser.map(Number);
-        setFacilityList((prevFacilities) =>
-          prevFacilities.map((fac) => {
-            if (selectedNumericFids.includes(fac.id)) {
-              const currentUsers = Array.isArray(fac.assignedUserIds)
-                ? fac.assignedUserIds
-                : [];
-              return {
-                ...fac,
-                assignedUserIds: [...currentUsers, createdUser.id],
-              };
-            }
-            return fac;
-          }),
-        );
-      }
-
-      setCreateUserSuccessMsg(
-        `User account for ${formattedNewUser.name} created successfully!`,
-      );
-
-      setTimeout(() => {
-        setIsCreateUserModalOpen(false);
-        setCreateUserSuccessMsg("");
-        setUserFormData(DEFAULT_USER_FORM);
-        setSelectedFacilitiesForNewUser([]);
-      }, 700);
-    } catch (err) {
-      console.error("Failed to create user:", err);
-      const errMsg =
-        err.response?.data?.message ||
-        err.response?.data?.error ||
-        err.message ||
-        "Failed to create user. Please try again.";
-      setCreateUserErrorMsg(
-        typeof errMsg === "string" ? errMsg : "Failed to create user.",
-      );
-    } finally {
-      setIsCreatingUser(false);
-    }
-  };
-
   if (!user) return null;
 
   return (
@@ -902,15 +725,6 @@ function SelectFacility() {
             <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
               <button
                 type="button"
-                onClick={handleOpenCreateUserModal}
-                className="btn-secondary py-2 px-3 text-xs shadow-sm flex items-center gap-1.5 shrink-0 hover:border-blue-300 hover:text-blue-700 cursor-pointer"
-                title="Create New User Account"
-              >
-                <UserPlus className="w-3.5 h-3.5 text-blue-600" />
-                <span>Create User</span>
-              </button>
-              <button
-                type="button"
                 onClick={() =>
                   handleOpenAssignUsersModal(
                     filteredFacilities[0] || facilityList[0],
@@ -922,17 +736,15 @@ function SelectFacility() {
                 <Users className="w-3.5 h-3.5 text-blue-600" />
                 <span>Assign Users</span>
               </button>
-              <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN]}>
-                <button
-                  type="button"
-                  onClick={handleOpenAddModal}
-                  className="btn-primary py-2 px-3.5 text-xs shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer"
-                  title="Create New Facility"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Create Facility</span>
-                </button>
-              </RoleGuard>
+              <button
+                type="button"
+                onClick={handleOpenAddModal}
+                className="btn-primary py-2 px-3.5 text-xs shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer"
+                title="Create New Facility"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Facility</span>
+              </button>
             </div>
           </RoleGuard>
         </PortalToolbar>
@@ -1785,268 +1597,6 @@ function SelectFacility() {
                 <>
                   <Check className="w-3.5 h-3.5" />
                   <span>Save Assignments</span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Super Admin & Admin Create User Modal */}
-      <Modal
-        isOpen={isCreateUserModalOpen}
-        onClose={() => setIsCreateUserModalOpen(false)}
-        title="Create User Account"
-        size="md"
-      >
-        <form onSubmit={handleCreateUserSubmit} className="space-y-4">
-          <div className="flex items-start gap-3 p-3 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-blue-800">
-            <UserPlus className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-blue-900">
-                Facility Staff Provisioning
-              </p>
-              <p className="mt-0.5 text-blue-700">
-                Create a new user account and optionally assign them to
-                healthcare facilities immediately.
-              </p>
-            </div>
-          </div>
-
-          {createUserSuccessMsg && (
-            <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl animate-fade-in">
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-              <span className="font-semibold">{createUserSuccessMsg}</span>
-            </div>
-          )}
-
-          {createUserErrorMsg && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl animate-fade-in">
-              <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-              <span>{createUserErrorMsg}</span>
-            </div>
-          )}
-
-          {/* Full Name */}
-          <div>
-            <label
-              htmlFor="user-fullname"
-              className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-            >
-              Full Name <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <input
-                id="user-fullname"
-                name="name"
-                type="text"
-                value={userFormData.name}
-                onChange={handleUserInputChange}
-                placeholder="e.g. Dr. Jonathan Mendoza"
-                className={`input text-xs pl-9 ${userFormErrors.name ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`}
-                autoFocus
-              />
-              <User className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-            {userFormErrors.name && (
-              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                <AlertCircle className="w-3.5 h-3.5" />
-                {userFormErrors.name}
-              </p>
-            )}
-          </div>
-
-          {/* Username & Email Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div>
-              <label
-                htmlFor="user-username"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Username <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  id="user-username"
-                  name="username"
-                  type="text"
-                  value={userFormData.username}
-                  onChange={handleUserInputChange}
-                  placeholder="jmendoza_pharma"
-                  className={`input text-xs pl-7 font-mono ${userFormErrors.username ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`}
-                />
-                <span className="text-gray-400 font-mono text-xs absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                  @
-                </span>
-              </div>
-              {userFormErrors.username && (
-                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  {userFormErrors.username}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label
-                htmlFor="user-email"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Email Address <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  id="user-email"
-                  name="email"
-                  type="email"
-                  value={userFormData.email}
-                  onChange={handleUserInputChange}
-                  placeholder="jmendoza@exaktmed.com"
-                  className={`input text-xs pl-9 ${userFormErrors.email ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`}
-                />
-                <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-              {userFormErrors.email && (
-                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  {userFormErrors.email}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Phone & Password Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div>
-              <label
-                htmlFor="user-phone"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Phone Number
-              </label>
-              <div className="relative">
-                <input
-                  id="user-phone"
-                  name="phone"
-                  type="text"
-                  value={userFormData.phone}
-                  onChange={handleUserInputChange}
-                  placeholder="+63 917 000 0000"
-                  className="input text-xs pl-9"
-                />
-                <Phone className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="user-password"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Initial Password <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  id="user-password"
-                  name="password"
-                  type="text"
-                  value={userFormData.password}
-                  onChange={handleUserInputChange}
-                  placeholder="exaktpassword"
-                  className={`input text-xs pl-9 ${userFormErrors.password ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`}
-                />
-                <Lock className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-              {userFormErrors.password && (
-                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  {userFormErrors.password}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Role & Status Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div>
-              <label
-                htmlFor="user-role"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Assigned Role <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="user-role"
-                name="role"
-                value={userFormData.role}
-                onChange={handleUserInputChange}
-                className="input text-xs font-medium"
-              >
-                {availableRolesForCreation.map((role) => (
-                  <option key={role} value={role}>
-                    {ROLE_DETAILS[role]?.label || role}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="user-status"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Account Status
-              </label>
-              <select
-                id="user-status"
-                name="status"
-                value={userFormData.status}
-                onChange={handleUserInputChange}
-                className="input text-xs"
-              >
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Assign Initial Facilities */}
-          <SearchableChecklist
-            label="Assign Facilities"
-            selectedCount={selectedFacilitiesForNewUser.length}
-            totalCount={facilityList.length}
-            selectedIds={selectedFacilitiesForNewUser}
-            onToggle={handleToggleFacilityForNewUser}
-            items={facilityList}
-            getItemBadge={(fac) => fac.facilityCode}
-            maxHeight="max-h-36"
-            helperText="The new user will be granted access to these healthcare branches upon logging in."
-          />
-
-          {/* Modal Actions */}
-          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
-            <button
-              type="button"
-              disabled={isCreatingUser}
-              onClick={() => setIsCreateUserModalOpen(false)}
-              className="btn-secondary text-xs cursor-pointer disabled:opacity-60"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isCreatingUser}
-              className="btn-primary text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
-            >
-              {isCreatingUser ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Creating User...</span>
-                </>
-              ) : (
-                <>
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>Create User</span>
                 </>
               )}
             </button>
