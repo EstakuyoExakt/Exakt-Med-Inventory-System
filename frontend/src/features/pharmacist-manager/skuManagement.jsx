@@ -21,6 +21,7 @@ import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 import DeleteModal from "../../components/common/deleteModal";
+import SuccessModal from "../../components/common/successModal";
 
 // Data & Constants Imports
 import {
@@ -28,7 +29,7 @@ import {
   DOSAGE_FORMS,
   PACKAGING_UNITS,
 } from "../../data/skuManagement";
-import { medicines, MEDICINE_TYPES } from "../../data/medicine";
+import { medicines } from "../../data/medicine";
 import { facilities } from "../../data/facility";
 import {
   FORM_CODES,
@@ -74,7 +75,6 @@ function SkuManagement() {
 
   const [skuList, setSkuList] = useState(initialSkus);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedType, setSelectedType] = useState("ALL");
   const [selectedStockFilter, setSelectedStockFilter] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
@@ -83,6 +83,8 @@ function SkuManagement() {
   const [modalMode, setModalMode] = useState(null);
   const [selectedSku, setSelectedSku] = useState(null);
   const [formData, setFormData] = useState(DEFAULT_SKU_FORM_DATA);
+  const [createdSkuInfo, setCreatedSkuInfo] = useState(null);
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const {
     errors: formErrors,
     setErrors: setFormErrors,
@@ -142,8 +144,6 @@ function SkuManagement() {
         item.genericName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.dosage.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesType = selectedType === "ALL" || item.type === selectedType;
-
       let matchesStock = true;
       if (selectedStockFilter === "OPTIMAL") {
         matchesStock = item.currentStock > item.reorderLevel;
@@ -157,9 +157,9 @@ function SkuManagement() {
         matchesStock = item.currentStock === 0;
       }
 
-      return matchesSearch && matchesType && matchesStock;
+      return matchesSearch && matchesStock;
     });
-  }, [currentFacilitySkus, searchQuery, selectedType, selectedStockFilter]);
+  }, [currentFacilitySkus, searchQuery, selectedStockFilter]);
 
   // Pagination calculation
   const totalPages = Math.ceil(filteredSkus.length / itemsPerPage) || 1;
@@ -173,11 +173,6 @@ function SkuManagement() {
     setCurrentPage(1);
   };
 
-  const handleTypeChange = (e) => {
-    setSelectedType(e.target.value);
-    setCurrentPage(1);
-  };
-
   const handleStockFilterChange = (e) => {
     setSelectedStockFilter(e.target.value);
     setCurrentPage(1);
@@ -188,30 +183,30 @@ function SkuManagement() {
     const medId = Number(e.target.value);
     const selectedMed = medicines.find((m) => m.id === medId);
     if (selectedMed) {
-      const generatedSku = generateSkuCode(
-        selectedMed.brandName,
-        selectedMed.dosage,
-        formData.dosageForm || "Tablet",
-        formData.packagingUnit || "Box of 100",
-      );
-      setFormData((prev) => ({
-        ...prev,
-        medicineId: selectedMed.id,
-        brandName: selectedMed.brandName,
-        genericName: selectedMed.genericName,
-        dosage: selectedMed.dosage,
-        type: selectedMed.type,
-        sku: generatedSku,
-      }));
+      setFormData((prev) => {
+        const generatedSku = generateSkuCode(
+          prev.brandName || selectedMed.genericName,
+          selectedMed.dosage,
+          prev.dosageForm || "Tablet",
+          prev.packagingUnit || "Box of 100",
+        );
+        return {
+          ...prev,
+          medicineId: selectedMed.id,
+          genericName: selectedMed.genericName,
+          dosage: selectedMed.dosage,
+          sku: generatedSku,
+        };
+      });
     } else {
       setFormData((prev) => ({
         ...prev,
         medicineId: "",
-        brandName: "",
         genericName: "",
         dosage: "",
       }));
     }
+    clearError("medicineId");
   };
 
   // Modal Open Handlers
@@ -219,20 +214,19 @@ function SkuManagement() {
     const defaultMed = medicines[0];
     const initialSkuCode = defaultMed
       ? generateSkuCode(
-          defaultMed.brandName,
+          defaultMed.genericName,
           defaultMed.dosage,
           "Tablet",
           "Box of 100",
         )
-      : "AMOX500-CAP-100";
+      : "AMOX500-TAB-100";
 
     setFormData({
       ...DEFAULT_SKU_FORM_DATA,
       medicineId: defaultMed ? defaultMed.id : "",
-      brandName: defaultMed ? defaultMed.brandName : "",
+      brandName: "",
       genericName: defaultMed ? defaultMed.genericName : "",
       dosage: defaultMed ? defaultMed.dosage : "",
-      type: defaultMed ? defaultMed.type : "Antibiotics",
       sku: initialSkuCode,
     });
     clearErrors();
@@ -253,7 +247,6 @@ function SkuManagement() {
       brandName: skuItem.brandName,
       genericName: skuItem.genericName,
       dosage: skuItem.dosage,
-      type: skuItem.type,
       dosageForm: skuItem.dosageForm,
       packagingUnit: skuItem.packagingUnit,
       minimumLevel: skuItem.minimumLevel,
@@ -309,15 +302,21 @@ function SkuManagement() {
       const updated = { ...prev, [name]: finalValue };
 
       if (
-        (name === "dosageForm" || name === "packagingUnit") &&
-        modalMode === "add" &&
-        prev.brandName
+        (name === "brandName" ||
+          name === "dosageForm" ||
+          name === "packagingUnit") &&
+        modalMode === "add"
       ) {
+        const brandForSku = name === "brandName" ? value : prev.brandName;
+        const formForSku = name === "dosageForm" ? value : prev.dosageForm;
+        const packForSku =
+          name === "packagingUnit" ? value : prev.packagingUnit;
+
         updated.sku = generateSkuCode(
-          prev.brandName,
+          brandForSku || prev.genericName,
           prev.dosage,
-          name === "dosageForm" ? value : prev.dosageForm,
-          name === "packagingUnit" ? value : prev.packagingUnit,
+          formForSku,
+          packForSku,
         );
       }
 
@@ -348,7 +347,6 @@ function SkuManagement() {
         brandName: formData.brandName,
         genericName: formData.genericName,
         dosage: formData.dosage,
-        type: formData.type,
         dosageForm: formData.dosageForm,
         packagingUnit: formData.packagingUnit,
         minimumLevel: Number(formData.minimumLevel),
@@ -360,6 +358,10 @@ function SkuManagement() {
         createdAt: new Date().toISOString().split("T")[0],
       };
       setSkuList((prev) => [newSkuItem, ...prev]);
+      handleCloseModal();
+      setCreatedSkuInfo(newSkuItem);
+      setIsSuccessModalOpen(true);
+      return;
     } else if (modalMode === "edit" && selectedSku) {
       setSkuList((prev) =>
         prev.map((s) =>
@@ -367,6 +369,7 @@ function SkuManagement() {
             ? {
                 ...s,
                 sku: formData.sku.trim().toUpperCase(),
+                brandName: formData.brandName,
                 dosageForm: formData.dosageForm,
                 packagingUnit: formData.packagingUnit,
                 minimumLevel: Number(formData.minimumLevel),
@@ -634,25 +637,11 @@ function SkuManagement() {
           </div>
 
           <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap sm:flex-nowrap">
-            {/* Medicine Type Filter */}
-            <select
-              value={selectedType}
-              onChange={handleTypeChange}
-              className="input py-2 text-xs w-full sm:w-44"
-            >
-              <option value="ALL">All Medicine Types</option>
-              {MEDICINE_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-
             {/* Stock Health Filter */}
             <select
               value={selectedStockFilter}
               onChange={handleStockFilterChange}
-              className="input py-2 text-xs w-full sm:w-40"
+              className="input py-2 text-xs w-full sm:w-44"
             >
               <option value="ALL">All Stock Levels</option>
               <option value="OPTIMAL">Optimal Stock</option>
@@ -716,9 +705,6 @@ function SkuManagement() {
                             </div>
                             <div className="text-xs text-gray-500">
                               {item.genericName} • {item.dosage}
-                            </div>
-                            <div className="text-[11px] text-gray-400 mt-0.5">
-                              {item.type}
                             </div>
                           </div>
                         </div>
@@ -953,8 +939,7 @@ function SkuManagement() {
                 <option value="">-- Choose a medicine --</option>
                 {medicines.map((med) => (
                   <option key={med.id} value={med.id}>
-                    {med.brandName} ({med.genericName}) — {med.dosage} [
-                    {med.type}]
+                    {med.genericName} — {med.dosage}
                   </option>
                 ))}
               </select>
@@ -966,7 +951,44 @@ function SkuManagement() {
             </div>
           )}
 
+          {modalMode === "edit" && (
+            <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-700">
+              <span className="font-semibold text-gray-900">
+                Generic Formula:
+              </span>{" "}
+              {formData.genericName} — {formData.dosage}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Brand Name Input */}
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="sku-brandName"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Brand Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="sku-brandName"
+                type="text"
+                name="brandName"
+                value={formData.brandName}
+                onChange={handleInputChange}
+                placeholder="e.g. Biogesic, Amoxil, Ventolin"
+                className={`input ${
+                  formErrors.brandName
+                    ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                    : ""
+                }`}
+              />
+              {formErrors.brandName && (
+                <p className="text-xs text-red-500 mt-1">
+                  {formErrors.brandName}
+                </p>
+              )}
+            </div>
+
             {/* SKU Code */}
             <div className="sm:col-span-2">
               <div className="flex items-center justify-between mb-1.5">
@@ -1516,10 +1538,6 @@ function SkuManagement() {
                   {selectedSku.genericName} • {selectedSku.dosage}
                 </p>
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-700 border border-gray-200">
-                    {selectedSku.type}
-                  </span>
-                  <span className="text-xs text-gray-400">•</span>
                   <span className="text-xs text-gray-600 font-medium">
                     {selectedSku.dosageForm} ({selectedSku.packagingUnit})
                   </span>
@@ -1643,7 +1661,8 @@ function SkuManagement() {
             <>
               This will remove SKU{" "}
               <span className="font-bold font-mono">{selectedSku.sku}</span> (
-              <span className="font-semibold">{selectedSku.brandName}</span>) from{" "}
+              <span className="font-semibold">{selectedSku.brandName}</span>)
+              from{" "}
               <span className="font-bold">
                 {selectedSku.facility || currentFacilityName}
               </span>
@@ -1652,6 +1671,53 @@ function SkuManagement() {
           )
         }
         confirmText="Delete SKU"
+      />
+
+      {/* ======================================================== */}
+      {/* 6. CREATE SKU SUCCESS MODAL                              */}
+      {/* ======================================================== */}
+      <SuccessModal
+        isOpen={isSuccessModalOpen}
+        onClose={() => {
+          setIsSuccessModalOpen(false);
+          setCreatedSkuInfo(null);
+        }}
+        title="Medication SKU Created!"
+        message={`SKU ${createdSkuInfo?.sku || ""} has been successfully registered.`}
+        details={
+          createdSkuInfo && (
+            <div className="space-y-1 text-xs">
+              <p>
+                <span className="font-semibold text-emerald-950">
+                  Medicine:
+                </span>{" "}
+                {createdSkuInfo.brandName} ({createdSkuInfo.genericName})
+              </p>
+              <p>
+                <span className="font-semibold text-emerald-950">
+                  Specification:
+                </span>{" "}
+                {createdSkuInfo.dosage} &bull; {createdSkuInfo.dosageForm} (
+                {createdSkuInfo.packagingUnit})
+              </p>
+              <p>
+                <span className="font-semibold text-emerald-950">
+                  Facility:
+                </span>{" "}
+                {createdSkuInfo.facility}
+              </p>
+              <p>
+                <span className="font-semibold text-emerald-950">
+                  Thresholds:
+                </span>{" "}
+                Min: {createdSkuInfo.minimumLevel} | Reorder:{" "}
+                {createdSkuInfo.reorderLevel} | Max:{" "}
+                {createdSkuInfo.maximumLevel}
+              </p>
+            </div>
+          )
+        }
+        confirmText="Done"
       />
     </div>
   );
