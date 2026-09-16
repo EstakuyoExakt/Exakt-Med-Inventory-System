@@ -22,6 +22,7 @@ import Card from "../../components/common/card";
 import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
+import ComboBox from "./components/comboBox";
 import { getExpiryStatus } from "../../utils/helpers";
 import { QUARANTINE_REASONS } from "../../utils/constants";
 import useAuth from "../../hooks/useAuth";
@@ -80,40 +81,26 @@ function BatchManagement() {
   }, [batchList, currentFacilityName]);
 
   // Form State for Receive Stock via PO
-  const defaultPo = useMemo(() => {
-    return (
-      requestedOrders.find(
-        (po) =>
-          po.status === "Approved" && po.targetFacility === currentFacilityName,
-      ) ||
-      requestedOrders.find((po) => po.status === "Approved") ||
-      requestedOrders[0]
-    );
-  }, [currentFacilityName]);
-
-  const [receiveFormData, setReceiveFormData] = useState({
-    poNumber: defaultPo?.orderNumber || "",
-    sku: defaultPo?.sku || "AMOX500-CAP-100",
-    batchNumber: defaultPo
-      ? `BAT-${defaultPo.orderNumber.replace("PO-", "")}`
-      : "BAT-2026-0103",
+  const getInitialReceiveFormData = () => ({
+    poNumber: "",
+    sku: "",
+    batchNumber: "",
     manufacturingDate: new Date().toISOString().split("T")[0],
-    expiryDate: (() => {
-      const d = new Date();
-      d.setFullYear(d.getFullYear() + 2);
-      return d.toISOString().split("T")[0];
-    })(),
-    quantity: defaultPo?.quantity || 500,
+    expiryDate: "",
+    quantity: "",
     location: currentFacilityName,
     isQuarantined: false,
     quarantineReason: QUARANTINE_REASONS[0],
     quarantineNotes: "",
   });
 
+  const [receiveFormData, setReceiveFormData] = useState(getInitialReceiveFormData);
+
   const {
     errors: formErrors,
     setErrors: setFormErrors,
     clearErrors,
+    clearError,
   } = useError();
 
   // Helper map for SKU metadata lookup
@@ -229,25 +216,7 @@ function BatchManagement() {
 
   // Receive Stock via PO
   const handleOpenReceiveModal = () => {
-    const po = defaultPo || requestedOrders[0];
-    const today = new Date();
-    const futureDate = new Date();
-    futureDate.setFullYear(today.getFullYear() + 2);
-
-    setReceiveFormData({
-      poNumber: po ? po.orderNumber : "",
-      sku: po ? po.sku : "AMOX500-CAP-100",
-      batchNumber: po
-        ? `BAT-${po.orderNumber.replace("PO-", "")}`
-        : `BAT-2026-${String(batchList.length + 1).padStart(4, "0")}`,
-      manufacturingDate: today.toISOString().split("T")[0],
-      expiryDate: futureDate.toISOString().split("T")[0],
-      quantity: po ? po.quantity : 500,
-      location: currentFacilityName, // Automatically lock to current facility
-      isQuarantined: false,
-      quarantineReason: QUARANTINE_REASONS[0],
-      quarantineNotes: "",
-    });
+    setReceiveFormData(getInitialReceiveFormData());
     clearErrors();
     setSelectedBatch(null);
     setModalMode("receive");
@@ -267,7 +236,7 @@ function BatchManagement() {
 
   // When PO is chosen in dropdown, auto-populate details while keeping location on currentFacility
   const handlePoChange = (e) => {
-    const poNum = e.target.value;
+    const poNum = e?.target?.value ?? e;
     const po = requestedOrders.find((p) => p.orderNumber === poNum);
 
     if (po) {
@@ -282,10 +251,14 @@ function BatchManagement() {
     } else {
       setReceiveFormData((prev) => ({
         ...prev,
-        poNumber: poNum,
+        poNumber: "",
+        sku: "",
+        batchNumber: "",
+        quantity: "",
         location: currentFacilityName,
       }));
     }
+    clearError("poNumber");
   };
 
   // Submit Received Batch
@@ -698,32 +671,28 @@ function BatchManagement() {
         <form onSubmit={handleSaveReceivedBatch} className="space-y-4">
           {/* PO Number Dropdown */}
           <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200">
-            <label
-              htmlFor="receive-po-select"
-              className="block text-xs font-bold text-blue-900 uppercase tracking-wider mb-1.5"
-            >
-              Select Purchase Order (PO Number){" "}
-              <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <select
-                id="receive-po-select"
-                value={receiveFormData.poNumber}
-                onChange={handlePoChange}
-                className="input bg-white font-medium text-xs pr-8"
-              >
-                <option value="">-- Choose a Purchase Order --</option>
-                {requestedOrders.map((po) => (
-                  <option key={po.id} value={po.orderNumber}>
-                    {po.orderNumber} — {po.brandName} ({po.quantity} units) •{" "}
-                    {po.supplierName} [{po.status}]
-                  </option>
-                ))}
-              </select>
-            </div>
-            {formErrors.poNumber && (
-              <p className="text-xs text-red-500 mt-1">{formErrors.poNumber}</p>
-            )}
+            <ComboBox
+              id="receive-po-select"
+              name="poNumber"
+              label="Select Purchase Order (PO Number)"
+              labelClassName="text-blue-900 font-bold"
+              required
+              options={requestedOrders}
+              value={receiveFormData.poNumber}
+              onChange={handlePoChange}
+              placeholder="-- Choose or search a Purchase Order --"
+              getOptionValue={(po) => po.orderNumber}
+              getOptionLabel={(po) =>
+                `${po.orderNumber} — ${po.brandName} (${po.genericName})`
+              }
+              getOptionSubtext={(po) =>
+                `${po.quantity} units • ${po.supplierName} [${po.status}]`
+              }
+              getDisplayValue={(po) =>
+                `${po.orderNumber} — ${po.brandName} (${po.quantity} units)`
+              }
+              error={formErrors.poNumber}
+            />
           </div>
 
           {/* PO Selected Details Card */}

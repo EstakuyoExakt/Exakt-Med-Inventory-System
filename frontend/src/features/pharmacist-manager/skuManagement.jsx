@@ -22,6 +22,7 @@ import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 import DeleteModal from "../../components/common/deleteModal";
 import SuccessModal from "../../components/common/successModal";
+import ComboBox from "./components/comboBox";
 
 // Data & Constants Imports
 import {
@@ -180,7 +181,7 @@ function SkuManagement() {
 
   // When Medicine is selected from Library in modal
   const handleMedicineSelect = (e) => {
-    const medId = Number(e.target.value);
+    const medId = Number(e?.target?.value ?? e);
     const selectedMed = medicines.find((m) => m.id === medId);
     if (selectedMed) {
       setFormData((prev) => {
@@ -211,24 +212,7 @@ function SkuManagement() {
 
   // Modal Open Handlers
   const handleOpenAddModal = () => {
-    const defaultMed = medicines[0];
-    const initialSkuCode = defaultMed
-      ? generateSkuCode(
-          defaultMed.genericName,
-          defaultMed.dosage,
-          "Tablet",
-          "Box of 100",
-        )
-      : "AMOX500-TAB-100";
-
-    setFormData({
-      ...DEFAULT_SKU_FORM_DATA,
-      medicineId: defaultMed ? defaultMed.id : "",
-      brandName: "",
-      genericName: defaultMed ? defaultMed.genericName : "",
-      dosage: defaultMed ? defaultMed.dosage : "",
-      sku: initialSkuCode,
-    });
+    setFormData(DEFAULT_SKU_FORM_DATA);
     clearErrors();
     setSelectedSku(null);
     setModalMode("add");
@@ -922,32 +906,22 @@ function SkuManagement() {
           {/* Medicine Library Picker (Only active when adding) */}
           {modalMode === "add" && (
             <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-100">
-              <label
-                htmlFor="select-medicine"
-                className="block text-xs font-bold text-blue-900 uppercase tracking-wider mb-1.5"
-              >
-                1. Select Medicine from Library{" "}
-                <span className="text-red-500">*</span>
-              </label>
-              <select
+              <ComboBox
                 id="select-medicine"
                 name="medicineId"
+                label="1. Select Medicine from Library"
+                labelClassName="text-blue-900 font-bold"
+                required
+                options={medicines}
                 value={formData.medicineId}
                 onChange={handleMedicineSelect}
-                className="input bg-white"
-              >
-                <option value="">-- Choose a medicine --</option>
-                {medicines.map((med) => (
-                  <option key={med.id} value={med.id}>
-                    {med.genericName} — {med.dosage}
-                  </option>
-                ))}
-              </select>
-              {formErrors.medicineId && (
-                <p className="text-xs text-red-500 mt-1">
-                  {formErrors.medicineId}
-                </p>
-              )}
+                placeholder="-- Choose or search a medicine --"
+                searchPlaceholder="Search generic name or dosage..."
+                getOptionLabel={(med) => med.genericName}
+                getOptionSubtext={(med) => med.dosage}
+                getOptionValue={(med) => med.id}
+                error={formErrors.medicineId}
+              />
             </div>
           )}
 
