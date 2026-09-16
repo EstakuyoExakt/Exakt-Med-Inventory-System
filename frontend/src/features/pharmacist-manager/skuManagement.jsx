@@ -51,18 +51,40 @@ const extractPackSize = (packagingUnit) => {
   return "000";
 };
 
-const generateSkuCode = (brandOrGeneric, dosage, form, packagingUnit) => {
-  const prefix = (brandOrGeneric || "")
+const generateSkuCode = (brand, generic, dosage, form, packagingUnit) => {
+  const brandCode = (brand || "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 4)
+    .toUpperCase();
+
+  let genericCode = (generic || "")
     .replace(/[^a-zA-Z]/g, "")
     .slice(0, 4)
     .toUpperCase();
-  const dosageMatch = (dosage || "").match(/\d+/);
-  const dosageDigits = dosageMatch ? dosageMatch[0] : "";
-  const formCode = (form && FORM_CODES[form]) || "";
+
+  let dosageDigits = "";
+  if (dosage) {
+    const nums = String(dosage).match(/\d+/g);
+    if (nums) {
+      if (String(dosage).includes("+") || String(dosage).includes("/")) {
+        dosageDigits = nums.slice(0, 2).join("");
+      } else {
+        dosageDigits = nums[0];
+      }
+    }
+  }
+
+  const genericStrength = `${genericCode}${dosageDigits}`;
+  const formCode =
+    (form && FORM_CODES[form]) || (form ? form.slice(0, 3).toUpperCase() : "");
   const packSize = packagingUnit ? extractPackSize(packagingUnit) : "";
 
-  const part1 = `${prefix}${dosageDigits}`;
-  const parts = [part1, formCode, packSize].filter(Boolean);
+  const parts = [];
+  if (brandCode) parts.push(brandCode);
+  if (genericStrength) parts.push(genericStrength);
+  if (formCode) parts.push(formCode);
+  if (packSize) parts.push(packSize);
+
   return parts.join("-");
 };
 
@@ -208,18 +230,23 @@ function SkuManagement() {
       selectedOptionObj || libMedicines.find((m) => m.id === medId);
     if (selectedMed) {
       const genericName = selectedMed.drugDescription || "";
+      const rawPackageCode =
+        selectedMed.packageCode || selectedMed.package_code || "";
+      const dosageForm = rawPackageCode.slice(0, 3).toUpperCase();
 
       setFormData((prev) => {
         const generatedSku = generateSkuCode(
-          prev.brandName || genericName,
+          prev.brandName,
+          genericName,
           prev.dosage,
-          prev.dosageForm || "",
+          dosageForm,
           prev.packagingUnit || "",
         );
         return {
           ...prev,
           medicineId: selectedMed.id,
           genericName,
+          dosageForm,
           sku: generatedSku,
         };
       });
@@ -228,6 +255,7 @@ function SkuManagement() {
         ...prev,
         medicineId: "",
         genericName: "",
+        dosageForm: "",
         sku: "",
       }));
     }
@@ -313,20 +341,19 @@ function SkuManagement() {
       if (
         (name === "brandName" ||
           name === "dosage" ||
-          name === "dosageForm" ||
           name === "packagingUnit") &&
         modalMode === "add"
       ) {
         const brandForSku = name === "brandName" ? value : prev.brandName;
         const dosageForSku = name === "dosage" ? value : prev.dosage;
-        const formForSku = name === "dosageForm" ? value : prev.dosageForm;
         const packForSku =
           name === "packagingUnit" ? value : prev.packagingUnit;
 
         updated.sku = generateSkuCode(
-          brandForSku || prev.genericName,
+          brandForSku,
+          prev.genericName,
           dosageForSku,
-          formForSku,
+          prev.dosageForm,
           packForSku,
         );
       }
@@ -1024,31 +1051,8 @@ function SkuManagement() {
               )}
             </div>
 
-            {/* Dosage Form */}
-            <div>
-              <label
-                htmlFor="sku-form"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Dosage Form <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="sku-form"
-                name="dosageForm"
-                value={formData.dosageForm}
-                onChange={handleInputChange}
-                className="input"
-              >
-                {DOSAGE_FORMS.map((form) => (
-                  <option key={form} value={form}>
-                    {form}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             {/* Packaging Unit */}
-            <div>
+            <div className="sm:col-span-2">
               <label
                 htmlFor="sku-packaging"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
@@ -1080,7 +1084,7 @@ function SkuManagement() {
                   SKU Identifier <span className="text-red-500">*</span>
                 </label>
                 <span className="text-[11px] text-gray-400 font-mono">
-                  Format: [DRUG][STRENGTH]-[FORM]-[PACK]
+                  Format: [BRAND]-[GENERIC][STRENGTH]-[FORM]-[PACK]
                 </span>
               </div>
               <input
@@ -1089,7 +1093,7 @@ function SkuManagement() {
                 name="sku"
                 value={formData.sku}
                 onChange={handleInputChange}
-                placeholder="PARA500-TAB-010"
+                placeholder="BIOG-PARA500-TAB-010"
                 className={`input uppercase font-mono ${
                   formErrors.sku
                     ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"

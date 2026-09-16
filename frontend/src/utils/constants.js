@@ -110,7 +110,7 @@ export const DEFAULT_SKU_FORM_DATA = {
   genericName: "",
   dosage: "",
   type: "Antibiotics",
-  dosageForm: "Tablet",
+  dosageForm: "",
   packagingUnit: "Box of 100 (10x10 Blister)",
   minimumLevel: 50,
   reorderLevel: 150,
