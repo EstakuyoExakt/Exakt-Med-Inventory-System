@@ -26,11 +26,7 @@ import ComboBox from "./components/comboBox";
 import libMedicineService from "../../services/libMedicine";
 
 // Data & Constants Imports
-import {
-  initialSkus,
-  DOSAGE_FORMS,
-  PACKAGING_UNITS,
-} from "../../data/skuManagement";
+import { initialSkus } from "../../data/skuManagement";
 import { facilities } from "../../data/facility";
 import {
   FORM_CODES,
@@ -49,6 +45,81 @@ const extractPackSize = (packagingUnit) => {
     return String(match[1]).padStart(3, "0");
   }
   return "000";
+};
+
+const extractDosageFromDescription = (description) => {
+  if (!description) return "";
+
+  // Single dose pattern (supports percentages like 10%, 0.9%, as well as mg, mcg, units, etc.)
+  const singleDosePattern =
+    /(?:\b\d+(?:\.\d+)?%|\b\d+(?:\.\d+)?\s*(?:mg|mcg|µg|g|iu|units?|u|meq|mmol)(?:\s*\/\s*\d*(?:\.\d+)?\s*(?:ml|l|g|dose|actuation|drop|spray))?\b)/i;
+
+  // 1. Check for combination dosage separated by "+", e.g. "200 units + 3 mg + 4000 units/g", "20 mg + 120 mg", or "5% + 0.9%"
+  const comboPattern = new RegExp(
+    `${singleDosePattern.source}(?:\\s*\\+\\s*${singleDosePattern.source})+`,
+    "i",
+  );
+
+  const comboMatch = description.match(comboPattern);
+  if (comboMatch) {
+    return comboMatch[0].trim();
+  }
+
+  // 2. Look for dosage before dosage form keywords to avoid container sizes (e.g. "10 g TUBE" or "500 mL BOTTLE")
+  const formKeywords =
+    /(TABLET|CAPSULE|OINTMENT|CREAM|SYRUP|SUSPENSION|SOLUTION|INJECTION|DROPS|GEL|LOTION|INHALER|PATCH|SUPPOSITORY|POWDER|SHAMPOO)/i;
+  const formIndex = description.search(formKeywords);
+
+  const unitPatternGlobal = new RegExp(singleDosePattern.source, "gi");
+
+  if (formIndex > 0) {
+    const textBeforeForm = description.substring(0, formIndex);
+    const matchesBefore = textBeforeForm.match(unitPatternGlobal);
+    if (matchesBefore && matchesBefore.length > 0) {
+      return matchesBefore[0].trim();
+    }
+  }
+
+  // 3. Fallback: match any dose unit not directly preceding packaging container descriptors
+  const allMatches = description.match(unitPatternGlobal);
+  if (allMatches && allMatches.length > 0) {
+    const nonPackMatches = allMatches.filter((m) => {
+      const regex = new RegExp(
+        `${m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*(?:bottle|tube|vial|ampoule|pack|box|bag|canister)`,
+        "i",
+      );
+      return !regex.test(description);
+    });
+    if (nonPackMatches.length > 0) {
+      return nonPackMatches[0].trim();
+    }
+    return allMatches[0].trim();
+  }
+
+  return "";
+};
+
+const extractPackagingFromDescription = (description) => {
+  if (!description) return "";
+
+  // 1. Look after dosage form keywords (e.g., TABLET, CAPSULE, OINTMENT, CREAM, SYRUP, etc.)
+  const formKeywords =
+    /(?:TABLET|CAPSULE|OINTMENT|CREAM|SYRUP|SUSPENSION|SOLUTION FOR INJECTION|SOLUTION|INJECTION|DROPS|GEL|LOTION|INHALER|PATCH|SUPPOSITORY|POWDER FOR SUSPENSION|POWDER FOR INJECTION|POWDER|SHAMPOO)/i;
+  const formMatch = description.match(formKeywords);
+  if (formMatch) {
+    const formIndex = description.indexOf(formMatch[0]);
+    const afterForm = description.substring(formIndex + formMatch[0].length).trim();
+    if (afterForm) {
+      const cleaned = afterForm.replace(/^[-,/(\s]+|[-,/)\s]+$/g, "").trim();
+      if (cleaned) return cleaned;
+    }
+  }
+
+  // 2. Match container patterns anywhere in description
+  const packMatch = description.match(
+    /\b(?:\d+(?:\.\d+)?\s*(?:ml|l|g|kg|'s|s)\s+)?(?:BOTTLE|TUBE|VIAL|AMPOULE|AMP|BAG|BOX|BLISTER|STRIP|CANISTER|SACHET|CARPULE|JAR)\b.*$/i
+  );
+  return packMatch ? packMatch[0].trim() : "";
 };
 
 const generateSkuCode = (brand, generic, dosage, form, packagingUnit) => {
@@ -233,29 +304,52 @@ function SkuManagement() {
       const rawPackageCode =
         selectedMed.packageCode || selectedMed.package_code || "";
       const dosageForm = rawPackageCode.slice(0, 3).toUpperCase();
+      const extractedDosage =
+        extractDosageFromDescription(genericName) ||
+        (selectedMed.strengthCode
+          ? `${selectedMed.strengthCode} ${selectedMed.unitCode || ""}`.trim()
+          : "");
+
+      const extractedPackaging =
+        extractPackagingFromDescription(genericName) ||
+        selectedMed.packageCode ||
+        selectedMed.package_code ||
+        "";
 
       setFormData((prev) => {
+        const dosage = extractedDosage || prev.dosage || "";
+        const packagingUnit = extractedPackaging || prev.packagingUnit || "";
         const generatedSku = generateSkuCode(
           prev.brandName,
           genericName,
-          prev.dosage,
+          dosage,
           dosageForm,
-          prev.packagingUnit || "",
+          packagingUnit,
         );
         return {
           ...prev,
           medicineId: selectedMed.id,
           genericName,
+          dosage,
           dosageForm,
+          packagingUnit,
           sku: generatedSku,
         };
       });
+      if (extractedDosage) {
+        clearError("dosage");
+      }
+      if (extractedPackaging) {
+        clearError("packagingUnit");
+      }
     } else {
       setFormData((prev) => ({
         ...prev,
         medicineId: "",
         genericName: "",
+        dosage: "",
         dosageForm: "",
+        packagingUnit: "",
         sku: "",
       }));
     }
@@ -1059,19 +1153,24 @@ function SkuManagement() {
               >
                 Packaging Unit <span className="text-red-500">*</span>
               </label>
-              <select
+              <input
                 id="sku-packaging"
+                type="text"
                 name="packagingUnit"
                 value={formData.packagingUnit}
                 onChange={handleInputChange}
-                className="input"
-              >
-                {PACKAGING_UNITS.map((unit) => (
-                  <option key={unit} value={unit}>
-                    {unit}
-                  </option>
-                ))}
-              </select>
+                placeholder="e.g. 500 mL BOTTLE, 10 g TUBE, Box of 100"
+                className={`input ${
+                  formErrors.packagingUnit
+                    ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                    : ""
+                }`}
+              />
+              {formErrors.packagingUnit && (
+                <p className="text-xs text-red-500 mt-1">
+                  {formErrors.packagingUnit}
+                </p>
+              )}
             </div>
 
             {/* SKU Code */}
