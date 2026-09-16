@@ -10,15 +10,7 @@ const libMedicineApi = {
     const qs = query.toString();
     return qs ? `${API_URL}/search?${qs}` : `${API_URL}/search`;
   },
-  getDropdownMedicines: (search = "", limit = 50) => {
-    const query = new URLSearchParams();
-    if (search) query.append("search", search);
-    if (limit) query.append("limit", limit);
-    const qs = query.toString();
-    return qs ? `${API_URL}/dropdown?${qs}` : `${API_URL}/dropdown`;
-  },
   getMedicineById: (id) => `${API_URL}/${id}`,
-  getMedicineByDrugCode: (drugCode) => `${API_URL}/code/${drugCode}`,
 };
 
 export default libMedicineApi;

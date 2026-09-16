@@ -37,33 +37,11 @@ const libMedicineService = {
     return response.data;
   },
 
-  getDropdownMedicines: async (search = "", limit = 50, config = {}) => {
-    const response = await axios.get(
-      libMedicineApi.getDropdownMedicines(search, limit),
-      {
-        ...config,
-        headers: getAuthHeaders(config),
-      }
-    );
-    return response.data;
-  },
-
   getMedicineById: async (id, config = {}) => {
     const response = await axios.get(libMedicineApi.getMedicineById(id), {
       ...config,
       headers: getAuthHeaders(config),
     });
-    return response.data;
-  },
-
-  getMedicineByDrugCode: async (drugCode, config = {}) => {
-    const response = await axios.get(
-      libMedicineApi.getMedicineByDrugCode(drugCode),
-      {
-        ...config,
-        headers: getAuthHeaders(config),
-      }
-    );
     return response.data;
   },
 };

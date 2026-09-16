@@ -36,8 +36,8 @@ public class LibMedicineController {
         return ResponseEntity.ok(libMedicineService.searchMedicines(search, pageable));
     }
 
-    // 2. DROPDOWN & AUTOCOMPLETE (Fast limited list for frontend dropdown selects)
-    @GetMapping({"/dropdown", "/search"})
+    // 2. SEARCH & AUTOCOMPLETE (Fast limited list for frontend dropdown selects)
+    @GetMapping("/search")
     public ResponseEntity<List<LibMedicineResponseDto>> getDropdownMedicines(
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "50") int limit) {
@@ -48,11 +48,5 @@ public class LibMedicineController {
     @GetMapping("/{id}")
     public ResponseEntity<LibMedicineResponseDto> getMedicineById(@PathVariable Long id) {
         return ResponseEntity.ok(libMedicineService.getMedicineById(id));
-    }
-
-    // 4. GET MEDICINE BY DRUG CODE
-    @GetMapping("/code/{drugCode}")
-    public ResponseEntity<LibMedicineResponseDto> getMedicineByDrugCode(@PathVariable String drugCode) {
-        return ResponseEntity.ok(libMedicineService.getMedicineByDrugCode(drugCode));
     }
 }
