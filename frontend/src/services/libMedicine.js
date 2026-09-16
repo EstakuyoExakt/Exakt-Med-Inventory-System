@@ -19,10 +19,13 @@ const libMedicineService = {
     } else {
       queryString = new URLSearchParams(params).toString();
     }
-    const response = await axios.get(libMedicineApi.searchMedicines(queryString), {
-      ...config,
-      headers: getAuthHeaders(config),
-    });
+    const response = await axios.get(
+      libMedicineApi.searchMedicines(queryString),
+      {
+        ...config,
+        headers: getAuthHeaders(config),
+      },
+    );
     return response.data;
   },
 
@@ -32,7 +35,7 @@ const libMedicineService = {
       {
         ...config,
         headers: getAuthHeaders(config),
-      }
+      },
     );
     return response.data;
   },

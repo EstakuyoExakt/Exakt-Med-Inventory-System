@@ -32,6 +32,7 @@ function ComboBox({
   disabled = false,
   clearable = true,
   className = "",
+  inputClassName = "",
   getOptionLabel = (opt) =>
     opt?.label ?? opt?.name ?? opt?.genericName ?? String(opt ?? ""),
   getOptionValue = (opt) => opt?.value ?? opt?.id ?? opt,
@@ -307,7 +308,7 @@ function ComboBox({
           onChange={handleInputChange}
           onFocus={handleFocus}
           onKeyDown={handleKeyDown}
-          className={`input pr-16 bg-white text-sm ${
+          className={`input pr-16 bg-white text-sm ${inputClassName} ${
             disabled ? "opacity-50 cursor-not-allowed bg-gray-50" : ""
           } ${
             error

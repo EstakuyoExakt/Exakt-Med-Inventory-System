@@ -93,14 +93,21 @@ export const DEFAULT_RECEIVE_BATCH = {
 // SKU Management & Stock Actions
 // ==========================================
 export const FORM_CODES = {
-  Tablet: "TAB",
-  Capsule: "CAP",
-  Syrup: "SYR",
-  Suspension: "SUS",
-  Inhaler: "INH",
-  Injectable: "INJ",
-  Ointment: "OIN",
-  Drops: "DRP",
+  TABLET: "TAB",
+  CAPSULE: "CAP",
+  SYRUP: "SYR",
+  SUSPENSION: "SUS",
+  INHALER: "INH",
+  INJECTABLE: "INJ",
+  INJECTION: "INJ",
+  OINTMENT: "OIN",
+  CREAM: "CRM",
+  SOLUTION: "SOL",
+  DROPS: "DRP",
+  POWDER: "POW",
+  LOTION: "LOT",
+  PATCH: "PAT",
+  SUPPOSITORY: "SUP",
 };
 
 export const DEFAULT_SKU_FORM_DATA = {
