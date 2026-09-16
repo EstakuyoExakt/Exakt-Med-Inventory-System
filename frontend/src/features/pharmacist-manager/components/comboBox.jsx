@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { ChevronDown, Check, X } from "lucide-react";
+import { ChevronDown, Check, X, Loader2 } from "lucide-react";
 
 /**
  * Reusable Traditional ComboBox Component
  * 
  * Supports:
  * - Direct input typing & real-time search filtering
+ * - Server-side / async search via onSearch & isLoading
  * - Keyboard navigation (ArrowUp, ArrowDown, Enter, Escape, Tab)
  * - Custom label/value getters and option rendering
  * - Clearable selection
@@ -17,6 +18,10 @@ function ComboBox({
   value = "",
   onChange,
   onSelect,
+  onSearch,
+  isLoading = false,
+  loadingText = "Searching...",
+  debounceMs = 300,
   placeholder = "Select or search...",
   label = "",
   labelClassName = "",
@@ -42,6 +47,17 @@ function ComboBox({
   const containerRef = useRef(null);
   const inputRef = useRef(null);
   const listboxRef = useRef(null);
+  const debounceTimerRef = useRef(null);
+  const lastSelectedOptionRef = useRef(null);
+
+  // Clear debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   // Helper to format the displayed text for a selected option
   const formatOptionDisplay = useMemo(() => {
@@ -56,12 +72,25 @@ function ComboBox({
 
   // Find currently selected option object
   const selectedOption = useMemo(() => {
-    if (value === "" || value === null || value === undefined) return null;
-    return (
-      options.find(
-        (opt) => String(getOptionValue(opt)) === String(value)
-      ) || null
+    if (value === "" || value === null || value === undefined) {
+      lastSelectedOptionRef.current = null;
+      return null;
+    }
+    const found = options.find(
+      (opt) => String(getOptionValue(opt)) === String(value)
     );
+    if (found) {
+      lastSelectedOptionRef.current = found;
+      return found;
+    }
+    // Fall back to remembered selected option if value matches
+    if (
+      lastSelectedOptionRef.current &&
+      String(getOptionValue(lastSelectedOptionRef.current)) === String(value)
+    ) {
+      return lastSelectedOptionRef.current;
+    }
+    return null;
   }, [options, value, getOptionValue]);
 
   // Synchronize input value with selectedOption when not actively typing
@@ -73,6 +102,8 @@ function ComboBox({
 
   // Filter options based on typed input
   const filteredOptions = useMemo(() => {
+    // If external async search handler is provided, options are managed externally
+    if (onSearch) return options;
     if (!isSearching || !inputValue.trim()) return options;
     const query = inputValue.toLowerCase().trim();
     return options.filter((opt) => {
@@ -80,7 +111,7 @@ function ComboBox({
       const optSubtext = getOptionSubtext(opt)?.toLowerCase() || "";
       return optLabel.includes(query) || optSubtext.includes(query);
     });
-  }, [options, inputValue, isSearching, getOptionLabel, getOptionSubtext]);
+  }, [options, inputValue, isSearching, onSearch, getOptionLabel, getOptionSubtext]);
 
   // Close and reset on outside click
   useEffect(() => {
@@ -94,11 +125,14 @@ function ComboBox({
         setInputValue(
           selectedOption ? formatOptionDisplay(selectedOption) : ""
         );
+        if (onSearch && isSearching) {
+          onSearch("");
+        }
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [selectedOption, formatOptionDisplay]);
+  }, [selectedOption, formatOptionDisplay, onSearch, isSearching]);
 
   // Scroll active item into view
   useEffect(() => {
@@ -111,10 +145,20 @@ function ComboBox({
   }, [highlightedIndex, isOpen]);
 
   const handleInputChange = (e) => {
-    setInputValue(e.target.value);
+    const nextVal = e.target.value;
+    setInputValue(nextVal);
     setIsSearching(true);
     setIsOpen(true);
     setHighlightedIndex(0);
+
+    if (onSearch) {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        onSearch(nextVal);
+      }, debounceMs);
+    }
   };
 
   const handleFocus = (e) => {
@@ -125,9 +169,13 @@ function ComboBox({
   };
 
   const handleSelect = (option) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
     const val = getOptionValue(option);
+    lastSelectedOptionRef.current = option;
     if (onChange) {
-      onChange({ target: { name, value: val } });
+      onChange({ target: { name, value: val } }, option);
     }
     if (onSelect) {
       onSelect(option);
@@ -139,11 +187,18 @@ function ComboBox({
 
   const handleClear = (e) => {
     e.stopPropagation();
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    lastSelectedOptionRef.current = null;
     if (onChange) {
-      onChange({ target: { name, value: "" } });
+      onChange({ target: { name, value: "" } }, null);
     }
     if (onSelect) {
       onSelect(null);
+    }
+    if (onSearch) {
+      onSearch("");
     }
     setInputValue("");
     setIsSearching(false);
@@ -161,6 +216,9 @@ function ComboBox({
       setIsOpen(false);
       setIsSearching(false);
       setInputValue(selectedOption ? formatOptionDisplay(selectedOption) : "");
+      if (onSearch && isSearching) {
+        onSearch("");
+      }
     }
   };
 
@@ -205,6 +263,9 @@ function ComboBox({
         setInputValue(
           selectedOption ? formatOptionDisplay(selectedOption) : ""
         );
+        if (onSearch && isSearching) {
+          onSearch("");
+        }
         break;
       case "Tab":
         setIsOpen(false);
@@ -259,6 +320,9 @@ function ComboBox({
 
         {/* Action Controls on right of input */}
         <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          {isLoading && (
+            <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin mr-0.5" />
+          )}
           {clearable && (selectedOption || inputValue) && !disabled && (
             <button
               type="button"
@@ -289,12 +353,24 @@ function ComboBox({
       {/* Floating Dropdown Options Panel (No secondary search bar) */}
       {isOpen && (
         <div className="absolute z-50 mt-1.5 w-full rounded-xl bg-white border border-gray-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+          {isLoading && filteredOptions.length > 0 && (
+            <div className="px-3.5 py-1.5 bg-blue-50/70 border-b border-blue-100/70 flex items-center gap-2 text-xs text-blue-600 font-medium">
+              <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+              <span>{loadingText}</span>
+            </div>
+          )}
+
           <ul
             ref={listboxRef}
             role="listbox"
             className="max-h-60 overflow-y-auto py-1 text-sm divide-y divide-gray-50"
           >
-            {filteredOptions.length > 0 ? (
+            {isLoading && filteredOptions.length === 0 ? (
+              <li className="px-4 py-6 flex flex-col items-center justify-center gap-2 text-xs text-blue-600">
+                <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                <span>{loadingText}</span>
+              </li>
+            ) : filteredOptions.length > 0 ? (
               filteredOptions.map((opt, idx) => {
                 const optVal = getOptionValue(opt);
                 const optLabel = getOptionLabel(opt);

@@ -44,6 +44,7 @@ export const validateSkuForm = (
       "Please select a medicine from the library."
     ),
     brandName: isRequired(formData.brandName, "Brand name is required."),
+    dosage: isRequired(formData.dosage, "Dosage / strength is required."),
     sku: skuError,
     dosageForm: isRequired(formData.dosageForm, "Dosage form is required."),
     packagingUnit: isRequired(

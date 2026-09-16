@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Boxes,
   Package,
@@ -23,6 +23,7 @@ import Modal from "../../components/common/modal";
 import DeleteModal from "../../components/common/deleteModal";
 import SuccessModal from "../../components/common/successModal";
 import ComboBox from "./components/comboBox";
+import libMedicineService from "../../services/libMedicine";
 
 // Data & Constants Imports
 import {
@@ -30,7 +31,6 @@ import {
   DOSAGE_FORMS,
   PACKAGING_UNITS,
 } from "../../data/skuManagement";
-import { medicines } from "../../data/medicine";
 import { facilities } from "../../data/facility";
 import {
   FORM_CODES,
@@ -48,20 +48,22 @@ const extractPackSize = (packagingUnit) => {
   if (match) {
     return String(match[1]).padStart(3, "0");
   }
-  return "100";
+  return "000";
 };
 
 const generateSkuCode = (brandOrGeneric, dosage, form, packagingUnit) => {
-  const prefix = (brandOrGeneric || "PARA")
+  const prefix = (brandOrGeneric || "")
     .replace(/[^a-zA-Z]/g, "")
     .slice(0, 4)
     .toUpperCase();
   const dosageMatch = (dosage || "").match(/\d+/);
-  const dosageDigits = dosageMatch ? dosageMatch[0] : "500";
-  const formCode = FORM_CODES[form] || "TAB";
-  const packSize = extractPackSize(packagingUnit || "Box of 100");
+  const dosageDigits = dosageMatch ? dosageMatch[0] : "";
+  const formCode = (form && FORM_CODES[form]) || "";
+  const packSize = packagingUnit ? extractPackSize(packagingUnit) : "";
 
-  return `${prefix}${dosageDigits}-${formCode}-${packSize}`;
+  const part1 = `${prefix}${dosageDigits}`;
+  const parts = [part1, formCode, packSize].filter(Boolean);
+  return parts.join("-");
 };
 
 function SkuManagement() {
@@ -92,6 +94,26 @@ function SkuManagement() {
     clearErrors,
     clearError,
   } = useError();
+
+  const [libMedicines, setLibMedicines] = useState([]);
+  const [isLoadingMedicines, setIsLoadingMedicines] = useState(false);
+
+  // Search Medicine Library from backend API
+  const handleSearchMedicines = async (searchQuery = "") => {
+    try {
+      setIsLoadingMedicines(true);
+      const data = await libMedicineService.searchDropdown(
+        searchQuery.trim(),
+        50,
+      );
+      setLibMedicines(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to search medicines from library API:", err);
+      setLibMedicines([]);
+    } finally {
+      setIsLoadingMedicines(false);
+    }
+  };
 
   // Batch Management Action Form States in SKU Management
   const [adjustFormData, setAdjustFormData] = useState(
@@ -180,22 +202,24 @@ function SkuManagement() {
   };
 
   // When Medicine is selected from Library in modal
-  const handleMedicineSelect = (e) => {
+  const handleMedicineSelect = (e, selectedOptionObj) => {
     const medId = Number(e?.target?.value ?? e);
-    const selectedMed = medicines.find((m) => m.id === medId);
+    const selectedMed =
+      selectedOptionObj || libMedicines.find((m) => m.id === medId);
     if (selectedMed) {
+      const genericName = selectedMed.drugDescription || "";
+
       setFormData((prev) => {
         const generatedSku = generateSkuCode(
-          prev.brandName || selectedMed.genericName,
-          selectedMed.dosage,
-          prev.dosageForm || "Tablet",
-          prev.packagingUnit || "Box of 100",
+          prev.brandName || genericName,
+          prev.dosage,
+          prev.dosageForm || "",
+          prev.packagingUnit || "",
         );
         return {
           ...prev,
           medicineId: selectedMed.id,
-          genericName: selectedMed.genericName,
-          dosage: selectedMed.dosage,
+          genericName,
           sku: generatedSku,
         };
       });
@@ -204,7 +228,7 @@ function SkuManagement() {
         ...prev,
         medicineId: "",
         genericName: "",
-        dosage: "",
+        sku: "",
       }));
     }
     clearError("medicineId");
@@ -215,6 +239,7 @@ function SkuManagement() {
     setFormData(DEFAULT_SKU_FORM_DATA);
     clearErrors();
     setSelectedSku(null);
+    handleSearchMedicines("");
     setModalMode("add");
   };
 
@@ -287,18 +312,20 @@ function SkuManagement() {
 
       if (
         (name === "brandName" ||
+          name === "dosage" ||
           name === "dosageForm" ||
           name === "packagingUnit") &&
         modalMode === "add"
       ) {
         const brandForSku = name === "brandName" ? value : prev.brandName;
+        const dosageForSku = name === "dosage" ? value : prev.dosage;
         const formForSku = name === "dosageForm" ? value : prev.dosageForm;
         const packForSku =
           name === "packagingUnit" ? value : prev.packagingUnit;
 
         updated.sku = generateSkuCode(
           brandForSku || prev.genericName,
-          prev.dosage,
+          dosageForSku,
           formForSku,
           packForSku,
         );
@@ -912,13 +939,21 @@ function SkuManagement() {
                 label="1. Select Medicine from Library"
                 labelClassName="text-blue-900 font-bold"
                 required
-                options={medicines}
+                options={libMedicines}
                 value={formData.medicineId}
                 onChange={handleMedicineSelect}
-                placeholder="-- Choose or search a medicine --"
-                searchPlaceholder="Search generic name or dosage..."
-                getOptionLabel={(med) => med.genericName}
-                getOptionSubtext={(med) => med.dosage}
+                onSelect={(med) => handleMedicineSelect(med?.id, med)}
+                onSearch={handleSearchMedicines}
+                isLoading={isLoadingMedicines}
+                loadingText="Searching medicine library..."
+                placeholder={
+                  isLoadingMedicines
+                    ? "Searching medicine library..."
+                    : "-- Choose or search a medicine --"
+                }
+                getOptionLabel={(med) => med.drugDescription || ""}
+                getOptionSubtext={() => ""}
+                getDisplayValue={(med) => med.drugDescription || ""}
                 getOptionValue={(med) => med.id}
                 error={formErrors.medicineId}
               />
@@ -936,7 +971,7 @@ function SkuManagement() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Brand Name Input */}
-            <div className="sm:col-span-2">
+            <div>
               <label
                 htmlFor="sku-brandName"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
@@ -963,34 +998,29 @@ function SkuManagement() {
               )}
             </div>
 
-            {/* SKU Code */}
-            <div className="sm:col-span-2">
-              <div className="flex items-center justify-between mb-1.5">
-                <label
-                  htmlFor="sku-code"
-                  className="block text-xs font-semibold text-gray-700 uppercase tracking-wider"
-                >
-                  SKU Identifier <span className="text-red-500">*</span>
-                </label>
-                <span className="text-[11px] text-gray-400 font-mono">
-                  Format: [DRUG][STRENGTH]-[FORM]-[PACK] (e.g. PARA500-TAB-010)
-                </span>
-              </div>
+            {/* Dosage / Strength Input */}
+            <div>
+              <label
+                htmlFor="sku-dosage"
+                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+              >
+                Dosage / Strength <span className="text-red-500">*</span>
+              </label>
               <input
-                id="sku-code"
+                id="sku-dosage"
                 type="text"
-                name="sku"
-                value={formData.sku}
+                name="dosage"
+                value={formData.dosage}
                 onChange={handleInputChange}
-                placeholder="PARA500-TAB-010"
-                className={`input uppercase font-mono ${
-                  formErrors.sku
+                placeholder="e.g. 500mg, 250mg/5ml, 10mcg"
+                className={`input ${
+                  formErrors.dosage
                     ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
                     : ""
                 }`}
               />
-              {formErrors.sku && (
-                <p className="text-xs text-red-500 mt-1">{formErrors.sku}</p>
+              {formErrors.dosage && (
+                <p className="text-xs text-red-500 mt-1">{formErrors.dosage}</p>
               )}
             </div>
 
@@ -1038,6 +1068,38 @@ function SkuManagement() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* SKU Code */}
+            <div className="sm:col-span-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <label
+                  htmlFor="sku-code"
+                  className="block text-xs font-semibold text-gray-700 uppercase tracking-wider"
+                >
+                  SKU Identifier <span className="text-red-500">*</span>
+                </label>
+                <span className="text-[11px] text-gray-400 font-mono">
+                  Format: [DRUG][STRENGTH]-[FORM]-[PACK]
+                </span>
+              </div>
+              <input
+                id="sku-code"
+                type="text"
+                name="sku"
+                value={formData.sku}
+                onChange={handleInputChange}
+                placeholder="PARA500-TAB-010"
+                className={`input uppercase font-mono ${
+                  formErrors.sku
+                    ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                    : ""
+                }`}
+                disabled
+              />
+              {formErrors.sku && (
+                <p className="text-xs text-red-500 mt-1">{formErrors.sku}</p>
+              )}
             </div>
 
             {/* Section: Stock Threshold Levels */}
