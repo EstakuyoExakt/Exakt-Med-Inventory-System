@@ -27,6 +27,7 @@ public interface SkuRepository extends JpaRepository<Sku, Long> {
            "NOT EXISTS (" +
            "    SELECT 1 FROM OrderedItem oi " +
            "    WHERE oi.sku = s " +
+           "      AND oi.order.facility = s.facility" +
            "      AND oi.order.status IN (com.example.backend.entity.Order.Status.Pending, com.example.backend.entity.Order.Status.Approved)" +
            ") AND " +
            "(:search IS NULL OR :search = '' OR " +

@@ -18,8 +18,11 @@ const orderService = {
     return response.data;
   },
 
-  getAllOrders: async (config = {}) => {
-    const response = await axios.get(orderApi.getAllOrders, {
+  getAllOrders: async (facilityId, config = {}) => {
+    if (!facilityId) {
+      throw new Error("Facility ID is required to fetch orders.");
+    }
+    const response = await axios.get(orderApi.getAllOrders(facilityId), {
       ...config,
       headers: getAuthHeaders(config),
     });

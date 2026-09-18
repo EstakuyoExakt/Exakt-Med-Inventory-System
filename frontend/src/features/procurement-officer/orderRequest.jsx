@@ -483,7 +483,13 @@ function OrderRequest() {
       supplierList.find((s) => s.id === Number(orderForm.supplierId)) ||
       suppliers.find((s) => s.id === Number(orderForm.supplierId));
 
+    const targetFacilityId =
+      facility?.id ||
+      facilities.find((f) => f.name === currentFacilityName)?.id ||
+      1;
+
     const orderPayload = {
+      facilityId: Number(targetFacilityId),
       supplierId: Number(orderForm.supplierId),
       priority: orderForm.priority || "Normal",
       totalPrice: Math.round(Number(orderForm.totalCost) || 0),

@@ -18,6 +18,8 @@ public class OrderResponseDto {
     private Long id;
     private String purchaseOrderNum;
     private String poNumberFormatted;
+    private Long facilityId;
+    private String facilityName;
     private Long supplierId;
     private String supplierName;
     private String priority;

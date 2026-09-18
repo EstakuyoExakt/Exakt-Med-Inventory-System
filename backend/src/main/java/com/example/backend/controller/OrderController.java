@@ -28,10 +28,11 @@ public class OrderController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-    // 2. GET ALL ORDERS
+    // 2. GET ALL ORDERS (facilityId is strictly required)
     @GetMapping
-    public ResponseEntity<List<OrderResponseDto>> getAllOrders() {
-        return ResponseEntity.ok(orderService.getAllOrders());
+    public ResponseEntity<List<OrderResponseDto>> getAllOrders(
+            @RequestParam Long facilityId) {
+        return ResponseEntity.ok(orderService.getAllOrders(facilityId));
     }
 
     // 3. GET ORDER BY ID

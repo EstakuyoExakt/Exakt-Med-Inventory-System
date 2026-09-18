@@ -23,6 +23,10 @@ public class Order {
     private Long id;
 
     @ManyToOne
+    @JoinColumn(name = "facilityId")
+    private Facility facility;
+
+    @ManyToOne
     @JoinColumn(name = "supplierId")
     private Supplier supplier;
 

@@ -4,10 +4,12 @@ import com.example.backend.dto.order.OrderItemRequestDto;
 import com.example.backend.dto.order.OrderItemResponseDto;
 import com.example.backend.dto.order.OrderRequestDto;
 import com.example.backend.dto.order.OrderResponseDto;
+import com.example.backend.entity.Facility;
 import com.example.backend.entity.Order;
 import com.example.backend.entity.OrderedItem;
 import com.example.backend.entity.Sku;
 import com.example.backend.entity.Supplier;
+import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.OrderRepository;
 import com.example.backend.repository.OrderedItemRepository;
 import com.example.backend.repository.SkuRepository;
@@ -28,21 +30,31 @@ public class OrderService {
     private final OrderedItemRepository orderedItemRepository;
     private final SupplierRepository supplierRepository;
     private final SkuRepository skuRepository;
+    private final FacilityRepository facilityRepository;
 
     public OrderService(OrderRepository orderRepository,
                         OrderedItemRepository orderedItemRepository,
                         SupplierRepository supplierRepository,
-                        SkuRepository skuRepository) {
+                        SkuRepository skuRepository,
+                        FacilityRepository facilityRepository) {
         this.orderRepository = orderRepository;
         this.orderedItemRepository = orderedItemRepository;
         this.supplierRepository = supplierRepository;
         this.skuRepository = skuRepository;
+        this.facilityRepository = facilityRepository;
     }
 
     // 1. CREATE PURCHASE ORDER REQUEST
     @Transactional
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Procurement')")
     public OrderResponseDto createOrder(OrderRequestDto request) {
+        if (request.getFacilityId() == null) {
+            throw new RuntimeException("Facility ID is required");
+        }
+
+        Facility facility = facilityRepository.findById(request.getFacilityId())
+                .orElseThrow(() -> new RuntimeException("Facility not found with id: " + request.getFacilityId()));
+
         Supplier supplier = supplierRepository.findById(request.getSupplierId())
                 .orElseThrow(() -> new RuntimeException("Supplier not found with id: " + request.getSupplierId()));
 
@@ -57,6 +69,7 @@ public class OrderService {
         LocalDateTime now = LocalDateTime.now();
 
         Order order = new Order();
+        order.setFacility(facility);
         order.setSupplier(supplier);
         order.setPurchaseOrderNum("PO-PENDING");
         order.setPriority(request.getPriority() != null && !request.getPriority().isBlank()
@@ -103,11 +116,17 @@ public class OrderService {
         return response;
     }
 
-    // 2. GET ALL ORDERS
+    // 2. GET ALL ORDERS (facilityId is strictly required)
     @Transactional(readOnly = true)
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Procurement')")
-    public List<OrderResponseDto> getAllOrders() {
-        return orderRepository.findAllByOrderByCreatedAtDesc().stream()
+    public List<OrderResponseDto> getAllOrders(Long facilityId) {
+        if (facilityId == null) {
+            throw new RuntimeException("Facility ID is required");
+        }
+
+        List<Order> orders = orderRepository.findByFacilityIdOrderByCreatedAtDesc(facilityId);
+
+        return orders.stream()
                 .map(order -> {
                     List<OrderedItem> items = orderedItemRepository.findByOrderId(order.getId());
                     List<OrderItemResponseDto> itemDtos = items.stream()
@@ -175,6 +194,10 @@ public class OrderService {
         dto.setId(order.getId());
         dto.setPurchaseOrderNum(order.getPurchaseOrderNum());
         dto.setPoNumberFormatted(order.getPurchaseOrderNum());
+        if (order.getFacility() != null) {
+            dto.setFacilityId(order.getFacility().getId());
+            dto.setFacilityName(order.getFacility().getName());
+        }
         if (order.getSupplier() != null) {
             dto.setSupplierId(order.getSupplier().getId());
             dto.setSupplierName(order.getSupplier().getName());
