@@ -3,15 +3,6 @@ import { ROLES } from "../config/roles";
 // ==========================================
 // Administration & User Management
 // ==========================================
-export const DEFAULT_ADMIN_FORM = {
-  name: "",
-  username: "",
-  email: "",
-  phone: "",
-  password: "exaktpassword",
-  status: "Active",
-};
-
 export const DEFAULT_USER_FORM = {
   name: "",
   username: "",
@@ -61,6 +52,7 @@ export const DEFAULT_SUPPLIER_FORM = {
 // Batch Management
 // ==========================================
 export const ADJUSTMENT_REASONS = [
+  "Dispensed",
   "Physical Cycle Count Discrepancy",
   "Damaged Goods / Packaging Compromised",
   "Spillage / Broken Ampoules",
@@ -79,15 +71,6 @@ export const QUARANTINE_REASONS = [
   "Discoloration or Precipitation Observed",
   "Other Quality Issue",
 ];
-
-export const DEFAULT_RECEIVE_BATCH = {
-  sku: "",
-  batchNumber: "",
-  manufacturingDate: new Date().toISOString().split("T")[0],
-  expiryDate: "",
-  quantity: 100,
-  location: "Exakt Central General Hospital",
-};
 
 // ==========================================
 // SKU Management & Stock Actions
@@ -116,25 +99,17 @@ export const DEFAULT_SKU_FORM_DATA = {
   brandName: "",
   genericName: "",
   dosage: "",
-  type: "Antibiotics",
   dosageForm: "",
   packagingUnit: "",
   minimumLevel: 50,
   reorderLevel: 150,
   maximumLevel: 1000,
-  status: "Active",
 };
 
 export const DEFAULT_STOCK_ADJUSTMENT = {
   type: "ADD", // 'ADD' | 'SUBTRACT' | 'SET'
   amount: 10,
   reason: ADJUSTMENT_REASONS[0],
-  notes: "",
-};
-
-export const DEFAULT_STOCK_TRANSFER = {
-  targetLocation: "Exakt Northside Medical Wing",
-  transferQuantity: 10,
   notes: "",
 };
 

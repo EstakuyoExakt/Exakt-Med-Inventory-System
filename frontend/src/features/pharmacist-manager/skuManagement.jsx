@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Boxes,
   Package,
@@ -24,6 +24,7 @@ import DeleteModal from "../../components/common/deleteModal";
 import SuccessModal from "../../components/common/successModal";
 import ComboBox from "./components/comboBox";
 import libMedicineService from "../../services/libMedicine";
+import skuService from "../../services/sku";
 
 // Data & Constants Imports
 import { initialSkus } from "../../data/skuManagement";
@@ -100,42 +101,58 @@ const extractDosageFromDescription = (description) => {
 };
 
 const extractPackagingFromDescription = (description) => {
-  if (!description) return "";
+  if (!description) return null;
 
-  // 1. Look after dosage form keywords (e.g., TABLET, CAPSULE, OINTMENT, CREAM, SYRUP, etc.)
+  const trimmed = description.trim();
+  // Standalone TABLET or CAPSULE is a dosage form, not packaging unit
+  if (/^(?:TABLET|CAPSULE|TAB|CAP)S?$/i.test(trimmed)) {
+    return null;
+  }
+
+  // 1. Look after dosage form keywords for packaging info
   const formKeywords =
-    /(?:TABLET|CAPSULE|OINTMENT|CREAM|SYRUP|SUSPENSION|SOLUTION FOR INJECTION|SOLUTION|INJECTION|DROPS|GEL|LOTION|INHALER|PATCH|SUPPOSITORY|POWDER FOR SUSPENSION|POWDER FOR INJECTION|POWDER|SHAMPOO)/i;
-  const formMatch = description.match(formKeywords);
+    /(?:SOLUTION FOR INJECTION|POWDER FOR SUSPENSION|POWDER FOR INJECTION|TABLET|CAPSULE|OINTMENT|CREAM|SYRUP|SUSPENSION|SOLUTION|INJECTION|DROPS|GEL|LOTION|INHALER|PATCH|SUPPOSITORY|POWDER|SHAMPOO)/i;
+  const formMatch = trimmed.match(formKeywords);
   if (formMatch) {
-    const formIndex = description.indexOf(formMatch[0]);
-    const afterForm = description
+    const formIndex = trimmed.indexOf(formMatch[0]);
+    const afterForm = trimmed
       .substring(formIndex + formMatch[0].length)
       .trim();
     if (afterForm) {
-      const cleaned = afterForm.replace(/^[-,/(\s]+|[-,/)\s]+$/g, "").trim();
+      let cleaned = afterForm.trim();
+      if (cleaned.startsWith("(") && cleaned.endsWith(")")) {
+        cleaned = cleaned.slice(1, -1).trim();
+      }
+      cleaned = cleaned.replace(/^[-,/:\s]+|[-,/:\s]+$/g, "").trim();
       if (cleaned) {
-        if (/^TABLET\b/i.test(cleaned)) return "TABLET";
-        return cleaned;
+        // Refactor for TABLET === null or CAPSULE === null
+        if (/^(?:TABLET|CAPSULE|TAB|CAP)S?$/i.test(cleaned)) {
+          return null;
+        }
+        if (!/^(?:ORAL|IV|IM|SC|TOPICAL)$/i.test(cleaned)) {
+          return cleaned;
+        }
       }
     }
   }
 
   // 2. Match container patterns anywhere in description
-  const packMatch = description.match(
-    /\b(?:\d+(?:\.\d+)?\s*(?:ml|l|g|kg|'s|s)\s+)?(?:BOTTLE|TUBE|VIAL|AMPOULE|AMP|BAG|BOX|BLISTER|STRIP|CANISTER|SACHET|CARPULE|JAR)\b.*$/i,
+  const packMatch = trimmed.match(
+    /\b(?:\d+(?:\.\d+)?\s*(?:ml|l|g|kg|'s|s)\s+)?(?:BOTTLE|TUBE|VIAL|AMPOULE|AMP|BAG|BOX|BLISTER|STRIP|CANISTER|SACHET|CARPULE|JAR|TIN)\b.*$/i,
   );
   if (packMatch) {
-    const res = packMatch[0].trim();
-    if (/^TABLET\b/i.test(res)) return "TABLET";
-    return res;
+    let res = packMatch[0].trim();
+    if (res.startsWith("(") && res.endsWith(")")) {
+      res = res.slice(1, -1).trim();
+    }
+    res = res.replace(/^[-,/:\s]+|[-,/:\s]+$/g, "").trim();
+    if (res && !/^(?:TABLET|CAPSULE|TAB|CAP)S?$/i.test(res)) {
+      return res;
+    }
   }
 
-  // 3. If description contains TABLET and has no separate container, extract "TABLET"
-  if (/\bTABLET\b/i.test(description)) {
-    return "TABLET";
-  }
-
-  return "";
+  // No packaging unit displayed in drug_description
+  return null;
 };
 
 const extractDosageFormFromDescription = (description, rawPackageCode) => {
@@ -222,6 +239,32 @@ const generateSkuCode = (brand, generic, dosage, form, packagingUnit) => {
   return parts.join("-");
 };
 
+const mapDtoToSku = (dto) => {
+  return {
+    id: dto.id,
+    sku: dto.name || "",
+    name: dto.name || "",
+    medicineId: dto.medicineId,
+    brandName: dto.brandName || "",
+    genericName: dto.drugDescription || "",
+    dosage: extractDosageFromDescription(dto.drugDescription) || "",
+    dosageForm: dto.dosageForm || "",
+    packagingUnit: dto.packagingUnit || "",
+    currentStock: Number(dto.units ?? 0),
+    units: Number(dto.units ?? 0),
+    minimumLevel: Number(dto.minimumLevel ?? 0),
+    reorderLevel: Number(dto.reorderLevel ?? 0),
+    maximumLevel: Number(dto.maximumLevel ?? 0),
+    facilityId: dto.facilityId,
+    facility: dto.facilityName || "",
+    status: "Active",
+    createdAt: dto.createdAt
+      ? String(dto.createdAt).split("T")[0]
+      : new Date().toISOString().split("T")[0],
+    updatedAt: dto.updatedAt ? String(dto.updatedAt).split("T")[0] : "",
+  };
+};
+
 function SkuManagement() {
   const { facility } = useAuth();
 
@@ -233,6 +276,9 @@ function SkuManagement() {
   }, [facility]);
 
   const [skuList, setSkuList] = useState(initialSkus);
+  const [isLoadingSkus, setIsLoadingSkus] = useState(false);
+  const [skuError, setSkuError] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStockFilter, setSelectedStockFilter] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
@@ -253,6 +299,48 @@ function SkuManagement() {
 
   const [libMedicines, setLibMedicines] = useState([]);
   const [isLoadingMedicines, setIsLoadingMedicines] = useState(false);
+
+  // Fetch SKUs from backend API (all or via searchSku endpoint)
+  const fetchSkus = useCallback(
+    async (query = "") => {
+      try {
+        setIsLoadingSkus(true);
+        setSkuError(null);
+        const targetFacilityId =
+          facility?.id ||
+          facilities.find((f) => f.name === currentFacilityName)?.id;
+
+        let data;
+        if (query && query.trim()) {
+          data = await skuService.searchSku(query.trim(), targetFacilityId);
+        } else {
+          data = await skuService.getAllSkus(targetFacilityId);
+        }
+
+        if (Array.isArray(data)) {
+          setSkuList(data.map(mapDtoToSku));
+        }
+      } catch (err) {
+        console.error("Failed to load SKUs from backend:", err);
+        setSkuError(
+          err?.response?.data?.message ||
+            err?.message ||
+            "Failed to load SKUs from server.",
+        );
+      } finally {
+        setIsLoadingSkus(false);
+      }
+    },
+    [facility?.id, currentFacilityName],
+  );
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchSkus(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, fetchSkus]);
 
   // Search Medicine Library from backend API
   const handleSearchMedicines = async (searchQuery = "") => {
@@ -318,10 +406,17 @@ function SkuManagement() {
   const filteredSkus = useMemo(() => {
     return currentFacilitySkus.filter((item) => {
       const matchesSearch =
-        item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.brandName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.genericName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.dosage.toLowerCase().includes(searchQuery.toLowerCase());
+        !searchQuery.trim() ||
+        (item.sku || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (item.brandName || "")
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        (item.genericName || "")
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        (item.dosage || "")
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase());
 
       let matchesStock = true;
       if (selectedStockFilter === "OPTIMAL") {
@@ -377,24 +472,24 @@ function SkuManagement() {
           ? `${selectedMed.strengthCode} ${selectedMed.unitCode || ""}`.trim()
           : "");
 
-      let extractedPackaging = (
-        extractPackagingFromDescription(genericName) ||
-        selectedMed.packageCode ||
-        selectedMed.package_code ||
-        ""
-      ).toUpperCase();
+      let extractedPackaging = extractPackagingFromDescription(genericName);
 
-      if (/^TABLET\b/i.test(extractedPackaging.trim())) {
-        extractedPackaging = "TABLET";
+      // Refactor for TABLET === null or CAPSULE === null
+      if (
+        extractedPackaging === null ||
+        extractedPackaging === "TABLET" ||
+        extractedPackaging === "CAPSULE" ||
+        extractedPackaging === "TAB" ||
+        extractedPackaging === "CAP"
+      ) {
+        extractedPackaging = null;
       }
 
       setFormData((prev) => {
         const dosage = (extractedDosage || prev.dosage || "").toUpperCase();
-        const packagingUnit = (
-          extractedPackaging ||
-          prev.packagingUnit ||
-          ""
-        ).toUpperCase();
+        const packagingUnit = extractedPackaging
+          ? extractedPackaging.toUpperCase()
+          : null;
         const brandName = (prev.brandName || "").toUpperCase();
         const finalDosageForm = dosageForm || prev.dosageForm || "";
         const generatedSku = generateSkuCode(
@@ -431,7 +526,7 @@ function SkuManagement() {
         genericName: "",
         dosage: "",
         dosageForm: "",
-        packagingUnit: "",
+        packagingUnit: null,
         sku: "",
       }));
     }
@@ -548,7 +643,7 @@ function SkuManagement() {
   };
 
   // Save (Add or Edit) SKU
-  const handleSaveSku = (e) => {
+  const handleSaveSku = async (e) => {
     e.preventDefault();
     const { isValid, errors: validationErrors } = validateSkuForm(formData, {
       currentFacilitySkus,
@@ -560,63 +655,112 @@ function SkuManagement() {
       return;
     }
 
-    if (modalMode === "add") {
-      const newSkuItem = {
-        id: Date.now(),
-        medicineId: Number(formData.medicineId),
-        sku: formData.sku.trim().toUpperCase(),
-        brandName: formData.brandName,
-        genericName: formData.genericName,
-        dosage: formData.dosage,
-        dosageForm: formData.dosageForm,
-        packagingUnit: formData.packagingUnit,
-        minimumLevel: Number(formData.minimumLevel),
-        reorderLevel: Number(formData.reorderLevel),
-        maximumLevel: Number(formData.maximumLevel),
-        currentStock: 0,
-        facility: currentFacilityName, // Link to current facility
-        status: formData.status || "Active",
-        createdAt: new Date().toISOString().split("T")[0],
-      };
-      setSkuList((prev) => [newSkuItem, ...prev]);
-      handleCloseModal();
-      setCreatedSkuInfo(newSkuItem);
-      setIsSuccessModalOpen(true);
-      return;
-    } else if (modalMode === "edit" && selectedSku) {
-      setSkuList((prev) =>
-        prev.map((s) =>
-          s.id === selectedSku.id
-            ? {
-                ...s,
-                sku: formData.sku.trim().toUpperCase(),
-                brandName: formData.brandName,
-                dosageForm: formData.dosageForm,
-                packagingUnit: formData.packagingUnit,
-                minimumLevel: Number(formData.minimumLevel),
-                reorderLevel: Number(formData.reorderLevel),
-                maximumLevel: Number(formData.maximumLevel),
-                status: formData.status,
-              }
-            : s,
-        ),
-      );
-    }
+    const targetFacilityId =
+      facility?.id ||
+      facilities.find((f) => f.name === currentFacilityName)?.id ||
+      1;
 
-    handleCloseModal();
+    setIsSubmitting(true);
+    try {
+      if (modalMode === "add") {
+        const payload = {
+          facilityId: Number(targetFacilityId),
+          medicineId: Number(formData.medicineId),
+          name: formData.sku.trim().toUpperCase(),
+          brandName: formData.brandName.trim().toUpperCase(),
+          dosageForm: formData.dosageForm.trim().toUpperCase(),
+          packagingUnit: (formData.packagingUnit || "").trim().toUpperCase(),
+          units: 0,
+          minimumLevel: Number(formData.minimumLevel),
+          reorderLevel: Number(formData.reorderLevel),
+          maximumLevel: Number(formData.maximumLevel),
+        };
+
+        const responseDto = await skuService.createSku(payload);
+        const newSkuItem = mapDtoToSku(responseDto);
+        if (!newSkuItem.genericName) newSkuItem.genericName = formData.genericName;
+        if (!newSkuItem.dosage) newSkuItem.dosage = formData.dosage;
+        if (!newSkuItem.facility) newSkuItem.facility = currentFacilityName;
+
+        setSkuList((prev) => [newSkuItem, ...prev]);
+        handleCloseModal();
+        setCreatedSkuInfo(newSkuItem);
+        setIsSuccessModalOpen(true);
+        return;
+      } else if (modalMode === "edit" && selectedSku) {
+        const editFacilityId =
+          selectedSku.facilityId ||
+          facility?.id ||
+          facilities.find(
+            (f) => f.name === (selectedSku.facility || currentFacilityName),
+          )?.id ||
+          1;
+
+        const payload = {
+          facilityId: Number(editFacilityId),
+          medicineId: Number(formData.medicineId || selectedSku.medicineId || 1),
+          name: formData.sku.trim().toUpperCase(),
+          brandName: formData.brandName.trim().toUpperCase(),
+          dosageForm: formData.dosageForm.trim().toUpperCase(),
+          packagingUnit: (formData.packagingUnit || "").trim().toUpperCase(),
+          units: Number(selectedSku.currentStock ?? selectedSku.units ?? 0),
+          minimumLevel: Number(formData.minimumLevel),
+          reorderLevel: Number(formData.reorderLevel),
+          maximumLevel: Number(formData.maximumLevel),
+        };
+
+        const responseDto = await skuService.updateSku(selectedSku.id, payload);
+        const updatedItem = mapDtoToSku(responseDto);
+        if (!updatedItem.genericName)
+          updatedItem.genericName = formData.genericName || selectedSku.genericName;
+        if (!updatedItem.dosage)
+          updatedItem.dosage = formData.dosage || selectedSku.dosage;
+        if (!updatedItem.facility)
+          updatedItem.facility = selectedSku.facility || currentFacilityName;
+
+        setSkuList((prev) =>
+          prev.map((s) => (s.id === selectedSku.id ? updatedItem : s)),
+        );
+        handleCloseModal();
+      }
+    } catch (err) {
+      console.error("Failed to save SKU:", err);
+      const backendMsg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Failed to save SKU to server.";
+      setFormErrors({ sku: backendMsg });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Delete SKU Confirmation
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!selectedSku) return;
 
-    setSkuList((prev) => prev.filter((s) => s.id !== selectedSku.id));
+    setIsSubmitting(true);
+    try {
+      await skuService.deleteSku(selectedSku.id);
+      setSkuList((prev) => prev.filter((s) => s.id !== selectedSku.id));
 
-    if (paginatedSkus.length === 1 && currentPage > 1) {
-      setCurrentPage((prev) => prev - 1);
+      if (paginatedSkus.length === 1 && currentPage > 1) {
+        setCurrentPage((prev) => prev - 1);
+      }
+
+      handleCloseModal();
+    } catch (err) {
+      console.error("Failed to delete SKU from server:", err);
+      // Fallback: remove locally so UI responds
+      setSkuList((prev) => prev.filter((s) => s.id !== selectedSku.id));
+      if (paginatedSkus.length === 1 && currentPage > 1) {
+        setCurrentPage((prev) => prev - 1);
+      }
+      handleCloseModal();
+    } finally {
+      setIsSubmitting(false);
     }
-
-    handleCloseModal();
   };
 
   // Submit Stock Adjustment Action
@@ -896,7 +1040,21 @@ function SkuManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {paginatedSkus.length > 0 ? (
+              {isLoadingSkus ? (
+                <tr>
+                  <td
+                    colSpan="5"
+                    className="px-6 py-12 text-center text-gray-400"
+                  >
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                      <p className="text-xs font-medium text-gray-500">
+                        Loading SKUs from server...
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              ) : paginatedSkus.length > 0 ? (
                 paginatedSkus.map((item) => {
                   const status = getStockStatus(item);
                   const fillPercent = Math.min(
@@ -1275,7 +1433,7 @@ function SkuManagement() {
                 id="sku-packaging"
                 type="text"
                 name="packagingUnit"
-                value={formData.packagingUnit}
+                value={formData.packagingUnit ?? ""}
                 onChange={handleInputChange}
                 placeholder="e.g. 500 ML BOTTLE, 10 G TUBE, BOX OF 100"
                 className={`input uppercase ${
@@ -1423,8 +1581,14 @@ function SkuManagement() {
             >
               Cancel
             </button>
-            <button type="submit" className="btn-primary">
-              {modalMode === "add" ? (
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? (
+                <span>Saving...</span>
+              ) : modalMode === "add" ? (
                 <>
                   <Plus className="w-4 h-4" />
                   <span>Create SKU</span>
@@ -1913,6 +2077,7 @@ function SkuManagement() {
         itemName={selectedSku?.brandName}
         itemCode={selectedSku?.sku}
         itemType="SKU"
+        isDeleting={isSubmitting}
         message={
           selectedSku && (
             <>
