@@ -65,6 +65,17 @@ const skuService = {
     });
     return response.data;
   },
+
+  getReorderNeededSkus: async (facilityId = null, search = "", config = {}) => {
+    const response = await axios.get(
+      skuApi.getReorderNeededSkus(facilityId, search),
+      {
+        ...config,
+        headers: getAuthHeaders(config),
+      },
+    );
+    return response.data;
+  },
 };
 
 export default skuService;

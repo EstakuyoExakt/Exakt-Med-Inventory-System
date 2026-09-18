@@ -152,6 +152,16 @@ public class SkuService {
                 .collect(Collectors.toList());
     }
 
+    // 7. GET SKUS THAT NEED REORDERING (units <= reorderLevel, excluding active Pending/Approved orders)
+    @PreAuthorize("isAuthenticated()")
+    public List<SkuResponseDto> getReorderNeededSkus(Long facilityId, String search) {
+        String query = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+        return skuRepository.findReorderNeededSkus(facilityId, query)
+                .stream()
+                .map(sku -> mapToResponseDto(sku, null))
+                .collect(Collectors.toList());
+    }
+
     // Helper: Map Sku entity to SkuResponseDto
     private SkuResponseDto mapToResponseDto(Sku sku, String message) {
         SkuResponseDto dto = new SkuResponseDto();

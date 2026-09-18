@@ -22,6 +22,13 @@ const skuApi = {
   getSkuById: (id) => `${API_URL}/${id}`,
   updateSku: (id) => `${API_URL}/${id}`,
   deleteSku: (id) => `${API_URL}/${id}`,
+  getReorderNeededSkus: (facilityId = null, search = "") => {
+    const params = new URLSearchParams();
+    if (facilityId) params.append("facilityId", facilityId);
+    if (search) params.append("search", search);
+    const qs = params.toString();
+    return qs ? `${API_URL}/reorder-needed?${qs}` : `${API_URL}/reorder-needed`;
+  },
 };
 
 export default skuApi;

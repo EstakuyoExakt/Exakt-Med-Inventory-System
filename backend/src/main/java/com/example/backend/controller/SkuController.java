@@ -35,6 +35,14 @@ public class SkuController {
         return ResponseEntity.ok(skuService.searchSkus(search, facilityId));
     }
 
+    // 2b. GET SKUS THAT NEED REORDERING (Excluding active Pending/Approved orders)
+    @GetMapping("/reorder-needed")
+    public ResponseEntity<List<SkuResponseDto>> getReorderNeededSkus(
+            @RequestParam(required = false) Long facilityId,
+            @RequestParam(required = false) String search) {
+        return ResponseEntity.ok(skuService.getReorderNeededSkus(facilityId, search));
+    }
+
     // 3. GET ALL SKUS (Optionally filtered by facilityId and/or search term)
     @GetMapping
     public ResponseEntity<List<SkuResponseDto>> getAllSkus(

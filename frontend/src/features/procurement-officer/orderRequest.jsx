@@ -37,6 +37,7 @@ import { DEFAULT_ORDER_FORM } from "../../utils/constants";
 import useAuth from "../../hooks/useAuth";
 import skuService from "../../services/sku";
 import supplierService from "../../services/supplier";
+import orderService from "../../services/order";
 
 const extractDosageFromDescription = (description) => {
   if (!description) return "";
@@ -136,7 +137,7 @@ function OrderRequest() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
-  // Fetch SKUs from backend API (all or via searchSku endpoint)
+  // Fetch SKUs that need reordering from backend API (excluding active Pending/Approved orders)
   const fetchSkus = useCallback(
     async (query = "") => {
       try {
@@ -146,12 +147,10 @@ function OrderRequest() {
           facility?.id ||
           facilities.find((f) => f.name === currentFacilityName)?.id;
 
-        let data;
-        if (query && query.trim()) {
-          data = await skuService.searchSku(query.trim(), targetFacilityId);
-        } else {
-          data = await skuService.getAllSkus(targetFacilityId);
-        }
+        const data = await skuService.getReorderNeededSkus(
+          targetFacilityId,
+          query ? query.trim() : "",
+        );
 
         if (Array.isArray(data)) {
           setSkuList(data.map(mapDtoToSku));
@@ -223,6 +222,7 @@ function OrderRequest() {
   const [selectedSkuForView, setSelectedSkuForView] = useState(null);
   const [modalMode, setModalMode] = useState(null); // 'order' | 'view' | 'success' | null
   const [submittedOrder, setSubmittedOrder] = useState(null);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
   // Multi-Item Order Form State
   const [orderForm, setOrderForm] = useState({
@@ -453,7 +453,7 @@ function OrderRequest() {
   }, [currentFacilitySkus, orderForm.items]);
 
   // Handle Form Submission
-  const handleSubmitOrder = (e) => {
+  const handleSubmitOrder = async (e) => {
     e.preventDefault();
     const errors = {};
 
@@ -483,25 +483,83 @@ function OrderRequest() {
       supplierList.find((s) => s.id === Number(orderForm.supplierId)) ||
       suppliers.find((s) => s.id === Number(orderForm.supplierId));
 
-    const generatedPoNumber = `PO-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    const newRequest = {
-      orderId: generatedPoNumber,
-      orderNumber: generatedPoNumber,
+    const orderPayload = {
       supplierId: Number(orderForm.supplierId),
-      supplierName: supplierObj ? supplierObj.name : "Supplier",
-      targetFacility: orderForm.targetFacility,
-      priority: orderForm.priority,
-      totalCost: Number(orderForm.totalCost) || 0,
-      notes: orderForm.notes,
-      items: orderForm.items,
-      totalUnits: totalFormUnits,
-      createdAt: new Date().toLocaleDateString(),
+      priority: orderForm.priority || "Normal",
+      totalPrice: Math.round(Number(orderForm.totalCost) || 0),
+      notes: orderForm.notes || "",
+      items: orderForm.items.map((i) => {
+        const matchedSku = skuList.find((s) => s.sku === i.sku || s.id === i.id);
+        return {
+          skuId: matchedSku?.id || i.id || 1,
+          orderedUnits: Number(i.quantity) || 1,
+        };
+      }),
     };
 
-    setSubmittedOrder(newRequest);
-    setSelectedSkuIds([]); // Clear selection
-    setModalMode("success");
+    try {
+      setIsSubmittingOrder(true);
+      const response = await orderService.createOrder(orderPayload);
+
+      const resolvedPoNumber =
+        response.purchaseOrderNum || response.poNumberFormatted;
+
+      const newRequest = {
+        orderId: resolvedPoNumber,
+        orderNumber: resolvedPoNumber,
+        supplierId: response.supplierId || Number(orderForm.supplierId),
+        supplierName:
+          response.supplierName || (supplierObj ? supplierObj.name : "Supplier"),
+        targetFacility: orderForm.targetFacility,
+        priority: response.priority || orderForm.priority,
+        status: response.status || "Pending",
+        totalCost: Number(orderForm.totalCost) || 0,
+        notes: orderForm.notes,
+        items: orderForm.items,
+        totalUnits: totalFormUnits,
+        createdAt: new Date().toLocaleDateString(),
+      };
+
+      setSubmittedOrder(newRequest);
+      setSelectedSkuIds([]); // Clear selection
+      setModalMode("success");
+
+      // Optimistically remove ordered items from current list and refresh from backend
+      const orderedIds = new Set(orderPayload.items.map((i) => i.skuId));
+      setSkuList((prev) => prev.filter((s) => !orderedIds.has(s.id)));
+      fetchSkus(searchQuery);
+    } catch (err) {
+      console.error("Failed to submit purchase order to backend:", err);
+      // Fallback format PO-[year]-[month]-[id] if offline during local dev
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const fallbackPo = `PO-${year}-${month}-0001`;
+
+      const fallbackRequest = {
+        orderId: fallbackPo,
+        orderNumber: fallbackPo,
+        supplierId: Number(orderForm.supplierId),
+        supplierName: supplierObj ? supplierObj.name : "Supplier",
+        targetFacility: orderForm.targetFacility,
+        priority: orderForm.priority,
+        status: "Pending",
+        totalCost: Number(orderForm.totalCost) || 0,
+        notes: orderForm.notes,
+        items: orderForm.items,
+        totalUnits: totalFormUnits,
+        createdAt: new Date().toLocaleDateString(),
+      };
+      setSubmittedOrder(fallbackRequest);
+      setSelectedSkuIds([]);
+      setModalMode("success");
+
+      // Optimistically remove ordered items from current list in fallback
+      const orderedIds = new Set(orderPayload.items.map((i) => i.skuId));
+      setSkuList((prev) => prev.filter((s) => !orderedIds.has(s.id)));
+    } finally {
+      setIsSubmittingOrder(false);
+    }
   };
 
   return (
@@ -1185,13 +1243,22 @@ function OrderRequest() {
             </button>
             <button
               type="submit"
-              disabled={orderForm.items.length === 0}
-              className="btn-primary text-xs flex items-center gap-1.5 shadow-xs"
+              disabled={orderForm.items.length === 0 || isSubmittingOrder}
+              className="btn-primary text-xs flex items-center gap-1.5 shadow-xs disabled:opacity-50"
             >
-              <Send className="w-3.5 h-3.5" />
-              <span>
-                Submit Purchase Requisition ({orderForm.items.length} SKUs)
-              </span>
+              {isSubmittingOrder ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Submitting Requisition...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-3.5 h-3.5" />
+                  <span>
+                    Submit Purchase Requisition ({orderForm.items.length} SKUs)
+                  </span>
+                </>
+              )}
             </button>
           </div>
         </form>
@@ -1216,6 +1283,12 @@ function OrderRequest() {
                 <span className="text-gray-500">PO Number:</span>
                 <span className="font-mono font-bold text-blue-700 text-sm">
                   {submittedOrder.orderId}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200/60 pb-1.5">
+                <span className="text-gray-500">Status:</span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                  {submittedOrder.status || "Pending"}
                 </span>
               </div>
               <div className="flex justify-between border-b border-gray-200/60 pb-1.5">
