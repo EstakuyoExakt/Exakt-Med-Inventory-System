@@ -66,6 +66,11 @@ public class OrderService {
                 .mapToLong(i -> i.getOrderedUnits() != null ? i.getOrderedUnits() : 0L)
                 .sum();
 
+        // Calculate totalPrice by summing the price of each ordered item
+        long totalPrice = request.getItems().stream()
+                .mapToLong(i -> i.getPrice() != null ? i.getPrice() : 0L)
+                .sum();
+
         LocalDateTime now = LocalDateTime.now();
 
         Order order = new Order();
@@ -76,7 +81,7 @@ public class OrderService {
                 ? request.getPriority()
                 : "Normal");
         order.setTotalOrderedUnits(totalUnits);
-        order.setTotalPrice(request.getTotalPrice() != null ? request.getTotalPrice() : 0L);
+        order.setTotalPrice(totalPrice);
         order.setNotes(request.getNotes());
         // Status explicitly defaults to Pending
         order.setStatus(Order.Status.Pending);
@@ -102,6 +107,7 @@ public class OrderService {
             orderedItem.setOrder(savedOrder);
             orderedItem.setSku(sku);
             orderedItem.setOrderedUnits(itemDto.getOrderedUnits());
+            orderedItem.setPrice(itemDto.getPrice() != null ? itemDto.getPrice() : 0L);
 
             orderedItems.add(orderedItem);
         }
@@ -186,6 +192,7 @@ public class OrderService {
             }
         }
         dto.setOrderedUnits(item.getOrderedUnits());
+        dto.setPrice(item.getPrice());
         return dto;
     }
 

@@ -25,4 +25,7 @@ public class OrderedItem {
     @Column(nullable = false)
     private Long orderedUnits;
 
+    @Column(nullable = false)
+    private Long price;
+
 }

@@ -19,4 +19,5 @@ public class OrderItemResponseDto {
     private String dosageForm;
     private String packagingUnit;
     private Long orderedUnits;
+    private Long price;
 }

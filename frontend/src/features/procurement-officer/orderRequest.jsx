@@ -340,6 +340,7 @@ function OrderRequest() {
       maximumLevel: sku.maximumLevel,
       reorderLevel: sku.reorderLevel,
       quantity: suggestedQty > 0 ? suggestedQty : 100,
+      price: "",
     };
   };
 
@@ -436,10 +437,28 @@ function OrderRequest() {
     }));
   };
 
+  // Update item price in Order Form
+  const handleUpdateItemPrice = (skuCode, price) => {
+    setOrderForm((prev) => ({
+      ...prev,
+      items: prev.items.map((i) =>
+        i.sku === skuCode ? { ...i, price } : i,
+      ),
+    }));
+  };
+
   // Total Units in the current Order Form
   const totalFormUnits = useMemo(() => {
     return orderForm.items.reduce(
       (sum, i) => sum + (Number(i.quantity) || 0),
+      0,
+    );
+  }, [orderForm.items]);
+
+  // Total Quoted Cost in the current Order Form (auto-calculated from sum of item prices)
+  const computedTotalCost = useMemo(() => {
+    return orderForm.items.reduce(
+      (sum, i) => sum + (Number(i.price) || 0),
       0,
     );
   }, [orderForm.items]);
@@ -470,8 +489,18 @@ function OrderRequest() {
         "All ordered medicines must have a quantity greater than 0.";
     }
 
-    if (orderForm.totalCost === "" || Number(orderForm.totalCost) < 0) {
-      errors.totalCost = "Please enter a valid total requisition cost.";
+    if (
+      orderForm.items.some(
+        (i) =>
+          i.price === "" ||
+          i.price === null ||
+          i.price === undefined ||
+          Number(i.price) < 0 ||
+          isNaN(Number(i.price)),
+      )
+    ) {
+      errors.items =
+        "Please enter a valid price (₱0 or higher) for each ordered medicine.";
     }
 
     if (Object.keys(errors).length > 0) {
@@ -492,13 +521,14 @@ function OrderRequest() {
       facilityId: Number(targetFacilityId),
       supplierId: Number(orderForm.supplierId),
       priority: orderForm.priority || "Normal",
-      totalPrice: Math.round(Number(orderForm.totalCost) || 0),
+      totalPrice: Math.round(computedTotalCost),
       notes: orderForm.notes || "",
       items: orderForm.items.map((i) => {
         const matchedSku = skuList.find((s) => s.sku === i.sku || s.id === i.id);
         return {
           skuId: matchedSku?.id || i.id || 1,
           orderedUnits: Number(i.quantity) || 1,
+          price: Math.round(Number(i.price) || 0),
         };
       }),
     };
@@ -519,7 +549,7 @@ function OrderRequest() {
         targetFacility: orderForm.targetFacility,
         priority: response.priority || orderForm.priority,
         status: response.status || "Pending",
-        totalCost: Number(orderForm.totalCost) || 0,
+        totalCost: response.totalPrice ?? Math.round(computedTotalCost),
         notes: orderForm.notes,
         items: orderForm.items,
         totalUnits: totalFormUnits,
@@ -952,7 +982,7 @@ function OrderRequest() {
         isOpen={modalMode === "order"}
         onClose={handleCloseModal}
         title="Create Purchase Order Requisition (Multi-Medicine)"
-        size="xl"
+        size="4xl"
       >
         <form onSubmit={handleSubmitOrder} className="space-y-4">
           {/* Supplier, Facility & Priority Header Controls */}
@@ -1082,7 +1112,8 @@ function OrderRequest() {
                   <tr>
                     <th className="px-3.5 py-2.5">Medication & SKU</th>
                     <th className="px-3.5 py-2.5">Current / Max</th>
-                    <th className="px-3.5 py-2.5 w-36">Order Quantity</th>
+                    <th className="px-3.5 py-2.5 w-28">Order Quantity</th>
+                    <th className="px-3.5 py-2.5 w-36">Item Price (₱)</th>
                     <th className="px-3.5 py-2.5 w-10 text-center">Action</th>
                   </tr>
                 </thead>
@@ -1135,11 +1166,33 @@ function OrderRequest() {
                                   e.target.value,
                                 )
                               }
-                              className="input py-1 px-2 text-xs w-24 font-bold text-gray-900"
+                              className="input py-1 px-2 text-xs w-20 font-bold text-gray-900"
                             />
                             <span className="text-[10px] text-gray-500">
                               units
                             </span>
+                          </div>
+                        </td>
+
+                        <td className="px-3.5 py-2.5">
+                          <div className="relative flex items-center">
+                            <span className="absolute left-2.5 text-gray-400 text-xs font-bold">
+                              ₱
+                            </span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="0.00"
+                              value={item.price ?? ""}
+                              onChange={(e) =>
+                                handleUpdateItemPrice(
+                                  item.sku,
+                                  e.target.value,
+                                )
+                              }
+                              className="input py-1 pl-6 pr-2 text-xs w-28 font-mono font-bold text-gray-900"
+                            />
                           </div>
                         </td>
 
@@ -1158,7 +1211,7 @@ function OrderRequest() {
                   ) : (
                     <tr>
                       <td
-                        colSpan="4"
+                        colSpan="5"
                         className="px-4 py-8 text-center text-gray-400"
                       >
                         <Layers className="w-6 h-6 mx-auto mb-1 text-gray-300" />
@@ -1179,39 +1232,35 @@ function OrderRequest() {
 
           {/* Bottom Financial & Notes Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-            {/* Total Cost Field */}
+            {/* Total Cost Field (Read-only, auto-calculated from item prices) */}
             <div>
-              <label
-                htmlFor="order-total-cost"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Total Quoted PO Cost (₱) <span className="text-red-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label
+                  htmlFor="order-total-cost"
+                  className="block text-xs font-semibold text-gray-700 uppercase tracking-wider"
+                >
+                  Total PO Cost (₱)
+                </label>
+                <span className="text-[10px] text-gray-400 font-medium bg-gray-100 px-1.5 py-0.5 rounded">
+                  Read Only • Auto Calculated
+                </span>
+              </div>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">
                   ₱
                 </span>
                 <input
                   id="order-total-cost"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={orderForm.totalCost}
-                  onChange={(e) =>
-                    setOrderForm((prev) => ({
-                      ...prev,
-                      totalCost: e.target.value,
-                    }))
-                  }
-                  placeholder="0.00"
-                  className="input pl-7 font-mono font-bold"
+                  type="text"
+                  readOnly
+                  tabIndex={-1}
+                  value={computedTotalCost.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                  className="input pl-7 font-mono font-bold bg-gray-100/80 text-gray-700 cursor-not-allowed border-gray-200 select-all"
                 />
               </div>
-              {formErrors.totalCost && (
-                <p className="text-xs text-red-500 mt-1">
-                  {formErrors.totalCost}
-                </p>
-              )}
             </div>
 
             {/* Notes */}
