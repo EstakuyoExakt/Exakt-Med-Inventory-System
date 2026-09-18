@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   AlertTriangle,
   AlertCircle,
@@ -28,14 +28,93 @@ import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 import SuccessModal from "../../components/common/successModal";
 
-// Data Imports
+// Data & Service Imports
 import { initialSkus } from "../../data/skuManagement";
 import { suppliers } from "../../data/supplier";
 import { facilities } from "../../data/facility";
-import { MEDICINE_TYPES } from "../../data/medicine";
 import { getStockStatus } from "../../utils/helpers";
 import { DEFAULT_ORDER_FORM } from "../../utils/constants";
 import useAuth from "../../hooks/useAuth";
+import skuService from "../../services/sku";
+import supplierService from "../../services/supplier";
+
+const extractDosageFromDescription = (description) => {
+  if (!description) return "";
+
+  const singleDosePattern =
+    /(?:\b\d+(?:\.\d+)?%|\b\d+(?:\.\d+)?\s*(?:mg|mcg|µg|g|iu|units?|u|meq|mmol)(?:\s*\/\s*\d*(?:\.\d+)?\s*(?:ml|l|g|dose|actuation|drop|spray))?\b)/i;
+
+  const comboPattern = new RegExp(
+    `${singleDosePattern.source}(?:\\s*\\+\\s*${singleDosePattern.source})+`,
+    "i",
+  );
+
+  const comboMatch = description.match(comboPattern);
+  if (comboMatch) {
+    return comboMatch[0].trim();
+  }
+
+  const formKeywords =
+    /(TABLET|CAPSULE|OINTMENT|CREAM|SYRUP|SUSPENSION|SOLUTION|INJECTION|DROPS|GEL|LOTION|INHALER|PATCH|SUPPOSITORY|POWDER|SHAMPOO)/i;
+  const formIndex = description.search(formKeywords);
+
+  const unitPatternGlobal = new RegExp(singleDosePattern.source, "gi");
+
+  if (formIndex > 0) {
+    const textBeforeForm = description.substring(0, formIndex);
+    const matchesBefore = textBeforeForm.match(unitPatternGlobal);
+    if (matchesBefore && matchesBefore.length > 0) {
+      return matchesBefore[0].trim();
+    }
+  }
+
+  const allMatches = description.match(unitPatternGlobal);
+  if (allMatches && allMatches.length > 0) {
+    const nonPackMatches = allMatches.filter((m) => {
+      const regex = new RegExp(
+        `${m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*(?:bottle|tube|vial|ampoule|pack|box|bag|canister)`,
+        "i",
+      );
+      return !regex.test(description);
+    });
+    if (nonPackMatches.length > 0) {
+      return nonPackMatches[0].trim();
+    }
+    return allMatches[0].trim();
+  }
+
+  return "";
+};
+
+const mapDtoToSku = (dto) => {
+  return {
+    id: dto.id,
+    sku: dto.name || "",
+    name: dto.name || "",
+    medicineId: dto.medicineId,
+    brandName: dto.brandName || "",
+    genericName: dto.drugDescription || "",
+    dosage: extractDosageFromDescription(dto.drugDescription) || "",
+    dosageForm: dto.dosageForm || "",
+    packagingUnit: dto.packagingUnit || "",
+    type:
+      dto.type ||
+      initialSkus.find((s) => s.sku === dto.name)?.type ||
+      "General",
+    currentStock: Number(dto.units ?? 0),
+    units: Number(dto.units ?? 0),
+    minimumLevel: Number(dto.minimumLevel ?? 0),
+    reorderLevel: Number(dto.reorderLevel ?? 0),
+    maximumLevel: Number(dto.maximumLevel ?? 0),
+    facilityId: dto.facilityId,
+    facility: dto.facilityName || "",
+    status: "Active",
+    createdAt: dto.createdAt
+      ? String(dto.createdAt).split("T")[0]
+      : new Date().toISOString().split("T")[0],
+    updatedAt: dto.updatedAt ? String(dto.updatedAt).split("T")[0] : "",
+  };
+};
 
 function OrderRequest() {
   const { facility } = useAuth();
@@ -47,12 +126,88 @@ function OrderRequest() {
     );
   }, [facility]);
 
-  const [skuList] = useState(initialSkus);
+  const [skuList, setSkuList] = useState(initialSkus);
+  const [isLoadingSkus, setIsLoadingSkus] = useState(false);
+  const [skuError, setSkuError] = useState(null);
+  const [supplierList, setSupplierList] = useState(suppliers);
+  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedType, setSelectedType] = useState("ALL");
   const [selectedUrgency, setSelectedUrgency] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
+
+  // Fetch SKUs from backend API (all or via searchSku endpoint)
+  const fetchSkus = useCallback(
+    async (query = "") => {
+      try {
+        setIsLoadingSkus(true);
+        setSkuError(null);
+        const targetFacilityId =
+          facility?.id ||
+          facilities.find((f) => f.name === currentFacilityName)?.id;
+
+        let data;
+        if (query && query.trim()) {
+          data = await skuService.searchSku(query.trim(), targetFacilityId);
+        } else {
+          data = await skuService.getAllSkus(targetFacilityId);
+        }
+
+        if (Array.isArray(data)) {
+          setSkuList(data.map(mapDtoToSku));
+        }
+      } catch (err) {
+        console.error("Failed to load SKUs in Order Request:", err);
+        setSkuError(
+          err?.response?.data?.message ||
+            err?.message ||
+            "Failed to load SKUs from server.",
+        );
+      } finally {
+        setIsLoadingSkus(false);
+      }
+    },
+    [facility?.id, currentFacilityName],
+  );
+
+  // Debounced search when user types in search bar
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchSkus(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, fetchSkus]);
+
+  // Fetch suppliers from backend API
+  const fetchSuppliers = useCallback(async () => {
+    try {
+      setIsLoadingSuppliers(true);
+      const targetFacilityId =
+        facility?.id ||
+        facilities.find((f) => f.name === currentFacilityName)?.id;
+      const data = await supplierService.getAllSuppliers(targetFacilityId);
+      if (Array.isArray(data) && data.length > 0) {
+        setSupplierList(data);
+      }
+    } catch (err) {
+      console.error("Failed to load suppliers in Order Request:", err);
+    } finally {
+      setIsLoadingSuppliers(false);
+    }
+  }, [facility?.id, currentFacilityName]);
+
+  useEffect(() => {
+    fetchSuppliers();
+  }, [fetchSuppliers]);
+
+  // Filter active suppliers, fallback to all suppliers in list if none explicitly active
+  const activeSuppliers = useMemo(() => {
+    const active = supplierList.filter(
+      (s) => !s.status || s.status.toLowerCase() === "active",
+    );
+    return active.length > 0 ? active : supplierList;
+  }, [supplierList]);
 
   // Filter SKUs that reference the current active facility
   const currentFacilitySkus = useMemo(() => {
@@ -99,12 +254,11 @@ function OrderRequest() {
       if (!needsReorder) return false;
 
       const matchesSearch =
+        !searchQuery.trim() ||
         item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.brandName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.genericName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.dosage.toLowerCase().includes(searchQuery.toLowerCase());
-
-      const matchesType = selectedType === "ALL" || item.type === selectedType;
 
       let matchesUrgency = true;
       if (selectedUrgency === "MINIMUM") {
@@ -115,9 +269,9 @@ function OrderRequest() {
           item.currentStock > item.minimumLevel;
       }
 
-      return matchesSearch && matchesType && matchesUrgency;
+      return matchesSearch && matchesUrgency;
     });
-  }, [currentFacilitySkus, searchQuery, selectedType, selectedUrgency]);
+  }, [currentFacilitySkus, searchQuery, selectedUrgency]);
 
   // Pagination calculation
   const totalPages = Math.ceil(reorderSkus.length / itemsPerPage) || 1;
@@ -128,11 +282,6 @@ function OrderRequest() {
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
-    setCurrentPage(1);
-  };
-
-  const handleTypeChange = (e) => {
-    setSelectedType(e.target.value);
     setCurrentPage(1);
   };
 
@@ -215,7 +364,8 @@ function OrderRequest() {
     );
 
     setOrderForm({
-      supplierId: suppliers[0]?.id || 1,
+      supplierId:
+        activeSuppliers[0]?.id || supplierList[0]?.id || suppliers[0]?.id || 1,
       targetFacility: currentFacilityName,
       priority: hasCritical ? "Urgent" : "Normal",
       totalCost: "",
@@ -329,9 +479,9 @@ function OrderRequest() {
       return;
     }
 
-    const supplierObj = suppliers.find(
-      (s) => s.id === Number(orderForm.supplierId),
-    );
+    const supplierObj =
+      supplierList.find((s) => s.id === Number(orderForm.supplierId)) ||
+      suppliers.find((s) => s.id === Number(orderForm.supplierId));
 
     const generatedPoNumber = `PO-2026-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -480,20 +630,6 @@ function OrderRequest() {
               <option value="MINIMUM">Critical (&le; Minimum Level)</option>
               <option value="REORDER_ONLY">Reorder Triggered Only</option>
             </select>
-
-            {/* Medicine Type Filter */}
-            <select
-              value={selectedType}
-              onChange={handleTypeChange}
-              className="input py-2 text-xs w-full sm:w-44"
-            >
-              <option value="ALL">All Medicine Types</option>
-              {MEDICINE_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
           </div>
         </div>
 
@@ -563,7 +699,21 @@ function OrderRequest() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {paginatedReorderSkus.length > 0 ? (
+              {isLoadingSkus ? (
+                <tr>
+                  <td
+                    colSpan="6"
+                    className="px-6 py-12 text-center text-gray-400"
+                  >
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                      <p className="text-xs font-medium text-gray-500">
+                        Loading critical and reorder level SKUs...
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              ) : paginatedReorderSkus.length > 0 ? (
                 paginatedReorderSkus.map((item) => {
                   const status = getStockStatus(item);
                   const isSelected = selectedSkuIds.includes(item.id);
@@ -762,13 +912,15 @@ function OrderRequest() {
                 }
                 className="input py-2 text-xs"
               >
-                {suppliers
-                  .filter((s) => s.status === "Active")
-                  .map((s) => (
+                {isLoadingSuppliers && activeSuppliers.length === 0 ? (
+                  <option value="">Loading suppliers...</option>
+                ) : (
+                  activeSuppliers.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
                     </option>
-                  ))}
+                  ))
+                )}
               </select>
             </div>
 
@@ -902,7 +1054,7 @@ function OrderRequest() {
                             </span>
                             <span className="text-gray-400">/</span>
                             <span className="text-gray-600">
-                              Max: {item.maximumLevel}
+                              {item.maximumLevel}
                             </span>
                           </div>
                         </td>

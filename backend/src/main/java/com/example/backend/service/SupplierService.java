@@ -50,7 +50,7 @@ public class SupplierService {
     }
 
     // 2. GET ALL SUPPLIERS (SuperAdmin and Admin) - optionally filtered by facilityId
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Procurement')")
     public List<SupplierResponseDto> getAllSuppliers(Long facilityId) {
         List<Supplier> suppliers;
         if (facilityId != null) {
