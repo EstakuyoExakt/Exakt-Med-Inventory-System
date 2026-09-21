@@ -37,9 +37,9 @@ export const validateBatchForm = (
     quantityErr = "Received quantity must be greater than 0.";
   }
 
-  let quarantineErr = null;
-  if (formData.isQuarantined && !formData.quarantineReason?.trim()) {
-    quarantineErr = "Please specify a quarantine reason.";
+  let quarantineNotesErr = null;
+  if (formData.isQuarantined && !formData.quarantineNotes?.trim()) {
+    quarantineNotesErr = "QA receiving notes/remarks are required when lot is quarantined.";
   }
 
   const errors = {
@@ -50,7 +50,7 @@ export const validateBatchForm = (
     ),
     expiryDate: expiryErr,
     quantity: quantityErr,
-    quarantineReason: quarantineErr,
+    quarantineNotes: quarantineNotesErr,
   };
 
   return runValidation(errors);

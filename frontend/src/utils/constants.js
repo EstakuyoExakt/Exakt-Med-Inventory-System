@@ -62,15 +62,6 @@ export const ADJUSTMENT_REASONS = [
   "Other Correction",
 ];
 
-export const QUARANTINE_REASONS = [
-  "FDA Regulatory Advisory / Recall",
-  "Temperature Excursion during Cold Chain Transit",
-  "Suspected Chemical / Physical Contamination",
-  "Compromised Packaging / Seal Defect",
-  "Pending Secondary Quality Assurance Testing",
-  "Discoloration or Precipitation Observed",
-  "Other Quality Issue",
-];
 
 // ==========================================
 // SKU Management & Stock Actions

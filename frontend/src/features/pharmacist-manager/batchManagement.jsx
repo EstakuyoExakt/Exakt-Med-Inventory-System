@@ -25,7 +25,6 @@ import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 import ComboBox from "./components/comboBox";
 import { getExpiryStatus } from "../../utils/helpers";
-import { QUARANTINE_REASONS } from "../../utils/constants";
 import useAuth from "../../hooks/useAuth";
 import useError from "../../hooks/useError";
 import { validateBatchForm } from "../../validators/batch.validator";
@@ -91,7 +90,6 @@ function BatchManagement() {
     quantity: "",
     location: currentFacilityName,
     isQuarantined: false,
-    quarantineReason: QUARANTINE_REASONS[0],
     quarantineNotes: "",
   });
 
@@ -417,9 +415,7 @@ function BatchManagement() {
         location: currentFacilityName, // Automatically saved to current facility
         poReference: selectedPoDetails.orderNumber,
         isQuarantined: receiveFormData.isQuarantined,
-        quarantineReason: receiveFormData.isQuarantined
-          ? receiveFormData.quarantineReason
-          : "",
+        quarantineReason: "",
         quarantineDate: receiveFormData.isQuarantined
           ? new Date().toISOString().split("T")[0]
           : "",
@@ -1126,58 +1122,40 @@ function BatchManagement() {
                     </span>
                   </div>
 
-                  <div>
-                    <label
-                      htmlFor="receive-quarantine-reason"
-                      className="block text-[11px] font-semibold text-red-900 uppercase tracking-wider mb-1"
-                    >
-                      Quarantine Cause / Deficiency{" "}
-                      <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      id="receive-quarantine-reason"
-                      value={receiveFormData.quarantineReason}
-                      onChange={(e) =>
-                        setReceiveFormData((prev) => ({
-                          ...prev,
-                          quarantineReason: e.target.value,
-                        }))
-                      }
-                      className="input bg-white text-xs"
-                    >
-                      {QUARANTINE_REASONS.map((q) => (
-                        <option key={q} value={q}>
-                          {q}
-                        </option>
-                      ))}
-                    </select>
-                    {formErrors.quarantineReason && (
-                      <p className="text-xs text-red-500 mt-1">
-                        {formErrors.quarantineReason}
-                      </p>
-                    )}
-                  </div>
 
                   <div>
                     <label
                       htmlFor="receive-quarantine-notes"
                       className="block text-[11px] font-semibold text-red-900 uppercase tracking-wider mb-1"
                     >
-                      QA Receiving Notes / Remarks
+                      QA Receiving Notes / Remarks{" "}
+                      <span className="text-red-500">*</span>
                     </label>
                     <input
                       id="receive-quarantine-notes"
                       type="text"
                       value={receiveFormData.quarantineNotes}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setReceiveFormData((prev) => ({
                           ...prev,
                           quarantineNotes: e.target.value,
-                        }))
-                      }
+                        }));
+                        if (formErrors.quarantineNotes) {
+                          clearError("quarantineNotes");
+                        }
+                      }}
                       placeholder="e.g. Temperature recorder logged 14°C excursion during freight"
-                      className="input bg-white text-xs"
+                      className={`input bg-white text-xs ${
+                        formErrors.quarantineNotes
+                          ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                          : ""
+                      }`}
                     />
+                    {formErrors.quarantineNotes && (
+                      <p className="text-xs text-red-500 mt-1">
+                        {formErrors.quarantineNotes}
+                      </p>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -1338,11 +1316,13 @@ function BatchManagement() {
               {selectedBatch.isQuarantined && (
                 <div className="p-3 rounded-lg border border-red-200 bg-red-50/60 col-span-2 text-red-900 space-y-1">
                   <span className="font-bold block text-[11px] uppercase tracking-wider text-red-700">
-                    Quarantine Cause
+                    Quarantine Status
                   </span>
-                  <p className="font-semibold">
-                    {selectedBatch.quarantineReason}
-                  </p>
+                  {selectedBatch.quarantineReason && (
+                    <p className="font-semibold">
+                      {selectedBatch.quarantineReason}
+                    </p>
+                  )}
                   {selectedBatch.quarantineDate && (
                     <span className="text-[10px] text-red-600 block">
                       Enforced on: {selectedBatch.quarantineDate}
