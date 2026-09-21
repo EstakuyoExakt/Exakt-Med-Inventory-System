@@ -43,7 +43,8 @@ const normalizeOrder = (raw) => {
 
   return {
     id: raw.id,
-    orderNumber: raw.purchaseOrderNum || raw.poNumberFormatted || `PO-${raw.id}`,
+    orderNumber:
+      raw.purchaseOrderNum || raw.poNumberFormatted || `PO-${raw.id}`,
     quantity: raw.totalOrderedUnits ?? raw.quantity ?? 0,
     estimatedCost: raw.totalPrice ?? raw.estimatedCost ?? 0,
     supplierId: raw.supplierId,
@@ -51,15 +52,16 @@ const normalizeOrder = (raw) => {
     targetFacility: raw.facilityName || raw.targetFacility || "Facility",
     facilityId: raw.facilityId,
     priority: raw.priority || "Normal",
-    status: raw.status === "Denied" ? "Rejected" : (raw.status || "Pending"),
-    notes: raw.notes || "",
+    status: raw.status === "Denied" ? "Rejected" : raw.status || "Pending",
+    notes: raw.status === "Denied" ? "" : raw.notes || "",
     requestedBy: raw.requestedBy || "Procurement Officer",
     requestedDate: raw.createdAt
       ? new Date(raw.createdAt).toISOString().split("T")[0]
       : raw.requestedDate || "—",
     approvedBy: raw.approvedBy || null,
     approvalDate: raw.approvalDate || null,
-    rejectionReason: raw.rejectionReason || null,
+    rejectionReason:
+      raw.status === "Denied" ? raw.notes : raw.rejectionReason || null,
     items: items,
     // First item fallbacks for search and backward compatibility
     sku: firstItem.skuName || raw.sku || "",
@@ -274,14 +276,19 @@ function RequestedOrders() {
 
   const handleRejectOrder = async (e) => {
     e.preventDefault();
-    if (!rejectReason.trim()) {
+    const denialNotes = rejectReason.trim();
+    if (!denialNotes) {
       setRejectError("Please provide a reason for denying this requisition.");
       return;
     }
 
     try {
       setIsActionLoading(true);
-      await orderService.updateOrderStatus(selectedOrder.id, "Denied");
+      await orderService.updateOrderStatus(
+        selectedOrder.id,
+        "Denied",
+        denialNotes,
+      );
       const today = new Date().toISOString().split("T")[0];
 
       setOrders((prev) =>
@@ -292,7 +299,8 @@ function RequestedOrders() {
                 status: "Rejected",
                 approvedBy: "Administrator",
                 approvalDate: today,
-                rejectionReason: rejectReason.trim(),
+                rejectionReason: denialNotes,
+                notes: "",
               }
             : o,
         ),
@@ -637,7 +645,9 @@ function RequestedOrders() {
                           </button>
 
                           {/* 2. Admin & Super Admin Protected Approval & Denial Actions */}
-                          <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.SUPER_ADMIN]}>
+                          <RoleGuard
+                            allowedRoles={[ROLES.ADMIN, ROLES.SUPER_ADMIN]}
+                          >
                             {(order.status === "Pending" ||
                               order.status === "Pending Approval") && (
                               <>
@@ -787,7 +797,10 @@ function RequestedOrders() {
                     </thead>
                     <tbody className="divide-y divide-gray-100 bg-white">
                       {selectedOrder.items.map((item, idx) => (
-                        <tr key={item.id || idx} className="hover:bg-gray-50/70">
+                        <tr
+                          key={item.id || idx}
+                          className="hover:bg-gray-50/70"
+                        >
                           <td className="px-3 py-2.5">
                             <span className="font-bold text-gray-900">
                               {item.brandName || item.skuName || "Medicine"}
@@ -808,7 +821,10 @@ function RequestedOrders() {
                             {item.orderedUnits?.toLocaleString()} units
                           </td>
                           <td className="px-3 py-2.5 text-right font-mono font-bold text-emerald-700 whitespace-nowrap">
-                            ₱{item.price ? Number(item.price).toLocaleString() : "0"}
+                            ₱
+                            {item.price
+                              ? Number(item.price).toLocaleString()
+                              : "0"}
                           </td>
                         </tr>
                       ))}
@@ -902,7 +918,10 @@ function RequestedOrders() {
             )}
 
             {/* Approval / Rejection Result Banner if processed */}
-            {selectedOrder.approvedBy && (
+            {(selectedOrder.approvedBy ||
+              selectedOrder.status === "Approved" ||
+              selectedOrder.status === "Denied" ||
+              selectedOrder.rejectionReason) && (
               <div
                 className={`p-3.5 rounded-xl text-xs border ${
                   selectedOrder.status === "Approved"
@@ -915,16 +934,28 @@ function RequestedOrders() {
                     ? "Approval Confirmation"
                     : "Rejection / Denial Notice"}
                 </p>
-                <p className="text-xs">
-                  Processed by{" "}
-                  <span className="font-semibold">
-                    {selectedOrder.approvedBy}
-                  </span>{" "}
-                  on {selectedOrder.approvalDate}.
-                </p>
+                {selectedOrder.approvedBy ? (
+                  <p className="text-xs">
+                    Processed by{" "}
+                    <span className="font-semibold">
+                      {selectedOrder.approvedBy}
+                    </span>{" "}
+                    {selectedOrder.approvalDate
+                      ? `on ${selectedOrder.approvalDate}`
+                      : ""}
+                    .
+                  </p>
+                ) : (
+                  <p className="text-xs">
+                    Status:{" "}
+                    <span className="font-semibold">
+                      {selectedOrder.status}
+                    </span>
+                  </p>
+                )}
                 {selectedOrder.rejectionReason && (
                   <p className="mt-1.5 text-red-800 bg-white/70 p-2 rounded-lg border border-red-200">
-                    <span className="font-semibold">Reason:</span>{" "}
+                    <span className="font-semibold">Reason for Denial:</span>{" "}
                     {selectedOrder.rejectionReason}
                   </p>
                 )}

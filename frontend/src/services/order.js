@@ -37,16 +37,16 @@ const orderService = {
     return response.data;
   },
 
-  updateOrderStatus: async (id, status, config = {}) => {
-    const response = await axios.patch(
-      orderApi.updateOrderStatus(id),
-      null,
-      {
-        ...config,
-        params: { status },
-        headers: getAuthHeaders(config),
-      },
-    );
+  updateOrderStatus: async (id, status, notes = null, config = {}) => {
+    const params = { status };
+    if (notes) {
+      params.notes = notes;
+    }
+    const response = await axios.patch(orderApi.updateOrderStatus(id), null, {
+      ...config,
+      params,
+      headers: getAuthHeaders(config),
+    });
     return response.data;
   },
 };

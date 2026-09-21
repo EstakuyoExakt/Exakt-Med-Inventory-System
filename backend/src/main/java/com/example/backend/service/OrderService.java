@@ -161,11 +161,24 @@ public class OrderService {
     // 4. UPDATE ORDER STATUS
     @Transactional
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
-    public OrderResponseDto updateOrderStatus(Long id, Order.Status status) {
+    public OrderResponseDto updateOrderStatus(Long id, Order.Status status, String notes) {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Order not found with id: " + id));
 
-        order.setStatus(status != null ? status : Order.Status.Pending);
+        Order.Status newStatus = status != null ? status : Order.Status.Pending;
+        order.setStatus(newStatus);
+
+        if (newStatus == Order.Status.Denied) {
+            if (notes == null || notes.trim().isEmpty()) {
+                throw new RuntimeException("Notes are required when status is Denied.");
+            }
+            order.setNotes(notes.trim());
+        } else if (newStatus == Order.Status.Approved) {
+            order.setNotes(null);
+        } else if (notes != null) {
+            order.setNotes(notes.trim());
+        }
+
         Order updatedOrder = orderRepository.save(order);
 
         List<OrderedItem> items = orderedItemRepository.findByOrderId(updatedOrder.getId());
@@ -176,6 +189,12 @@ public class OrderService {
         OrderResponseDto response = mapToOrderResponseDto(updatedOrder, itemDtos);
         response.setMessage("Order status updated successfully.");
         return response;
+    }
+
+    @Transactional
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
+    public OrderResponseDto updateOrderStatus(Long id, Order.Status status) {
+        return updateOrderStatus(id, status, null);
     }
 
     private OrderItemResponseDto mapToItemResponseDto(OrderedItem item) {
