@@ -13,6 +13,7 @@ import {
   Pencil,
   ArrowRightLeft,
   Building2,
+  PackagePlus,
 } from "lucide-react";
 
 // Common Components
@@ -25,6 +26,7 @@ import SuccessModal from "../../components/common/successModal";
 import ComboBox from "./components/comboBox";
 import libMedicineService from "../../services/libMedicine";
 import skuService from "../../services/sku";
+import restockRequestService from "../../services/restockRequest";
 
 // Data & Constants Imports
 import { initialSkus } from "../../data/skuManagement";
@@ -39,6 +41,12 @@ import { getStockStatus } from "../../utils/helpers";
 import useAuth from "../../hooks/useAuth";
 import useError from "../../hooks/useError";
 import { validateSkuForm } from "../../validators/sku.validator";
+
+const DEFAULT_RESTOCK_FORM_DATA = {
+  skuId: "",
+  requestedUnits: "",
+  reason: "",
+};
 
 const extractPackSize = (packagingUnit) => {
   const match = packagingUnit ? packagingUnit.match(/\b(\d+)\b/) : null;
@@ -284,12 +292,19 @@ function SkuManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
-  // Modal State: 'add' | 'view' | 'edit' | 'delete' | 'adjust' | 'transfer' | null
+  // Modal State: 'add' | 'view' | 'edit' | 'delete' | 'adjust' | 'transfer' | 'restock' | null
   const [modalMode, setModalMode] = useState(null);
   const [selectedSku, setSelectedSku] = useState(null);
   const [formData, setFormData] = useState(DEFAULT_SKU_FORM_DATA);
   const [createdSkuInfo, setCreatedSkuInfo] = useState(null);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [restockFormData, setRestockFormData] = useState(
+    DEFAULT_RESTOCK_FORM_DATA,
+  );
+  const [isRestockSubmitting, setIsRestockSubmitting] = useState(false);
+  const [restockSuccessInfo, setRestockSuccessInfo] = useState(null);
+  const [isRestockSuccessModalOpen, setIsRestockSuccessModalOpen] =
+    useState(false);
   const {
     errors: formErrors,
     setErrors: setFormErrors,
@@ -595,10 +610,93 @@ function SkuManagement() {
     setModalMode("transfer");
   };
 
+  const handleOpenRestockModal = (skuItem = null) => {
+    if (skuItem && skuItem.id) {
+      setSelectedSku(skuItem);
+      const suggestedUnits =
+        skuItem.maximumLevel && skuItem.currentStock !== undefined
+          ? Math.max(1, skuItem.maximumLevel - skuItem.currentStock)
+          : "";
+      setRestockFormData({
+        skuId: String(skuItem.id),
+        requestedUnits: suggestedUnits,
+        reason: "",
+      });
+    } else {
+      setSelectedSku(null);
+      setRestockFormData(DEFAULT_RESTOCK_FORM_DATA);
+    }
+    clearErrors();
+    setModalMode("restock");
+  };
+
   const handleCloseModal = () => {
     setModalMode(null);
     setSelectedSku(null);
+    setRestockFormData(DEFAULT_RESTOCK_FORM_DATA);
     clearErrors();
+  };
+
+  const handleSaveRestockRequest = async (e) => {
+    e.preventDefault();
+    const errors = {};
+    if (!restockFormData.skuId) {
+      errors.skuId = "Please select an SKU to restock";
+    }
+    const units = Number(restockFormData.requestedUnits);
+    if (!restockFormData.requestedUnits || isNaN(units) || units < 1) {
+      errors.requestedUnits = "Requested units must be at least 1";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    try {
+      setIsRestockSubmitting(true);
+      const targetFacilityId =
+        facility?.id ||
+        selectedSku?.facilityId ||
+        facilities.find((f) => f.name === currentFacilityName)?.id;
+
+      if (!targetFacilityId) {
+        setFormErrors({
+          skuId: "Active facility could not be determined. Please re-select your operating facility.",
+        });
+        return;
+      }
+
+      const payload = {
+        skuId: Number(restockFormData.skuId),
+        facilityId: Number(targetFacilityId),
+        requestedUnits: units,
+        reason: restockFormData.reason ? restockFormData.reason.trim() : null,
+      };
+
+      const result = await restockRequestService.createRestockRequest(payload);
+
+      setRestockSuccessInfo({
+        skuCode: result?.skuCode || selectedSku?.sku,
+        brandName: result?.brandName || selectedSku?.brandName,
+        genericName: result?.genericName || selectedSku?.genericName,
+        requestedUnits: result?.requestedUnits || units,
+        facilityName: result?.facilityName || currentFacilityName,
+      });
+      setIsRestockSuccessModalOpen(true);
+      handleCloseModal();
+    } catch (err) {
+      console.error("Failed to submit restock request:", err);
+      const serverMessage =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to submit restock request.";
+      setFormErrors({
+        requestedUnits: serverMessage,
+      });
+    } finally {
+      setIsRestockSubmitting(false);
+    }
   };
 
   // Form Field Change Handler
@@ -892,14 +990,25 @@ function SkuManagement() {
             </span>
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleOpenAddModal}
-          className="btn-primary self-start sm:self-auto shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Create New SKU</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          <button
+            type="button"
+            onClick={() => handleOpenRestockModal()}
+            className="btn-secondary self-start sm:self-auto shadow-sm flex items-center gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50"
+            title="Request Stock Replenishment"
+          >
+            <PackagePlus className="w-4 h-4 text-blue-600" />
+            <span>Request Restock</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenAddModal}
+            className="btn-primary self-start sm:self-auto shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Create New SKU</span>
+          </button>
+        </div>
       </div>
 
       {/* 4 Metric KPI Cards for Current Facility */}
@@ -1200,7 +1309,7 @@ function SkuManagement() {
                             <Sliders className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* 3. Transfer Stock to Facility (Batch Action) */}
+                          {/* 2. Transfer Stock to Facility (Batch Action) */}
                           <button
                             type="button"
                             onClick={() => handleOpenTransferModal(item)}
@@ -1209,6 +1318,17 @@ function SkuManagement() {
                             aria-label="Transfer Stock"
                           >
                             <ArrowRightLeft className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* 3. Request Restock */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenRestockModal(item)}
+                            className="btn-secondary p-1.5 text-gray-600 hover:text-blue-600 hover:border-blue-300"
+                            title="Request Restock for this SKU"
+                            aria-label="Request Restock"
+                          >
+                            <PackagePlus className="w-3.5 h-3.5" />
                           </button>
 
                           {/* 4. Edit SKU & Thresholds */}
@@ -2055,6 +2175,14 @@ function SkuManagement() {
               </button>
               <button
                 type="button"
+                onClick={() => handleOpenRestockModal(selectedSku)}
+                className="btn-secondary text-xs text-blue-700 hover:text-blue-800"
+              >
+                <PackagePlus className="w-3.5 h-3.5" />
+                <span>Request Restock</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => handleOpenEditModal(selectedSku)}
                 className="btn-primary text-xs"
               >
@@ -2135,6 +2263,239 @@ function SkuManagement() {
                 Min: {createdSkuInfo.minimumLevel} | Reorder:{" "}
                 {createdSkuInfo.reorderLevel} | Max:{" "}
                 {createdSkuInfo.maximumLevel}
+              </p>
+            </div>
+          )
+        }
+        confirmText="Done"
+      />
+
+      {/* ======================================================== */}
+      {/* 7. RESTOCK REQUEST MODAL (Pharmacist to Procurement)      */}
+      {/* ======================================================== */}
+      <Modal
+        isOpen={modalMode === "restock"}
+        onClose={handleCloseModal}
+        title="Request Stock Replenishment"
+        size="lg"
+      >
+        <form onSubmit={handleSaveRestockRequest} className="space-y-4">
+          {/* Facility Assignment Badge */}
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-blue-50/60 border border-blue-100 text-xs">
+            <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <span className="font-bold text-gray-900 block truncate">
+                Target Facility: {currentFacilityName}
+              </span>
+              <span className="text-[11px] text-blue-700 font-medium">
+                This replenishment request will be routed to Procurement for ordering.
+              </span>
+            </div>
+          </div>
+
+          {/* SKU Selection */}
+          <div>
+            <label
+              htmlFor="restock-skuId"
+              className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+            >
+              Select Target SKU <span className="text-red-500">*</span>
+            </label>
+            <select
+              id="restock-skuId"
+              name="skuId"
+              value={restockFormData.skuId}
+              onChange={(e) => {
+                const id = e.target.value;
+                const found = currentFacilitySkus.find(
+                  (s) => String(s.id) === String(id),
+                );
+                setSelectedSku(found || null);
+                setRestockFormData((prev) => ({
+                  ...prev,
+                  skuId: id,
+                  requestedUnits:
+                    prev.requestedUnits ||
+                    (found?.maximumLevel && found?.currentStock !== undefined
+                      ? Math.max(1, found.maximumLevel - found.currentStock)
+                      : ""),
+                }));
+                clearError("skuId");
+              }}
+              className={`input w-full ${formErrors.skuId ? "border-red-500 focus:ring-red-500" : ""}`}
+              required
+            >
+              <option value="">-- Select SKU to Replenish --</option>
+              {currentFacilitySkus.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.sku} — {s.brandName} ({s.genericName}) [Current: {s.currentStock}, Max: {s.maximumLevel}]
+                </option>
+              ))}
+            </select>
+            {formErrors.skuId && (
+              <p className="text-[11px] text-red-500 font-medium mt-1">
+                {formErrors.skuId}
+              </p>
+            )}
+          </div>
+
+          {/* Selected SKU Inventory Summary card if SKU is chosen */}
+          {selectedSku && (
+            <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">
+                  Current Stock
+                </span>
+                <span className="font-bold text-gray-800 text-sm">
+                  {selectedSku.currentStock ?? 0}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">
+                  Min Threshold
+                </span>
+                <span className="font-bold text-red-600 text-sm">
+                  {selectedSku.minimumLevel ?? 0}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">
+                  Reorder Trigger
+                </span>
+                <span className="font-bold text-amber-600 text-sm">
+                  {selectedSku.reorderLevel ?? 0}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">
+                  Max Capacity
+                </span>
+                <span className="font-bold text-emerald-600 text-sm">
+                  {selectedSku.maximumLevel ?? 0}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Requested Units */}
+          <div>
+            <label
+              htmlFor="restock-requestedUnits"
+              className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+            >
+              Requested Quantity (Units) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              id="restock-requestedUnits"
+              name="requestedUnits"
+              min="1"
+              step="1"
+              value={restockFormData.requestedUnits}
+              onChange={(e) => {
+                setRestockFormData((prev) => ({
+                  ...prev,
+                  requestedUnits: e.target.value,
+                }));
+                clearError("requestedUnits");
+              }}
+              placeholder="e.g. 500"
+              className={`input w-full ${formErrors.requestedUnits ? "border-red-500 focus:ring-red-500" : ""}`}
+              required
+            />
+            {formErrors.requestedUnits && (
+              <p className="text-[11px] text-red-500 font-medium mt-1">
+                {formErrors.requestedUnits}
+              </p>
+            )}
+          </div>
+
+          {/* Reason / Clinical Justification */}
+          <div>
+            <label
+              htmlFor="restock-reason"
+              className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+            >
+              Reason / Justification Notes
+            </label>
+            <textarea
+              id="restock-reason"
+              name="reason"
+              rows="3"
+              value={restockFormData.reason}
+              onChange={(e) =>
+                setRestockFormData((prev) => ({
+                  ...prev,
+                  reason: e.target.value,
+                }))
+              }
+              placeholder="e.g. Critical stock deficit reached; urgent high patient consumption anticipated."
+              className="input w-full resize-none text-xs"
+            />
+          </div>
+
+          {/* Form Actions */}
+          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={handleCloseModal}
+              disabled={isRestockSubmitting}
+              className="btn-secondary text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isRestockSubmitting}
+              className="btn-primary text-xs flex items-center gap-1.5"
+            >
+              {isRestockSubmitting ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Submitting Request...</span>
+                </>
+              ) : (
+                <>
+                  <PackagePlus className="w-3.5 h-3.5" />
+                  <span>Submit Restock Request</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* 8. RESTOCK REQUEST SUCCESS MODAL                         */}
+      {/* ======================================================== */}
+      <SuccessModal
+        isOpen={isRestockSuccessModalOpen}
+        onClose={() => {
+          setIsRestockSuccessModalOpen(false);
+          setRestockSuccessInfo(null);
+        }}
+        title="Restock Request Submitted!"
+        message="Your replenishment request has been forwarded to Procurement for ordering."
+        details={
+          restockSuccessInfo && (
+            <div className="space-y-1 text-xs">
+              <p>
+                <span className="font-semibold text-emerald-950">
+                  Target SKU:
+                </span>{" "}
+                {restockSuccessInfo.brandName} ({restockSuccessInfo.skuCode})
+              </p>
+              <p>
+                <span className="font-semibold text-emerald-950">
+                  Requested Units:
+                </span>{" "}
+                {restockSuccessInfo.requestedUnits} units
+              </p>
+              <p>
+                <span className="font-semibold text-emerald-950">
+                  Facility:
+                </span>{" "}
+                {restockSuccessInfo.facilityName}
               </p>
             </div>
           )

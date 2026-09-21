@@ -9,9 +9,11 @@ import com.example.backend.entity.Order;
 import com.example.backend.entity.OrderedItem;
 import com.example.backend.entity.Sku;
 import com.example.backend.entity.Supplier;
+import com.example.backend.entity.RestockRequest;
 import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.OrderRepository;
 import com.example.backend.repository.OrderedItemRepository;
+import com.example.backend.repository.RestockRequestRepository;
 import com.example.backend.repository.SkuRepository;
 import com.example.backend.repository.SupplierRepository;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,17 +33,20 @@ public class OrderService {
     private final SupplierRepository supplierRepository;
     private final SkuRepository skuRepository;
     private final FacilityRepository facilityRepository;
+    private final RestockRequestRepository restockRequestRepository;
 
     public OrderService(OrderRepository orderRepository,
                         OrderedItemRepository orderedItemRepository,
                         SupplierRepository supplierRepository,
                         SkuRepository skuRepository,
-                        FacilityRepository facilityRepository) {
+                        FacilityRepository facilityRepository,
+                        RestockRequestRepository restockRequestRepository) {
         this.orderRepository = orderRepository;
         this.orderedItemRepository = orderedItemRepository;
         this.supplierRepository = supplierRepository;
         this.skuRepository = skuRepository;
         this.facilityRepository = facilityRepository;
+        this.restockRequestRepository = restockRequestRepository;
     }
 
     // 1. CREATE PURCHASE ORDER REQUEST
@@ -95,6 +100,15 @@ public class OrderService {
                 savedOrder.getId());
         savedOrder.setPurchaseOrderNum(formattedPoNumber);
         savedOrder = orderRepository.save(savedOrder);
+
+        // If this purchase order fulfills a Pharmacist Restock Request, link it
+        if (request.getRestockRequestId() != null) {
+            final Order orderForRestock = savedOrder;
+            restockRequestRepository.findById(request.getRestockRequestId()).ifPresent(rr -> {
+                rr.setOrder(orderForRestock);
+                restockRequestRepository.save(rr);
+            });
+        }
 
         List<OrderedItem> orderedItems = new ArrayList<>();
         List<OrderItemResponseDto> itemResponses = new ArrayList<>();

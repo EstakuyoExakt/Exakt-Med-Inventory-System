@@ -19,6 +19,8 @@ import {
   CheckSquare,
   Square,
   ListPlus,
+  ClipboardList,
+  User,
 } from "lucide-react";
 
 // Common Components
@@ -38,6 +40,7 @@ import useAuth from "../../hooks/useAuth";
 import skuService from "../../services/sku";
 import supplierService from "../../services/supplier";
 import orderService from "../../services/order";
+import restockRequestService from "../../services/restockRequest";
 
 const extractDosageFromDescription = (description) => {
   if (!description) return "";
@@ -218,6 +221,84 @@ function OrderRequest() {
   // Multi-Selection State for Table Checkboxes
   const [selectedSkuIds, setSelectedSkuIds] = useState([]);
 
+  // Restock Request States
+  const [restockRequests, setRestockRequests] = useState([]);
+  const [isLoadingRestockRequests, setIsLoadingRestockRequests] =
+    useState(false);
+  const [restockRequestError, setRestockRequestError] = useState(null);
+  const [activeTab, setActiveTab] = useState("requests"); // "requests" | "thresholds"
+  const [restockSearchQuery, setRestockSearchQuery] = useState("");
+  const [restockCurrentPage, setRestockCurrentPage] = useState(1);
+  const restockItemsPerPage = 6;
+
+  // Fetch Restock Requests from backend API (Pending only - awaiting PO creation)
+  const fetchRestockRequests = useCallback(async () => {
+    try {
+      setIsLoadingRestockRequests(true);
+      setRestockRequestError(null);
+      const targetFacilityId =
+        facility?.id ||
+        facilities.find((f) => f.name === currentFacilityName)?.id;
+
+      const data = await restockRequestService.getAllRestockRequests(
+        targetFacilityId,
+        true, // pendingOnly = true
+      );
+
+      if (Array.isArray(data)) {
+        // Exclude any requests that already have a PO generated
+        setRestockRequests(data.filter((r) => !r.orderId));
+      }
+    } catch (err) {
+      console.error("Failed to load restock requests:", err);
+      setRestockRequestError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to load restock requests.",
+      );
+    } finally {
+      setIsLoadingRestockRequests(false);
+    }
+  }, [facility?.id, currentFacilityName]);
+
+  useEffect(() => {
+    fetchRestockRequests();
+  }, [fetchRestockRequests]);
+
+  // Count pending unfulfilled restock requests
+  const pendingRestockRequestsCount = useMemo(() => {
+    return restockRequests.filter((r) => !r.orderId).length;
+  }, [restockRequests]);
+
+  // Filter restock requests by search query (only pending requests are listed)
+  const filteredRestockRequests = useMemo(() => {
+    return restockRequests.filter((r) => {
+      if (r.orderId) return false;
+
+      const query = restockSearchQuery.trim().toLowerCase();
+      if (!query) return true;
+
+      return (
+        (r.skuName || "").toLowerCase().includes(query) ||
+        (r.brandName || "").toLowerCase().includes(query) ||
+        (r.genericName || "").toLowerCase().includes(query) ||
+        (r.userName || "").toLowerCase().includes(query) ||
+        (r.reason || "").toLowerCase().includes(query)
+      );
+    });
+  }, [restockRequests, restockSearchQuery]);
+
+  const restockTotalPages =
+    Math.ceil(filteredRestockRequests.length / restockItemsPerPage) || 1;
+
+  const paginatedRestockRequests = useMemo(() => {
+    const startIndex = (restockCurrentPage - 1) * restockItemsPerPage;
+    return filteredRestockRequests.slice(
+      startIndex,
+      startIndex + restockItemsPerPage,
+    );
+  }, [filteredRestockRequests, restockCurrentPage, restockItemsPerPage]);
+
   // Modal States
   const [selectedSkuForView, setSelectedSkuForView] = useState(null);
   const [modalMode, setModalMode] = useState(null); // 'order' | 'view' | 'success' | null
@@ -229,6 +310,7 @@ function OrderRequest() {
     ...DEFAULT_ORDER_FORM,
     supplierId: suppliers[0]?.id || 1,
     targetFacility: currentFacilityName,
+    restockRequestId: null,
   });
   const [formErrors, setFormErrors] = useState({});
 
@@ -383,16 +465,58 @@ function OrderRequest() {
     handleOpenMultiOrderModal([sku]);
   };
 
-  // Open View Details Modal
-  const handleOpenViewModal = (sku) => {
-    setSelectedSkuForView(sku);
-    setModalMode("view");
+  // Process a Pharmacist Restock Request directly into a Purchase Order
+  const handleProcessRestockRequest = (restockReq) => {
+    const matchedSku =
+      currentFacilitySkus.find(
+        (s) => s.id === restockReq.skuId || s.sku === restockReq.skuName,
+      ) ||
+      skuList.find(
+        (s) => s.id === restockReq.skuId || s.sku === restockReq.skuName,
+      );
+
+    const item = {
+      id: restockReq.skuId || matchedSku?.id || 1,
+      sku: restockReq.skuName || matchedSku?.sku || "",
+      brandName: restockReq.brandName || matchedSku?.brandName || "",
+      genericName: restockReq.genericName || matchedSku?.genericName || "",
+      dosage: matchedSku?.dosage || "",
+      dosageForm: restockReq.dosageForm || matchedSku?.dosageForm || "",
+      packagingUnit:
+        restockReq.packagingUnit || matchedSku?.packagingUnit || "",
+      currentStock: matchedSku?.currentStock ?? 0,
+      minimumLevel: matchedSku?.minimumLevel ?? 0,
+      maximumLevel: matchedSku?.maximumLevel ?? 0,
+      reorderLevel: matchedSku?.reorderLevel ?? 0,
+      quantity: Number(restockReq.requestedUnits) || 100,
+      price: "",
+    };
+
+    setOrderForm({
+      supplierId:
+        activeSuppliers[0]?.id || supplierList[0]?.id || suppliers[0]?.id || 1,
+      targetFacility: currentFacilityName,
+      priority: "Normal",
+      totalCost: "",
+      notes: restockReq.reason
+        ? `Pharmacist Request: ${restockReq.reason}`
+        : "Requested by Pharmacy Department",
+      restockRequestId: restockReq.id,
+      items: [item],
+    });
+    setFormErrors({});
+    setSkuToAdd("");
+    setModalMode("order");
   };
 
   const handleCloseModal = () => {
     setModalMode(null);
     setSelectedSkuForView(null);
     setFormErrors({});
+    setOrderForm((prev) => ({
+      ...prev,
+      restockRequestId: null,
+    }));
   };
 
   // Add Item to Order Form within the Modal
@@ -523,8 +647,13 @@ function OrderRequest() {
       priority: orderForm.priority || "Normal",
       totalPrice: Math.round(computedTotalCost),
       notes: orderForm.notes || "",
+      restockRequestId: orderForm.restockRequestId
+        ? Number(orderForm.restockRequestId)
+        : null,
       items: orderForm.items.map((i) => {
-        const matchedSku = skuList.find((s) => s.sku === i.sku || s.id === i.id);
+        const matchedSku = skuList.find(
+          (s) => s.sku === i.sku || s.id === i.id,
+        );
         return {
           skuId: matchedSku?.id || i.id || 1,
           orderedUnits: Number(i.quantity) || 1,
@@ -560,10 +689,16 @@ function OrderRequest() {
       setSelectedSkuIds([]); // Clear selection
       setModalMode("success");
 
-      // Optimistically remove ordered items from current list and refresh from backend
+      // Optimistically remove ordered items and fulfilled restock request from current list
       const orderedIds = new Set(orderPayload.items.map((i) => i.skuId));
       setSkuList((prev) => prev.filter((s) => !orderedIds.has(s.id)));
+      if (orderPayload.restockRequestId) {
+        setRestockRequests((prev) =>
+          prev.filter((r) => r.id !== orderPayload.restockRequestId),
+        );
+      }
       fetchSkus(searchQuery);
+      fetchRestockRequests();
     } catch (err) {
       console.error("Failed to submit purchase order to backend:", err);
       // Fallback format PO-[year]-[month]-[id] if offline during local dev
@@ -590,9 +725,14 @@ function OrderRequest() {
       setSelectedSkuIds([]);
       setModalMode("success");
 
-      // Optimistically remove ordered items from current list in fallback
+      // Optimistically remove ordered items and fulfilled restock request in fallback
       const orderedIds = new Set(orderPayload.items.map((i) => i.skuId));
       setSkuList((prev) => prev.filter((s) => !orderedIds.has(s.id)));
+      if (orderPayload.restockRequestId) {
+        setRestockRequests((prev) =>
+          prev.filter((r) => r.id !== orderPayload.restockRequestId),
+        );
+      }
     } finally {
       setIsSubmittingOrder(false);
     }
@@ -624,23 +764,25 @@ function OrderRequest() {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          <button
-            type="button"
-            onClick={() => handleOpenMultiOrderModal()}
-            className="btn-primary shadow-xs flex items-center gap-2 text-xs py-2 px-3.5"
-          >
-            <ListPlus className="w-4 h-4" />
-            <span>
-              {selectedSkuIds.length > 0
-                ? `Create PO for (${selectedSkuIds.length}) Selected`
-                : "Create Multi-Item PO Request"}
-            </span>
-          </button>
+          {activeTab === "thresholds" && (
+            <button
+              type="button"
+              onClick={() => handleOpenMultiOrderModal()}
+              className="btn-primary shadow-xs flex items-center gap-2 text-xs py-2 px-3.5"
+            >
+              <ListPlus className="w-4 h-4" />
+              <span>
+                {selectedSkuIds.length > 0
+                  ? `Create PO for (${selectedSkuIds.length}) Selected`
+                  : "Create Multi-Item PO Request"}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 2 Total Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* 3 KPI Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* 1. Total Minimum SKUs */}
         <Card className="p-5 border border-red-200/80 shadow-xs hover:border-red-300 transition-all bg-linear-to-br from-white to-red-50/20">
           <div className="flex items-center justify-between">
@@ -653,16 +795,15 @@ function OrderRequest() {
               </h3>
               <div className="flex items-center gap-2 mt-1">
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 bg-red-100/70 px-2 py-0.5 rounded-full">
-                  <AlertCircle className="w-3 h-3" /> Critical emergency
-                  shortage (&le; Min)
+                  <AlertCircle className="w-3 h-3" /> Critical shortage (&le; Min)
                 </span>
-                {totalMinimumSkus > 0 && (
+                {totalMinimumSkus > 0 && activeTab === "thresholds" && (
                   <button
                     type="button"
                     onClick={handleSelectAllCritical}
                     className="text-[11px] font-bold text-red-700 underline hover:text-red-900 cursor-pointer"
                   >
-                    Select All Critical
+                    Select Critical
                   </button>
                 )}
               </div>
@@ -678,14 +819,13 @@ function OrderRequest() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
-                Total Needs Reorder SKUs
+                Needs Reorder SKUs
               </p>
               <h3 className="text-3xl font-extrabold text-amber-600 mt-1.5">
                 {totalNeedsReorderSkus}
               </h3>
               <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 mt-1 bg-amber-100/70 px-2 py-0.5 rounded-full">
-                <Clock className="w-3 h-3" /> Qualified for restocking (&le;
-                Reorder point)
+                <Clock className="w-3 h-3" /> &le; Reorder point
               </span>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 text-amber-600 border border-amber-200 shadow-xs">
@@ -693,39 +833,304 @@ function OrderRequest() {
             </div>
           </div>
         </Card>
+
+        {/* 3. Pending Pharmacist Restock Requests */}
+        <Card className="p-5 border border-blue-200/80 shadow-xs hover:border-blue-300 transition-all bg-linear-to-br from-white to-blue-50/20">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
+                Pharmacist Requests
+              </p>
+              <h3 className="text-3xl font-extrabold text-blue-600 mt-1.5">
+                {pendingRestockRequestsCount}
+              </h3>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-full">
+                  <ClipboardList className="w-3 h-3" /> Pending Review
+                </span>
+                {activeTab !== "requests" && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("requests")}
+                    className="text-[11px] font-bold text-blue-700 underline hover:text-blue-900 cursor-pointer"
+                  >
+                    View Requests
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-600 border border-blue-200 shadow-xs">
+              <ClipboardList className="w-6 h-6" />
+            </div>
+          </div>
+        </Card>
       </div>
 
-      {/* Main Table Section */}
+      {/* Main Workspace Card with Navigation Tabs */}
       <Card className="p-0 overflow-hidden border border-gray-200">
-        {/* Search & Filter Bar */}
-        <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row items-center justify-between gap-3 bg-gray-50/50">
-          <div className="w-full md:w-80">
-            <SearchBar
-              value={searchQuery}
-              onChange={handleSearchChange}
-              onClear={() => {
-                setSearchQuery("");
-                setCurrentPage(1);
-              }}
-              placeholder="Search reorder SKU, drug name..."
-            />
-          </div>
+        {/* Navigation Tabs Header */}
+        <div className="flex border-b border-gray-200 bg-gray-50/75 px-4 pt-3 gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab("requests")}
+            className={`pb-3 px-3 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+              activeTab === "requests"
+                ? "border-blue-600 text-blue-700"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            }`}
+          >
+            <ClipboardList className="w-4 h-4" />
+            <span>Pharmacist Restock Requests</span>
+            {pendingRestockRequestsCount > 0 && (
+              <span className="px-2 py-0.5 text-[10px] font-extrabold rounded-full bg-blue-600 text-white shadow-xs">
+                {pendingRestockRequestsCount}
+              </span>
+            )}
+          </button>
 
-          <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap sm:flex-nowrap">
-            {/* Urgency Filter */}
-            <select
-              value={selectedUrgency}
-              onChange={handleUrgencyChange}
-              className="input py-2 text-xs w-full sm:w-44"
-            >
-              <option value="ALL">
-                All Reorder Items ({reorderSkus.length})
-              </option>
-              <option value="MINIMUM">Critical (&le; Minimum Level)</option>
-              <option value="REORDER_ONLY">Reorder Triggered Only</option>
-            </select>
-          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab("thresholds")}
+            className={`pb-3 px-3 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+              activeTab === "thresholds"
+                ? "border-blue-600 text-blue-700"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            }`}
+          >
+            <AlertTriangle className="w-4 h-4" />
+            <span>System Threshold Alerts</span>
+            {reorderSkus.length > 0 && (
+              <span className="px-2 py-0.5 text-[10px] font-extrabold rounded-full bg-amber-500 text-white shadow-xs">
+                {reorderSkus.length}
+              </span>
+            )}
+          </button>
         </div>
+
+        {/* TAB 1: PHARMACIST RESTOCK REQUESTS */}
+        {activeTab === "requests" && (
+          <div>
+            {/* Search & Filter Bar */}
+            <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row items-center justify-between gap-3 bg-gray-50/50">
+              <div className="w-full md:w-96">
+                <SearchBar
+                  value={restockSearchQuery}
+                  onChange={(e) => {
+                    setRestockSearchQuery(e.target.value);
+                    setRestockCurrentPage(1);
+                  }}
+                  onClear={() => {
+                    setRestockSearchQuery("");
+                    setRestockCurrentPage(1);
+                  }}
+                  placeholder="Search pending request by drug, requester, notes..."
+                />
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-semibold border border-blue-100">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>
+                    {filteredRestockRequests.length} Pending Requisition
+                    {filteredRestockRequests.length !== 1 ? "s" : ""}
+                  </span>
+                </span>
+              </div>
+            </div>
+
+            {/* Restock Requests Table View */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm text-gray-600">
+                <thead className="bg-gray-50 text-[11px] uppercase tracking-wider text-gray-500 font-semibold border-b border-gray-200">
+                  <tr>
+                    <th scope="col" className="px-6 py-3.5">
+                      Request Date & Pharmacist
+                    </th>
+                    <th scope="col" className="px-6 py-3.5">
+                      Target SKU & Medicine
+                    </th>
+                    <th scope="col" className="px-6 py-3.5">
+                      Requested Units
+                    </th>
+                    <th scope="col" className="px-6 py-3.5">
+                      Clinical Justification / Reason
+                    </th>
+                    <th scope="col" className="px-6 py-3.5 text-right">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {isLoadingRestockRequests ? (
+                    <tr>
+                      <td
+                        colSpan="5"
+                        className="px-6 py-12 text-center text-gray-400"
+                      >
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                          <p className="text-xs font-medium text-gray-500">
+                            Loading pharmacist restock requests...
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : paginatedRestockRequests.length > 0 ? (
+                    paginatedRestockRequests.map((req) => (
+                      <tr
+                        key={req.id}
+                        className="hover:bg-blue-50/30 transition-colors"
+                      >
+                        {/* Date & Requester */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-xs font-semibold text-gray-900">
+                            {req.createdAt
+                              ? new Date(req.createdAt).toLocaleDateString(
+                                  undefined,
+                                  {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric",
+                                  },
+                                )
+                              : "—"}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-1">
+                            <User className="w-3.5 h-3.5 text-gray-400" />
+                            <span>{req.userName || "Pharmacist"}</span>
+                          </div>
+                        </td>
+
+                        {/* Target SKU & Medicine */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600 font-semibold text-xs border border-blue-100 shrink-0 mt-0.5">
+                              <Pill className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-900 text-sm">
+                                  {req.brandName || "Medication"}
+                                </span>
+                                <span className="font-mono text-[11px] text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-bold">
+                                  {req.skuName}
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {req.genericName || "—"}
+                              </div>
+                              <div className="text-[11px] text-gray-400 mt-0.5">
+                                {req.dosageForm}{" "}
+                                {req.packagingUnit && `• ${req.packagingUnit}`}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Requested Units */}
+                        <td className="px-6 py-4 whitespace-nowrap text-xs">
+                          <div className="inline-flex items-baseline gap-1 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg">
+                            <span className="font-extrabold text-blue-800 text-sm">
+                              {req.requestedUnits}
+                            </span>
+                            <span className="text-[11px] text-blue-600 font-medium">
+                              units
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Clinical Justification / Reason */}
+                        <td className="px-6 py-4 max-w-xs">
+                          <p
+                            className="text-xs text-gray-700 bg-gray-50 p-2.5 rounded-lg border border-gray-200/80 italic line-clamp-2"
+                            title={req.reason}
+                          >
+                            {req.reason || "No clinical remarks specified."}
+                          </p>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-xs">
+                          <button
+                            type="button"
+                            onClick={() => handleProcessRestockRequest(req)}
+                            className="btn-primary py-1.5 px-3 text-xs shadow-xs inline-flex items-center gap-1.5 cursor-pointer"
+                            title="Convert this request into a purchase order"
+                          >
+                            <ShoppingCart className="w-3.5 h-3.5" />
+                            <span>Process into PO</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan="5"
+                        className="px-6 py-12 text-center text-gray-400"
+                      >
+                        <CheckCircle2 className="w-9 h-9 mx-auto mb-2 text-emerald-500" />
+                        <p className="text-base font-semibold text-gray-800">
+                          All pharmacist restock requests have been processed!
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          No pending replenishment requests currently require
+                          procurement ordering.
+                        </p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination for Restock Requests */}
+            {filteredRestockRequests.length > 0 && (
+              <div className="p-4 border-t border-gray-100 bg-gray-50/40">
+                <Pagination
+                  currentPage={restockCurrentPage}
+                  totalPages={restockTotalPages}
+                  totalItems={filteredRestockRequests.length}
+                  itemsPerPage={restockItemsPerPage}
+                  onPageChange={setRestockCurrentPage}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 2: SYSTEM THRESHOLD ALERTS */}
+        {activeTab === "thresholds" && (
+          <div>
+            {/* Search & Filter Bar */}
+            <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row items-center justify-between gap-3 bg-gray-50/50">
+              <div className="w-full md:w-80">
+                <SearchBar
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  onClear={() => {
+                    setSearchQuery("");
+                    setCurrentPage(1);
+                  }}
+                  placeholder="Search reorder SKU, drug name..."
+                />
+              </div>
+
+              <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap sm:flex-nowrap">
+                {/* Urgency Filter */}
+                <select
+                  value={selectedUrgency}
+                  onChange={handleUrgencyChange}
+                  className="input py-2 text-xs w-full sm:w-44"
+                >
+                  <option value="ALL">
+                    All Reorder Items ({reorderSkus.length})
+                  </option>
+                  <option value="MINIMUM">Critical (&le; Minimum Level)</option>
+                  <option value="REORDER_ONLY">Reorder Triggered Only</option>
+                </select>
+              </div>
+            </div>
 
         {/* Multi-Select Floating Action Bar if items checked */}
         {selectedSkuIds.length > 0 && (
@@ -973,6 +1378,8 @@ function OrderRequest() {
             />
           </div>
         )}
+          </div>
+        )}
       </Card>
 
       {/* ======================================================== */}
@@ -985,6 +1392,21 @@ function OrderRequest() {
         size="4xl"
       >
         <form onSubmit={handleSubmitOrder} className="space-y-4">
+          {/* Linked Restock Request Banner if applicable */}
+          {orderForm.restockRequestId && (
+            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-blue-50/80 border border-blue-200 text-xs text-blue-900">
+              <ClipboardList className="w-4.5 h-4.5 text-blue-600 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <span className="font-bold block">
+                  Fulfilling Pharmacist Restock Request #{orderForm.restockRequestId}
+                </span>
+                <span className="text-[11px] text-blue-700 font-medium">
+                  Submitting this order will link and mark the pharmacist request as fulfilled.
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Supplier, Facility & Priority Header Controls */}
           <div className="p-4 rounded-xl bg-gray-50 border border-gray-200/80 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             {/* Supplier Selection */}

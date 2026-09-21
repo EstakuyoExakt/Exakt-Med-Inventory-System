@@ -28,6 +28,8 @@ public class OrderRequestDto {
 
     private String notes;
 
+    private Long restockRequestId;
+
     @NotEmpty(message = "Order must contain at least one item")
     @Valid
     private List<OrderItemRequestDto> items;
