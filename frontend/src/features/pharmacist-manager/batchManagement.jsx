@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Package,
   Boxes,
@@ -15,6 +15,7 @@ import {
   Building2,
   Truck,
   FileText,
+  Loader2,
 } from "lucide-react";
 
 // Common Components & Guards
@@ -29,11 +30,11 @@ import useAuth from "../../hooks/useAuth";
 import useError from "../../hooks/useError";
 import { validateBatchForm } from "../../validators/batch.validator";
 
-// Data Imports
+// Data & Service Imports
 import { batches as initialBatches } from "../../data/batches";
 import { initialSkus } from "../../data/skuManagement";
 import { facilities } from "../../data/facility";
-import { requestedOrders } from "../../data/orders";
+import orderService from "../../services/order";
 
 function BatchManagement() {
   const { facility } = useAuth();
@@ -85,7 +86,7 @@ function BatchManagement() {
     poNumber: "",
     sku: "",
     batchNumber: "",
-    manufacturingDate: new Date().toISOString().split("T")[0],
+    manufacturingDate: "",
     expiryDate: "",
     quantity: "",
     location: currentFacilityName,
@@ -94,7 +95,9 @@ function BatchManagement() {
     quarantineNotes: "",
   });
 
-  const [receiveFormData, setReceiveFormData] = useState(getInitialReceiveFormData);
+  const [receiveFormData, setReceiveFormData] = useState(
+    getInitialReceiveFormData,
+  );
 
   const {
     errors: formErrors,
@@ -112,12 +115,102 @@ function BatchManagement() {
     return map;
   }, []);
 
-  // Selected PO Details lookup
+  // Live Approved Purchase Orders for Current Facility
+  const [approvedOrders, setApprovedOrders] = useState([]);
+  const [isOrdersLoading, setIsOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState(null);
+
+  const activeFacilityId = useMemo(() => {
+    return (
+      facility?.id ||
+      facilities.find((f) => f.name === currentFacilityName)?.id ||
+      1
+    );
+  }, [facility, currentFacilityName]);
+
+  const normalizeApprovedOrder = useCallback(
+    (po) => {
+      const orderNumber =
+        po.purchaseOrderNum ||
+        po.poNumberFormatted ||
+        `PO-${String(po.id).padStart(5, "0")}`;
+
+      const items = (po.items || []).map((item) => ({
+        id: item.id,
+        skuId: item.skuId,
+        sku: item.skuName || `SKU-${item.skuId}`,
+        brandName: item.brandName || "Medicine",
+        genericName: item.genericName || "—",
+        dosageForm: item.dosageForm || "—",
+        packagingUnit: item.packagingUnit || "—",
+        quantity: Number(item.orderedUnits) || 0,
+        price: Number(item.price) || 0,
+      }));
+
+      const totalQuantity = items.reduce((sum, i) => sum + i.quantity, 0);
+      const firstItem = items[0] || {};
+
+      return {
+        id: po.id,
+        orderNumber,
+        status: po.status || "Approved",
+        supplierName: po.supplierName || "Supplier",
+        targetFacility: po.facilityName || currentFacilityName,
+        facilityId: po.facilityId,
+        totalQuantity: po.totalOrderedUnits ?? totalQuantity,
+        totalPrice: po.totalPrice || 0,
+        items,
+        itemCount: items.length,
+        brandName:
+          items.length === 1
+            ? firstItem.brandName
+            : `${items.length} Medicines`,
+        genericName:
+          items.length === 1
+            ? firstItem.genericName
+            : items.map((i) => i.brandName).join(", "),
+        sku: items.length === 1 ? firstItem.sku : "Multiple SKUs",
+      };
+    },
+    [currentFacilityName],
+  );
+
+  const fetchApprovedOrders = useCallback(async () => {
+    try {
+      setIsOrdersLoading(true);
+      setOrdersError(null);
+      const data = await orderService.getAllOrders(
+        activeFacilityId,
+        "Approved",
+      );
+      if (Array.isArray(data)) {
+        setApprovedOrders(data.map(normalizeApprovedOrder));
+      } else {
+        setApprovedOrders([]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch approved orders:", err);
+      setOrdersError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to load approved purchase orders.",
+      );
+      setApprovedOrders([]);
+    } finally {
+      setIsOrdersLoading(false);
+    }
+  }, [activeFacilityId, normalizeApprovedOrder]);
+
+  useEffect(() => {
+    fetchApprovedOrders();
+  }, [fetchApprovedOrders]);
+
+  // Selected PO Details lookup from real approved orders
   const selectedPoDetails = useMemo(() => {
-    return requestedOrders.find(
+    return approvedOrders.find(
       (po) => po.orderNumber === receiveFormData.poNumber,
     );
-  }, [receiveFormData.poNumber]);
+  }, [approvedOrders, receiveFormData.poNumber]);
 
   // Summary KPI Calculations for Current Facility
   const totalBatches = currentFacilityBatches.length;
@@ -143,8 +236,8 @@ function BatchManagement() {
   const filteredBatches = useMemo(() => {
     return currentFacilityBatches.filter((batch) => {
       const skuData = skuMetaMap[batch.sku] || {};
-      const brandName = skuData.brandName || "";
-      const genericName = skuData.genericName || "";
+      const brandName = batch.brandName || skuData.brandName || "";
+      const genericName = batch.genericName || skuData.genericName || "";
 
       const matchesSearch =
         batch.batchNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -220,6 +313,7 @@ function BatchManagement() {
     clearErrors();
     setSelectedBatch(null);
     setModalMode("receive");
+    fetchApprovedOrders();
   };
 
   // View Batch Dossier
@@ -237,15 +331,15 @@ function BatchManagement() {
   // When PO is chosen in dropdown, auto-populate details while keeping location on currentFacility
   const handlePoChange = (e) => {
     const poNum = e?.target?.value ?? e;
-    const po = requestedOrders.find((p) => p.orderNumber === poNum);
+    const po = approvedOrders.find((p) => p.orderNumber === poNum);
 
     if (po) {
       setReceiveFormData((prev) => ({
         ...prev,
         poNumber: po.orderNumber,
         sku: po.sku,
-        batchNumber: `BAT-${po.orderNumber.replace("PO-", "")}`,
-        quantity: po.quantity,
+        batchNumber: "",
+        quantity: po.totalQuantity || "",
         location: currentFacilityName,
       }));
     } else {
@@ -261,13 +355,36 @@ function BatchManagement() {
     clearError("poNumber");
   };
 
-  // Submit Received Batch
+  // Submit Received Batch (Receives 100% complete delivery for all medicines in PO)
   const handleSaveReceivedBatch = (e) => {
     e.preventDefault();
 
-    const { errors } = validateBatchForm(receiveFormData, {
-      batchList,
-    });
+    if (!receiveFormData.poNumber) {
+      setFormErrors({ poNumber: "Please select a Purchase Order (PO)." });
+      return;
+    }
+
+    if (
+      !selectedPoDetails ||
+      !selectedPoDetails.items ||
+      selectedPoDetails.items.length === 0
+    ) {
+      setFormErrors({
+        poNumber: "Selected purchase order contains no items to receive.",
+      });
+      return;
+    }
+
+    const { errors } = validateBatchForm(
+      {
+        ...receiveFormData,
+        quantity:
+          selectedPoDetails.totalQuantity || receiveFormData.quantity || 1,
+      },
+      {
+        batchList,
+      },
+    );
     const finalErrors = { ...errors };
     if (!receiveFormData.poNumber) {
       finalErrors.poNumber = "Please select a Purchase Order (PO).";
@@ -278,28 +395,41 @@ function BatchManagement() {
       return;
     }
 
-    const newBatch = {
-      id: Date.now(),
-      batchNumber: receiveFormData.batchNumber.trim().toUpperCase(),
-      sku: receiveFormData.sku,
-      manufacturingDate: receiveFormData.manufacturingDate,
-      expiryDate: receiveFormData.expiryDate,
-      quantity: Number(receiveFormData.quantity) || 0,
-      location: currentFacilityName, // Automatically saved to current facility
-      poReference: receiveFormData.poNumber,
-      isQuarantined: receiveFormData.isQuarantined,
-      quarantineReason: receiveFormData.isQuarantined
-        ? receiveFormData.quarantineReason
-        : "",
-      quarantineDate: receiveFormData.isQuarantined
-        ? new Date().toISOString().split("T")[0]
-        : "",
-      quarantineNotes: receiveFormData.isQuarantined
-        ? receiveFormData.quarantineNotes
-        : "",
-    };
+    const itemsToReceive = selectedPoDetails.items || [];
+    const isMultiItem = itemsToReceive.length > 1;
+    const baseBatch = receiveFormData.batchNumber.trim().toUpperCase();
 
-    setBatchList((prev) => [newBatch, ...prev]);
+    // Create a batch intake for every medicine inside the purchase order
+    const newBatches = itemsToReceive.map((item, idx) => {
+      const lotNumber = isMultiItem ? `${baseBatch}-${idx + 1}` : baseBatch;
+
+      return {
+        id: Date.now() + idx,
+        batchNumber: lotNumber,
+        sku: item.sku,
+        brandName: item.brandName,
+        genericName: item.genericName,
+        dosageForm: item.dosageForm,
+        packagingUnit: item.packagingUnit,
+        manufacturingDate: receiveFormData.manufacturingDate,
+        expiryDate: receiveFormData.expiryDate,
+        quantity: Number(item.quantity) || 0,
+        location: currentFacilityName, // Automatically saved to current facility
+        poReference: selectedPoDetails.orderNumber,
+        isQuarantined: receiveFormData.isQuarantined,
+        quarantineReason: receiveFormData.isQuarantined
+          ? receiveFormData.quarantineReason
+          : "",
+        quarantineDate: receiveFormData.isQuarantined
+          ? new Date().toISOString().split("T")[0]
+          : "",
+        quarantineNotes: receiveFormData.isQuarantined
+          ? receiveFormData.quarantineNotes
+          : "",
+      };
+    });
+
+    setBatchList((prev) => [...newBatches, ...prev]);
     handleCloseModal();
   };
 
@@ -492,9 +622,6 @@ function BatchManagement() {
                   Expiry Countdown
                 </th>
                 <th scope="col" className="px-6 py-3.5">
-                  Facility Location
-                </th>
-                <th scope="col" className="px-6 py-3.5">
                   Status
                 </th>
                 <th scope="col" className="px-6 py-3.5 text-right">
@@ -541,9 +668,19 @@ function BatchManagement() {
                               </span>
                             </div>
                             <div className="text-xs text-gray-500 font-medium mt-0.5">
-                              {skuData.brandName || "Medicine"}{" "}
+                              {batch.brandName ||
+                                skuData.brandName ||
+                                "Medicine"}{" "}
                               <span className="text-gray-400 font-normal">
-                                ({skuData.genericName} • {skuData.dosage})
+                                (
+                                {batch.genericName ||
+                                  skuData.genericName ||
+                                  "—"}{" "}
+                                •{" "}
+                                {batch.dosageForm ||
+                                  skuData.dosage ||
+                                  "Standard"}
+                                )
                               </span>
                             </div>
                           </div>
@@ -580,17 +717,7 @@ function BatchManagement() {
                           </span>
                         </div>
                       </td>
-
-                      {/* Location */}
-                      <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-600">
-                        <div className="flex items-center gap-1.5">
-                          <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                          <span className="truncate max-w-44 font-medium">
-                            {batch.location}
-                          </span>
-                        </div>
-                      </td>
-
+ 
                       {/* Status / Quarantine */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         {batch.isQuarantined ? (
@@ -628,7 +755,7 @@ function BatchManagement() {
               ) : (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan="5"
                     className="px-6 py-12 text-center text-gray-400"
                   >
                     <Package className="w-8 h-8 mx-auto mb-2 text-gray-300" />
@@ -666,85 +793,157 @@ function BatchManagement() {
         isOpen={modalMode === "receive"}
         onClose={handleCloseModal}
         title="Receive Stock via Purchase Order"
-        size="lg"
+        size="3xl"
       >
         <form onSubmit={handleSaveReceivedBatch} className="space-y-4">
           {/* PO Number Dropdown */}
           <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200">
-            <ComboBox
-              id="receive-po-select"
-              name="poNumber"
-              label="Select Purchase Order (PO Number)"
-              labelClassName="text-blue-900 font-bold"
-              required
-              options={requestedOrders}
-              value={receiveFormData.poNumber}
-              onChange={handlePoChange}
-              placeholder="-- Choose or search a Purchase Order --"
-              getOptionValue={(po) => po.orderNumber}
-              getOptionLabel={(po) =>
-                `${po.orderNumber} — ${po.brandName} (${po.genericName})`
-              }
-              getOptionSubtext={(po) =>
-                `${po.quantity} units • ${po.supplierName} [${po.status}]`
-              }
-              getDisplayValue={(po) =>
-                `${po.orderNumber} — ${po.brandName} (${po.quantity} units)`
-              }
-              error={formErrors.poNumber}
-            />
+            {isOrdersLoading ? (
+              <div className="flex items-center justify-center gap-2 py-4 text-xs text-blue-700">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Loading approved purchase orders...</span>
+              </div>
+            ) : approvedOrders.length === 0 ? (
+              <div className="text-xs text-amber-800 bg-amber-50 p-3 rounded-lg border border-amber-200 flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">
+                    No approved purchase orders found.
+                  </p>
+                  <p className="text-[11px] text-amber-700 mt-0.5">
+                    Only orders with "Approved" status for {currentFacilityName}{" "}
+                    can be received into inventory.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <ComboBox
+                id="receive-po-select"
+                name="poNumber"
+                label="Select Purchase Order (Approved PO Number)"
+                labelClassName="text-blue-900 font-bold"
+                required
+                options={approvedOrders}
+                value={receiveFormData.poNumber}
+                onChange={handlePoChange}
+                placeholder="-- Choose or search an Approved Purchase Order --"
+                getOptionValue={(po) => po.orderNumber}
+                getOptionLabel={(po) => `${po.orderNumber}`}
+                getOptionSubtext={(po) =>
+                  `${po.totalQuantity.toLocaleString()} units • ${po.supplierName} [Approved]`
+                }
+                getDisplayValue={(po) =>
+                  `${po.orderNumber} — ${po.supplierName}`
+                }
+                error={formErrors.poNumber}
+              />
+            )}
+            {ordersError && (
+              <p className="text-xs text-red-500 mt-1">{ordersError}</p>
+            )}
           </div>
 
           {/* PO Selected Details Card */}
           {selectedPoDetails ? (
-            <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-200 text-xs space-y-2.5">
-              <div className="flex items-start justify-between gap-2 border-b border-gray-200 pb-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-gray-900 text-sm">
-                      {selectedPoDetails.brandName}
+            <div className="space-y-3">
+              <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-200 text-xs space-y-2.5">
+                <div className="flex items-start justify-between gap-2 border-b border-gray-200 pb-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-blue-900 text-sm">
+                        {selectedPoDetails.orderNumber}
+                      </span>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        {selectedPoDetails.status}
+                      </span>
+                    </div>
+                    <p className="text-gray-600 text-xs mt-0.5">
+                      Supplier:{" "}
+                      <span className="font-semibold text-gray-800">
+                        {selectedPoDetails.supplierName}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-[11px] text-gray-500 block">
+                      Total PO Units
                     </span>
-                    <span className="font-mono text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded">
-                      {selectedPoDetails.sku}
+                    <span className="font-mono font-bold text-blue-800 text-sm">
+                      {selectedPoDetails.totalQuantity?.toLocaleString()} units
                     </span>
                   </div>
-                  <p className="text-gray-500 mt-0.5">
-                    {selectedPoDetails.genericName} • {selectedPoDetails.dosage}{" "}
-                    ({selectedPoDetails.packagingUnit})
-                  </p>
                 </div>
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
-                    selectedPoDetails.status === "Approved"
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : "bg-amber-50 text-amber-700 border border-amber-200"
-                  }`}
-                >
-                  {selectedPoDetails.status}
-                </span>
+
+                <div className="flex justify-between gap-2.5 text-[11px]">
+                  <div className="flex items-center gap-1.5 text-gray-600">
+                    <Truck className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <span className="truncate font-medium">
+                      {selectedPoDetails.supplierName}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-gray-600">
+                    <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span className="truncate font-medium">
+                      {selectedPoDetails.targetFacility}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-gray-600">
+                    <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <span>
+                      Items:{" "}
+                      <strong>
+                        {selectedPoDetails.items.length}{" "}
+                        {selectedPoDetails.items.length === 1
+                          ? "medicine"
+                          : "medicines"}
+                      </strong>
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-[11px]">
-                <div className="flex items-center gap-1.5 text-gray-600">
-                  <Truck className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                  <span className="truncate font-medium">
-                    {selectedPoDetails.supplierName}
+              {/* Complete Delivery Medicines Intake List */}
+              <div className="border border-blue-100 rounded-xl overflow-hidden bg-white shadow-xs">
+                <div className="px-3.5 py-2 bg-blue-50/80 border-b border-blue-100 flex items-center justify-between text-xs">
+                  <span className="font-bold text-blue-950 flex items-center gap-1.5">
+                    <Pill className="w-3.5 h-3.5 text-blue-600" />
+                    Medicines to Receive (100% Complete Delivery)
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded border border-emerald-200">
+                    Receive All
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-gray-600">
-                  <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                  <span className="truncate font-medium">
-                    {selectedPoDetails.targetFacility}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 text-gray-600">
-                  <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                  <span>
-                    Ordered:{" "}
-                    <strong>
-                      {selectedPoDetails.quantity.toLocaleString()} units
-                    </strong>
-                  </span>
+                <div className="max-h-44 overflow-y-auto divide-y divide-gray-100 text-xs">
+                  {selectedPoDetails.items.map((item, idx) => (
+                    <div
+                      key={item.id || idx}
+                      className="p-3 flex items-center justify-between hover:bg-gray-50/60 transition-colors"
+                    >
+                      <div className="min-w-0 pr-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-gray-900 truncate">
+                            {item.brandName}
+                          </span>
+                          <span className="font-mono text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200 shrink-0">
+                            {item.sku}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-500 mt-0.5 truncate">
+                          {item.genericName} • {item.dosageForm} (
+                          {item.packagingUnit})
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-mono font-bold text-gray-900 text-sm">
+                          {Number(item.quantity || 0).toLocaleString()}
+                        </span>
+                        <span className="text-[11px] text-gray-500 ml-1">
+                          units
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -752,8 +951,8 @@ function BatchManagement() {
             <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
               <span>
-                Please select a PO above to auto-load its receiving stock
-                specifications.
+                Please select an approved PO above to auto-load its receiving
+                stock specifications.
               </span>
             </div>
           )}
@@ -766,12 +965,15 @@ function BatchManagement() {
                 htmlFor="receive-batch-number"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
               >
-                Lot / Batch Number <span className="text-red-500">*</span>
+                {selectedPoDetails?.items?.length > 1
+                  ? "Base Lot / Batch Prefix"
+                  : "Lot / Batch Number"}{" "}
+                <span className="text-red-500">*</span>
               </label>
               <input
                 id="receive-batch-number"
                 type="text"
-                value={receiveFormData.batchNumber}
+                value={receiveFormData.batchNumber || ""}
                 onChange={(e) =>
                   setReceiveFormData((prev) => ({
                     ...prev,
@@ -785,6 +987,19 @@ function BatchManagement() {
                     : ""
                 }`}
               />
+              {selectedPoDetails?.items?.length > 1 && (
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Each medicine will be assigned sub-lot:{" "}
+                  <span className="font-mono font-semibold text-gray-700">
+                    {receiveFormData.batchNumber || "BAT-XXXX"}-1
+                  </span>
+                  ,{" "}
+                  <span className="font-mono font-semibold text-gray-700">
+                    {receiveFormData.batchNumber || "BAT-XXXX"}-2
+                  </span>
+                  ...
+                </p>
+              )}
               {formErrors.batchNumber && (
                 <p className="text-xs text-red-500 mt-1">
                   {formErrors.batchNumber}
@@ -792,33 +1007,26 @@ function BatchManagement() {
               )}
             </div>
 
-            {/* Received Quantity */}
+            {/* Received Quantity (Auto-complete) */}
             <div>
               <label
                 htmlFor="receive-batch-quantity"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
               >
-                Received Quantity (Units){" "}
-                <span className="text-red-500">*</span>
+                Total Received Quantity (Units){" "}
               </label>
               <input
                 id="receive-batch-quantity"
-                type="number"
-                min="1"
-                value={receiveFormData.quantity}
-                onChange={(e) =>
-                  setReceiveFormData((prev) => ({
-                    ...prev,
-                    quantity: Number(e.target.value),
-                  }))
+                type="text"
+                readOnly
+                value={
+                  selectedPoDetails
+                    ? `${selectedPoDetails.totalQuantity?.toLocaleString() || 0} units (${selectedPoDetails.items.length} ${selectedPoDetails.items.length === 1 ? "medicine" : "medicines"})`
+                    : ""
                 }
-                className="input"
+                placeholder="Auto-calculated from PO"
+                className="input bg-gray-50 font-mono font-bold text-gray-800 cursor-not-allowed"
               />
-              {formErrors.quantity && (
-                <p className="text-xs text-red-500 mt-1">
-                  {formErrors.quantity}
-                </p>
-              )}
             </div>
 
             {/* Manufacturing Date */}
@@ -873,24 +1081,6 @@ function BatchManagement() {
                   {formErrors.expiryDate}
                 </p>
               )}
-            </div>
-
-            {/* Automatically Detected Facility (No Dropdown) */}
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                Receiving Storage Facility (Auto-Detected)
-              </label>
-              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-blue-50/70 border border-blue-200 text-xs">
-                <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <span className="font-bold text-gray-900 block truncate">
-                    {currentFacilityName}
-                  </span>
-                  <span className="text-[11px] text-blue-700 font-medium">
-                    Current Working Facility Session
-                  </span>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -1010,9 +1200,20 @@ function BatchManagement() {
             >
               Cancel
             </button>
-            <button type="submit" className="btn-primary">
+            <button
+              type="submit"
+              disabled={
+                !selectedPoDetails || selectedPoDetails.items?.length === 0
+              }
+              className="btn-primary flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <CheckCircle2 className="w-4 h-4" />
-              <span>Confirm Stock Receipt</span>
+              <span>
+                Confirm Stock Receipt
+                {selectedPoDetails?.items?.length > 1
+                  ? ` (All ${selectedPoDetails.items.length} Medicines)`
+                  : ""}
+              </span>
             </button>
           </div>
         </form>

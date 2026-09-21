@@ -18,14 +18,26 @@ const orderService = {
     return response.data;
   },
 
-  getAllOrders: async (facilityId, config = {}) => {
+  getAllOrders: async (facilityId, statusOrConfig = null, config = {}) => {
     if (!facilityId) {
       throw new Error("Facility ID is required to fetch orders.");
     }
-    const response = await axios.get(orderApi.getAllOrders(facilityId), {
-      ...config,
-      headers: getAuthHeaders(config),
-    });
+    let status = null;
+    let actualConfig = config;
+
+    if (statusOrConfig && typeof statusOrConfig === "object") {
+      actualConfig = statusOrConfig;
+    } else if (typeof statusOrConfig === "string") {
+      status = statusOrConfig;
+    }
+
+    const response = await axios.get(
+      orderApi.getAllOrders(facilityId, status),
+      {
+        ...actualConfig,
+        headers: getAuthHeaders(actualConfig),
+      },
+    );
     return response.data;
   },
 

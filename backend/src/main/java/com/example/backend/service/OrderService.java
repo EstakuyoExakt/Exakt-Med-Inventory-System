@@ -122,15 +122,20 @@ public class OrderService {
         return response;
     }
 
-    // 2. GET ALL ORDERS (facilityId is strictly required)
+    // 2. GET ALL ORDERS (facilityId is strictly required, optional status filter)
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Procurement')")
-    public List<OrderResponseDto> getAllOrders(Long facilityId) {
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Procurement', 'Pharmacist')")
+    public List<OrderResponseDto> getAllOrders(Long facilityId, Order.Status status) {
         if (facilityId == null) {
             throw new RuntimeException("Facility ID is required");
         }
 
-        List<Order> orders = orderRepository.findByFacilityIdOrderByCreatedAtDesc(facilityId);
+        List<Order> orders;
+        if (status != null) {
+            orders = orderRepository.findByFacilityIdAndStatusOrderByCreatedAtDesc(facilityId, status);
+        } else {
+            orders = orderRepository.findByFacilityIdOrderByCreatedAtDesc(facilityId);
+        }
 
         return orders.stream()
                 .map(order -> {
@@ -143,9 +148,15 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Procurement', 'Pharmacist')")
+    public List<OrderResponseDto> getAllOrders(Long facilityId) {
+        return getAllOrders(facilityId, null);
+    }
+
     // 3. GET ORDER BY ID
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Procurement')")
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Procurement', 'Pharmacist')")
     public OrderResponseDto getOrderById(Long id) {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Order not found with id: " + id));
