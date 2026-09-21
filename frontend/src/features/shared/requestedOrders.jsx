@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   ClipboardCheck,
   Clock,
@@ -19,6 +19,8 @@ import {
   FileText,
   DollarSign,
   UserCheck,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 
 // Common Components & Guards
@@ -29,10 +31,45 @@ import Modal from "../../components/common/modal";
 import RoleGuard from "../../components/guard/roleGuard";
 import { ROLES } from "../../config/roles";
 
-// Mock Data & Facilities
-import { requestedOrders as initialOrders } from "../../data/orders";
+// Services & Facilities
+import orderService from "../../services/order";
 import { facilities } from "../../data/facility";
 import useAuth from "../../hooks/useAuth";
+
+// Helper to normalize backend OrderResponseDto into view model
+const normalizeOrder = (raw) => {
+  const items = raw.items || [];
+  const firstItem = items[0] || {};
+
+  return {
+    id: raw.id,
+    orderNumber: raw.purchaseOrderNum || raw.poNumberFormatted || `PO-${raw.id}`,
+    quantity: raw.totalOrderedUnits ?? raw.quantity ?? 0,
+    estimatedCost: raw.totalPrice ?? raw.estimatedCost ?? 0,
+    supplierId: raw.supplierId,
+    supplierName: raw.supplierName || "Supplier",
+    targetFacility: raw.facilityName || raw.targetFacility || "Facility",
+    facilityId: raw.facilityId,
+    priority: raw.priority || "Normal",
+    status: raw.status === "Denied" ? "Rejected" : (raw.status || "Pending"),
+    notes: raw.notes || "",
+    requestedBy: raw.requestedBy || "Procurement Officer",
+    requestedDate: raw.createdAt
+      ? new Date(raw.createdAt).toISOString().split("T")[0]
+      : raw.requestedDate || "—",
+    approvedBy: raw.approvedBy || null,
+    approvalDate: raw.approvalDate || null,
+    rejectionReason: raw.rejectionReason || null,
+    items: items,
+    // First item fallbacks for search and backward compatibility
+    sku: firstItem.skuName || raw.sku || "",
+    brandName: firstItem.brandName || raw.brandName || "",
+    genericName: firstItem.genericName || raw.genericName || "",
+    dosage: firstItem.dosage || raw.dosage || "",
+    dosageForm: firstItem.dosageForm || raw.dosageForm || "",
+    packagingUnit: firstItem.packagingUnit || raw.packagingUnit || "",
+  };
+};
 
 function RequestedOrders() {
   const { facility } = useAuth();
@@ -44,12 +81,48 @@ function RequestedOrders() {
     );
   }, [facility]);
 
-  const [orders, setOrders] = useState(initialOrders);
+  const [orders, setOrders] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
+  const [isActionLoading, setIsActionLoading] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [priorityFilter, setPriorityFilter] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
+
+  // Fetch real order data from backend
+  const fetchOrders = useCallback(async () => {
+    const targetFacilityId =
+      facility?.id ||
+      facilities.find((f) => f.name === currentFacilityName)?.id ||
+      1;
+
+    try {
+      setIsLoading(true);
+      setFetchError(null);
+      const data = await orderService.getAllOrders(targetFacilityId);
+      if (Array.isArray(data)) {
+        setOrders(data.map(normalizeOrder));
+      } else {
+        setOrders([]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch requested orders:", err);
+      setFetchError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to fetch orders from server.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [facility?.id, currentFacilityName]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
 
   // Filter orders that reference the current active facility
   const currentFacilityOrders = useMemo(() => {
@@ -68,13 +141,13 @@ function RequestedOrders() {
   const metrics = useMemo(() => {
     const total = currentFacilityOrders.length;
     const pending = currentFacilityOrders.filter(
-      (o) => o.status === "Pending Approval",
+      (o) => o.status === "Pending" || o.status === "Pending Approval",
     ).length;
     const approved = currentFacilityOrders.filter(
       (o) => o.status === "Approved",
     ).length;
     const rejected = currentFacilityOrders.filter(
-      (o) => o.status === "Rejected",
+      (o) => o.status === "Rejected" || o.status === "Denied",
     ).length;
     return { total, pending, approved, rejected };
   }, [currentFacilityOrders]);
@@ -84,15 +157,32 @@ function RequestedOrders() {
     return currentFacilityOrders.filter((order) => {
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
-        order.orderNumber.toLowerCase().includes(q) ||
-        order.sku.toLowerCase().includes(q) ||
-        order.brandName.toLowerCase().includes(q) ||
-        order.genericName.toLowerCase().includes(q) ||
-        order.supplierName.toLowerCase().includes(q) ||
-        order.targetFacility.toLowerCase().includes(q);
+        !q ||
+        (order.orderNumber && order.orderNumber.toLowerCase().includes(q)) ||
+        (order.sku && order.sku.toLowerCase().includes(q)) ||
+        (order.brandName && order.brandName.toLowerCase().includes(q)) ||
+        (order.genericName && order.genericName.toLowerCase().includes(q)) ||
+        (order.supplierName && order.supplierName.toLowerCase().includes(q)) ||
+        (order.targetFacility &&
+          order.targetFacility.toLowerCase().includes(q)) ||
+        (order.items &&
+          order.items.some(
+            (item) =>
+              (item.brandName && item.brandName.toLowerCase().includes(q)) ||
+              (item.genericName &&
+                item.genericName.toLowerCase().includes(q)) ||
+              (item.skuName && item.skuName.toLowerCase().includes(q)),
+          ));
 
       const matchesStatus =
-        statusFilter === "ALL" || order.status === statusFilter;
+        statusFilter === "ALL" ||
+        order.status === statusFilter ||
+        (statusFilter === "Pending Approval" &&
+          (order.status === "Pending" ||
+            order.status === "Pending Approval")) ||
+        (statusFilter === "Approved" && order.status === "Approved") ||
+        (statusFilter === "Rejected" &&
+          (order.status === "Rejected" || order.status === "Denied"));
 
       const matchesPriority =
         priorityFilter === "ALL" || order.priority === priorityFilter;
@@ -149,49 +239,75 @@ function RequestedOrders() {
   };
 
   // Actions
-  const handleApproveOrder = () => {
+  const handleApproveOrder = async () => {
     if (!selectedOrder) return;
-    const today = new Date().toISOString().split("T")[0];
+    try {
+      setIsActionLoading(true);
+      await orderService.updateOrderStatus(selectedOrder.id, "Approved");
+      const today = new Date().toISOString().split("T")[0];
 
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === selectedOrder.id
-          ? {
-              ...o,
-              status: "Approved",
-              approvedBy: "Sarah Jenkins (Admin)",
-              approvalDate: today,
-              rejectionReason: null,
-            }
-          : o,
-      ),
-    );
-    handleCloseModal();
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === selectedOrder.id
+            ? {
+                ...o,
+                status: "Approved",
+                approvedBy: "Administrator",
+                approvalDate: today,
+                rejectionReason: null,
+              }
+            : o,
+        ),
+      );
+      handleCloseModal();
+    } catch (err) {
+      console.error("Failed to approve order:", err);
+      alert(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to approve order request.",
+      );
+    } finally {
+      setIsActionLoading(false);
+    }
   };
 
-  const handleRejectOrder = (e) => {
+  const handleRejectOrder = async (e) => {
     e.preventDefault();
     if (!rejectReason.trim()) {
       setRejectError("Please provide a reason for denying this requisition.");
       return;
     }
 
-    const today = new Date().toISOString().split("T")[0];
+    try {
+      setIsActionLoading(true);
+      await orderService.updateOrderStatus(selectedOrder.id, "Denied");
+      const today = new Date().toISOString().split("T")[0];
 
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === selectedOrder.id
-          ? {
-              ...o,
-              status: "Rejected",
-              approvedBy: "Sarah Jenkins (Admin)",
-              approvalDate: today,
-              rejectionReason: rejectReason.trim(),
-            }
-          : o,
-      ),
-    );
-    handleCloseModal();
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === selectedOrder.id
+            ? {
+                ...o,
+                status: "Rejected",
+                approvedBy: "Administrator",
+                approvalDate: today,
+                rejectionReason: rejectReason.trim(),
+              }
+            : o,
+        ),
+      );
+      handleCloseModal();
+    } catch (err) {
+      console.error("Failed to deny order:", err);
+      setRejectError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to deny order request.",
+      );
+    } finally {
+      setIsActionLoading(false);
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -202,12 +318,14 @@ function RequestedOrders() {
           color: "bg-emerald-50 text-emerald-700 border-emerald-200",
           icon: CheckCircle2,
         };
+      case "Pending":
       case "Pending Approval":
         return {
           label: "Pending Approval",
           color: "bg-amber-50 text-amber-700 border-amber-200",
           icon: Clock,
         };
+      case "Denied":
       case "Rejected":
         return {
           label: "Denied / Rejected",
@@ -246,7 +364,40 @@ function RequestedOrders() {
             </span>
           </p>
         </div>
+
+        {/* Header Action: Refresh Button */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={fetchOrders}
+            disabled={isLoading}
+            className="btn-secondary py-2 px-3 text-xs flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+            title="Refresh order requisitions from backend"
+          >
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${isLoading ? "animate-spin text-blue-600" : ""}`}
+            />
+            <span>{isLoading ? "Refreshing..." : "Refresh"}</span>
+          </button>
+        </div>
       </div>
+
+      {/* Error Banner if fetch failed */}
+      {fetchError && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 flex items-center justify-between gap-3 text-red-800 text-xs">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{fetchError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={fetchOrders}
+            className="font-bold underline hover:text-red-950 cursor-pointer shrink-0"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* 4 Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -487,7 +638,8 @@ function RequestedOrders() {
 
                           {/* 2. Admin & Super Admin Protected Approval & Denial Actions */}
                           <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.SUPER_ADMIN]}>
-                            {order.status === "Pending Approval" && (
+                            {(order.status === "Pending" ||
+                              order.status === "Pending Approval") && (
                               <>
                                 {/* Approve Button */}
                                 <button
@@ -520,6 +672,18 @@ function RequestedOrders() {
                     </tr>
                   );
                 })
+              ) : isLoading ? (
+                <tr>
+                  <td
+                    colSpan="5"
+                    className="px-6 py-12 text-center text-gray-400"
+                  >
+                    <Loader2 className="w-8 h-8 mx-auto mb-2 text-blue-600 animate-spin" />
+                    <p className="text-sm font-semibold text-gray-700">
+                      Loading purchase order requisitions...
+                    </p>
+                  </td>
+                </tr>
               ) : (
                 <tr>
                   <td
@@ -561,7 +725,7 @@ function RequestedOrders() {
         isOpen={modalMode === "view" && Boolean(selectedOrder)}
         onClose={handleCloseModal}
         title="Purchase Order Details"
-        size="xl"
+        size="3xl"
       >
         {selectedOrder && (
           <div className="space-y-4">
@@ -600,75 +764,129 @@ function RequestedOrders() {
               </div>
             </div>
 
-            {/* Requisition Data Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div className="p-3.5 rounded-xl border border-gray-100 bg-gray-50/70 space-y-2">
-                <p className="font-bold text-gray-800 uppercase tracking-wider text-[10px]">
-                  Medication Information
-                </p>
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500">Brand Name:</span>
-                    <span className="font-bold text-gray-900">
-                      {selectedOrder.brandName}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500">Generic Name:</span>
-                    <span className="font-semibold text-gray-800">
-                      {selectedOrder.genericName}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500">Dosage & Form:</span>
-                    <span className="text-gray-700">
-                      {selectedOrder.dosage} ({selectedOrder.dosageForm})
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500">Packaging:</span>
-                    <span className="text-gray-700">
-                      {selectedOrder.packagingUnit}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500">SKU Code:</span>
-                    <span className="font-mono font-bold text-blue-700">
-                      {selectedOrder.sku}
-                    </span>
+            {/* If Order has Multiple Items */}
+            {selectedOrder.items && selectedOrder.items.length > 0 ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="font-bold text-gray-800 uppercase tracking-wider text-[10px]">
+                    Ordered Medicines ({selectedOrder.items.length})
+                  </p>
+                  <span className="text-xs text-gray-500 font-medium">
+                    Total: {selectedOrder.quantity.toLocaleString()} units
+                  </span>
+                </div>
+                <div className="border border-gray-200 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
+                  <table className="w-full text-left text-xs text-gray-600">
+                    <thead className="bg-gray-100 text-[10px] uppercase font-bold text-gray-600 sticky top-0 border-b border-gray-200">
+                      <tr>
+                        <th className="px-3 py-2">Medicine / SKU</th>
+                        <th className="px-3 py-2">Form & Packaging</th>
+                        <th className="px-3 py-2 text-right">Quantity</th>
+                        <th className="px-3 py-2 text-right">Item Price</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 bg-white">
+                      {selectedOrder.items.map((item, idx) => (
+                        <tr key={item.id || idx} className="hover:bg-gray-50/70">
+                          <td className="px-3 py-2.5">
+                            <span className="font-bold text-gray-900">
+                              {item.brandName || item.skuName || "Medicine"}
+                            </span>
+                            {item.genericName && (
+                              <div className="text-[11px] text-gray-500">
+                                {item.genericName}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-gray-600">
+                            <div>{item.dosageForm || "—"}</div>
+                            <div className="text-[10px] text-gray-400">
+                              {item.packagingUnit || ""}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-bold text-gray-900 whitespace-nowrap">
+                            {item.orderedUnits?.toLocaleString()} units
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-mono font-bold text-emerald-700 whitespace-nowrap">
+                            ₱{item.price ? Number(item.price).toLocaleString() : "0"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              /* Fallback Single-item Data Grid */
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3.5 rounded-xl border border-gray-100 bg-gray-50/70 space-y-2">
+                  <p className="font-bold text-gray-800 uppercase tracking-wider text-[10px]">
+                    Medication Information
+                  </p>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">Brand Name:</span>
+                      <span className="font-bold text-gray-900">
+                        {selectedOrder.brandName}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">Generic Name:</span>
+                      <span className="font-semibold text-gray-800">
+                        {selectedOrder.genericName}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">Dosage & Form:</span>
+                      <span className="text-gray-700">
+                        {selectedOrder.dosage} ({selectedOrder.dosageForm})
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">Packaging:</span>
+                      <span className="text-gray-700">
+                        {selectedOrder.packagingUnit}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">SKU Code:</span>
+                      <span className="font-mono font-bold text-blue-700">
+                        {selectedOrder.sku}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
+            )}
 
-              <div className="p-3.5 rounded-xl border border-gray-100 bg-gray-50/70 space-y-2">
-                <p className="font-bold text-gray-800 uppercase tracking-wider text-[10px]">
-                  Procurement & Destination
-                </p>
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500">Order Quantity:</span>
-                    <span className="font-bold text-gray-900 text-sm">
-                      {selectedOrder.quantity.toLocaleString()} units
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500">Supplier:</span>
-                    <span className="font-semibold text-gray-800">
-                      {selectedOrder.supplierName}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500">Destination:</span>
-                    <span className="font-semibold text-gray-800">
-                      {selectedOrder.targetFacility}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500">Estimated Cost:</span>
-                    <span className="font-mono font-bold text-emerald-700">
-                      ₱{selectedOrder.estimatedCost?.toLocaleString() || "—"}
-                    </span>
-                  </div>
+            {/* Procurement & Destination Summary */}
+            <div className="p-3.5 rounded-xl border border-gray-100 bg-gray-50/70 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500">Supplier:</span>
+                  <span className="font-semibold text-gray-800">
+                    {selectedOrder.supplierName}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500">Destination:</span>
+                  <span className="font-semibold text-gray-800">
+                    {selectedOrder.targetFacility}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-1.5 sm:text-right">
+                <div className="flex items-center sm:justify-end gap-2">
+                  <span className="text-gray-500">Total Units:</span>
+                  <span className="font-bold text-gray-900">
+                    {selectedOrder.quantity.toLocaleString()} units
+                  </span>
+                </div>
+                <div className="flex items-center sm:justify-end gap-2">
+                  <span className="text-gray-500">Total PO Cost:</span>
+                  <span className="font-mono font-bold text-emerald-700 text-sm">
+                    ₱{selectedOrder.estimatedCost?.toLocaleString() || "—"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -748,11 +966,20 @@ function RequestedOrders() {
                   <span className="font-semibold">
                     {selectedOrder.supplierName}
                   </span>{" "}
-                  to process the purchase order for{" "}
+                  to process purchase order{" "}
+                  <span className="font-mono font-bold">
+                    {selectedOrder.orderNumber}
+                  </span>{" "}
+                  for{" "}
                   <span className="font-bold font-mono">
                     {selectedOrder.quantity} units
-                  </span>{" "}
-                  of {selectedOrder.brandName}.
+                  </span>
+                  {selectedOrder.items?.length > 1
+                    ? ` across ${selectedOrder.items.length} medicines`
+                    : selectedOrder.brandName
+                      ? ` of ${selectedOrder.brandName}`
+                      : ""}
+                  .
                 </p>
               </div>
             </div>
@@ -771,7 +998,7 @@ function RequestedOrders() {
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Estimated Total:</span>
+                <span className="text-gray-500">Total PO Cost:</span>
                 <span className="font-mono font-bold text-emerald-700">
                   ₱{selectedOrder.estimatedCost?.toLocaleString() || "—"}
                 </span>
@@ -782,6 +1009,7 @@ function RequestedOrders() {
               <button
                 type="button"
                 onClick={handleCloseModal}
+                disabled={isActionLoading}
                 className="btn-secondary"
               >
                 Cancel
@@ -789,10 +1017,20 @@ function RequestedOrders() {
               <button
                 type="button"
                 onClick={handleApproveOrder}
-                className="btn-primary bg-emerald-600 hover:bg-emerald-700 border-emerald-600"
+                disabled={isActionLoading}
+                className="btn-primary bg-emerald-600 hover:bg-emerald-700 border-emerald-600 flex items-center gap-1.5 disabled:opacity-50"
               >
-                <Check className="w-4 h-4" />
-                <span>Confirm Approval</span>
+                {isActionLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Approving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Confirm Approval</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -853,13 +1091,27 @@ function RequestedOrders() {
               <button
                 type="button"
                 onClick={handleCloseModal}
+                disabled={isActionLoading}
                 className="btn-secondary"
               >
                 Cancel
               </button>
-              <button type="submit" className="btn-danger">
-                <X className="w-4 h-4" />
-                <span>Deny Request</span>
+              <button
+                type="submit"
+                disabled={isActionLoading}
+                className="btn-danger flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isActionLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Denying...</span>
+                  </>
+                ) : (
+                  <>
+                    <X className="w-4 h-4" />
+                    <span>Deny Request</span>
+                  </>
+                )}
               </button>
             </div>
           </form>
