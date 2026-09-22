@@ -37,9 +37,13 @@ public class RestockRequest {
 
     private String reason;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "orderId", unique = true)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "orderId")
     private Order order;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "orderedItemId")
+    private OrderedItem orderedItem;
 
     @Column(updatable = false)
     private LocalDateTime createdAt;

@@ -142,6 +142,10 @@ public class RestockRequestService {
             dto.setOrderId(entity.getOrder().getId());
         }
 
+        if (entity.getOrderedItem() != null) {
+            dto.setOrderedItemId(entity.getOrderedItem().getId());
+        }
+
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;

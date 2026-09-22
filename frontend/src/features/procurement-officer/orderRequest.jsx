@@ -220,6 +220,9 @@ function OrderRequest() {
 
   // Multi-Selection State for Table Checkboxes
   const [selectedSkuIds, setSelectedSkuIds] = useState([]);
+  const [selectedRestockRequestIds, setSelectedRestockRequestIds] = useState(
+    [],
+  );
 
   // Restock Request States
   const [restockRequests, setRestockRequests] = useState([]);
@@ -299,9 +302,34 @@ function OrderRequest() {
     );
   }, [filteredRestockRequests, restockCurrentPage, restockItemsPerPage]);
 
+  // Checkbox Selection Handlers for Restock Requests
+  const handleToggleSelectRestock = (id) => {
+    setSelectedRestockRequestIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
+    );
+  };
+
+  const handleSelectAllVisibleRestock = () => {
+    const visibleIds = paginatedRestockRequests.map((r) => r.id);
+    const allSelected =
+      visibleIds.length > 0 &&
+      visibleIds.every((id) => selectedRestockRequestIds.includes(id));
+    if (allSelected) {
+      setSelectedRestockRequestIds((prev) =>
+        prev.filter((id) => !visibleIds.includes(id)),
+      );
+    } else {
+      setSelectedRestockRequestIds((prev) => [
+        ...prev,
+        ...visibleIds.filter((id) => !prev.includes(id)),
+      ]);
+    }
+  };
+
   // Modal States
   const [selectedSkuForView, setSelectedSkuForView] = useState(null);
-  const [modalMode, setModalMode] = useState(null); // 'order' | 'view' | 'success' | null
+  const [selectedRestockForView, setSelectedRestockForView] = useState(null);
+  const [modalMode, setModalMode] = useState(null); // 'order' | 'view' | 'view_restock' | 'success' | null
   const [submittedOrder, setSubmittedOrder] = useState(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
@@ -310,7 +338,7 @@ function OrderRequest() {
     ...DEFAULT_ORDER_FORM,
     supplierId: suppliers[0]?.id || 1,
     targetFacility: currentFacilityName,
-    restockRequestId: null,
+    restockRequestIds: [],
   });
   const [formErrors, setFormErrors] = useState({});
 
@@ -465,32 +493,64 @@ function OrderRequest() {
     handleOpenMultiOrderModal([sku]);
   };
 
-  // Process a Pharmacist Restock Request directly into a Purchase Order
-  const handleProcessRestockRequest = (restockReq) => {
-    const matchedSku =
-      currentFacilitySkus.find(
-        (s) => s.id === restockReq.skuId || s.sku === restockReq.skuName,
-      ) ||
-      skuList.find(
-        (s) => s.id === restockReq.skuId || s.sku === restockReq.skuName,
-      );
+  // Open View SKU Threshold Diagnostics Modal
+  const handleOpenViewModal = (sku) => {
+    setSelectedSkuForView(sku);
+    setModalMode("view");
+  };
 
-    const item = {
-      id: restockReq.skuId || matchedSku?.id || 1,
-      sku: restockReq.skuName || matchedSku?.sku || "",
-      brandName: restockReq.brandName || matchedSku?.brandName || "",
-      genericName: restockReq.genericName || matchedSku?.genericName || "",
-      dosage: matchedSku?.dosage || "",
-      dosageForm: restockReq.dosageForm || matchedSku?.dosageForm || "",
-      packagingUnit:
-        restockReq.packagingUnit || matchedSku?.packagingUnit || "",
-      currentStock: matchedSku?.currentStock ?? 0,
-      minimumLevel: matchedSku?.minimumLevel ?? 0,
-      maximumLevel: matchedSku?.maximumLevel ?? 0,
-      reorderLevel: matchedSku?.reorderLevel ?? 0,
-      quantity: Number(restockReq.requestedUnits) || 100,
-      price: "",
-    };
+  // Open View Pharmacist Restock Request Modal
+  const handleOpenViewRestockModal = (req) => {
+    setSelectedRestockForView(req);
+    setModalMode("view_restock");
+  };
+
+  // Process one or multiple Pharmacist Restock Requests into a Purchase Order
+  const handleProcessRestockRequests = (requestsToProcess = []) => {
+    let targetRequests = [];
+    if (requestsToProcess.length > 0) {
+      targetRequests = requestsToProcess;
+    } else if (selectedRestockRequestIds.length > 0) {
+      targetRequests = restockRequests.filter((r) =>
+        selectedRestockRequestIds.includes(r.id),
+      );
+    }
+
+    if (targetRequests.length === 0) return;
+
+    // Build line items for each request
+    const items = targetRequests.map((req) => {
+      const matchedSku =
+        currentFacilitySkus.find(
+          (s) => s.id === req.skuId || s.sku === req.skuName,
+        ) ||
+        skuList.find((s) => s.id === req.skuId || s.sku === req.skuName);
+
+      return {
+        id: req.skuId || matchedSku?.id || 1,
+        sku: req.skuName || matchedSku?.sku || "",
+        brandName: req.brandName || matchedSku?.brandName || "",
+        genericName: req.genericName || matchedSku?.genericName || "",
+        dosage: matchedSku?.dosage || "",
+        dosageForm: req.dosageForm || matchedSku?.dosageForm || "",
+        packagingUnit:
+          req.packagingUnit || matchedSku?.packagingUnit || "",
+        currentStock: matchedSku?.currentStock ?? 0,
+        minimumLevel: matchedSku?.minimumLevel ?? 0,
+        maximumLevel: matchedSku?.maximumLevel ?? 0,
+        reorderLevel: matchedSku?.reorderLevel ?? 0,
+        quantity: Number(req.requestedUnits) || 100,
+        price: "",
+      };
+    });
+
+    const reasons = targetRequests
+      .map((r) => r.reason?.trim())
+      .filter(Boolean);
+    const combinedNotes =
+      reasons.length > 0
+        ? `Pharmacist Restock Requests: ${reasons.join("; ")}`
+        : "Requested by Pharmacy Department";
 
     setOrderForm({
       supplierId:
@@ -498,11 +558,9 @@ function OrderRequest() {
       targetFacility: currentFacilityName,
       priority: "Normal",
       totalCost: "",
-      notes: restockReq.reason
-        ? `Pharmacist Request: ${restockReq.reason}`
-        : "Requested by Pharmacy Department",
-      restockRequestId: restockReq.id,
-      items: [item],
+      notes: combinedNotes,
+      restockRequestIds: targetRequests.map((r) => r.id),
+      items,
     });
     setFormErrors({});
     setSkuToAdd("");
@@ -512,10 +570,11 @@ function OrderRequest() {
   const handleCloseModal = () => {
     setModalMode(null);
     setSelectedSkuForView(null);
+    setSelectedRestockForView(null);
     setFormErrors({});
     setOrderForm((prev) => ({
       ...prev,
-      restockRequestId: null,
+      restockRequestIds: [],
     }));
   };
 
@@ -647,9 +706,11 @@ function OrderRequest() {
       priority: orderForm.priority || "Normal",
       totalPrice: Math.round(computedTotalCost),
       notes: orderForm.notes || "",
-      restockRequestId: orderForm.restockRequestId
-        ? Number(orderForm.restockRequestId)
-        : null,
+      restockRequestIds:
+        Array.isArray(orderForm.restockRequestIds) &&
+        orderForm.restockRequestIds.length > 0
+          ? orderForm.restockRequestIds.map(Number)
+          : null,
       items: orderForm.items.map((i) => {
         const matchedSku = skuList.find(
           (s) => s.sku === i.sku || s.id === i.id,
@@ -689,12 +750,16 @@ function OrderRequest() {
       setSelectedSkuIds([]); // Clear selection
       setModalMode("success");
 
-      // Optimistically remove ordered items and fulfilled restock request from current list
+      // Optimistically remove ordered items and fulfilled restock requests from current list
       const orderedIds = new Set(orderPayload.items.map((i) => i.skuId));
       setSkuList((prev) => prev.filter((s) => !orderedIds.has(s.id)));
-      if (orderPayload.restockRequestId) {
+      if (orderPayload.restockRequestIds) {
+        const reqIdsSet = new Set(orderPayload.restockRequestIds);
         setRestockRequests((prev) =>
-          prev.filter((r) => r.id !== orderPayload.restockRequestId),
+          prev.filter((r) => !reqIdsSet.has(r.id)),
+        );
+        setSelectedRestockRequestIds((prev) =>
+          prev.filter((id) => !reqIdsSet.has(id)),
         );
       }
       fetchSkus(searchQuery);
@@ -725,12 +790,16 @@ function OrderRequest() {
       setSelectedSkuIds([]);
       setModalMode("success");
 
-      // Optimistically remove ordered items and fulfilled restock request in fallback
+      // Optimistically remove ordered items and fulfilled restock requests in fallback
       const orderedIds = new Set(orderPayload.items.map((i) => i.skuId));
       setSkuList((prev) => prev.filter((s) => !orderedIds.has(s.id)));
-      if (orderPayload.restockRequestId) {
+      if (orderPayload.restockRequestIds) {
+        const reqIdsSet = new Set(orderPayload.restockRequestIds);
         setRestockRequests((prev) =>
-          prev.filter((r) => r.id !== orderPayload.restockRequestId),
+          prev.filter((r) => !reqIdsSet.has(r.id)),
+        );
+        setSelectedRestockRequestIds((prev) =>
+          prev.filter((id) => !reqIdsSet.has(id)),
         );
       }
     } finally {
@@ -764,6 +833,26 @@ function OrderRequest() {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          {activeTab === "requests" && (
+            <button
+              type="button"
+              onClick={() => handleProcessRestockRequests()}
+              disabled={selectedRestockRequestIds.length === 0}
+              className={`btn-primary shadow-xs flex items-center gap-2 text-xs py-2 px-3.5 ${
+                selectedRestockRequestIds.length === 0
+                  ? "opacity-50 cursor-not-allowed"
+                  : "cursor-pointer"
+              }`}
+            >
+              <ListPlus className="w-4 h-4" />
+              <span>
+                {selectedRestockRequestIds.length > 0
+                  ? `Create Consolidated PO for (${selectedRestockRequestIds.length}) Selected`
+                  : "Consolidate Restock Requests into PO"}
+              </span>
+            </button>
+          )}
+
           {activeTab === "thresholds" && (
             <button
               type="button"
@@ -938,11 +1027,58 @@ function OrderRequest() {
               </div>
             </div>
 
+            {/* Multi-Select Floating Action Bar if requests checked */}
+            {selectedRestockRequestIds.length > 0 && (
+              <div className="p-3 bg-blue-50/90 border-b border-blue-100 flex items-center justify-between text-xs text-blue-900">
+                <div className="flex items-center gap-2 font-semibold">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white text-[11px] font-bold">
+                    {selectedRestockRequestIds.length}
+                  </span>
+                  <span>Restock requests selected for consolidated purchase order</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRestockRequestIds([])}
+                    className="btn-secondary py-1 px-2.5 text-xs text-gray-600 hover:text-gray-900 cursor-pointer"
+                  >
+                    Clear Selection
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleProcessRestockRequests()}
+                    className="btn-primary py-1 px-3 text-xs shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <ShoppingCart className="w-3.5 h-3.5" />
+                    <span>Create Consolidated PO ({selectedRestockRequestIds.length})</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Restock Requests Table View */}
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-gray-600">
                 <thead className="bg-gray-50 text-[11px] uppercase tracking-wider text-gray-500 font-semibold border-b border-gray-200">
                   <tr>
+                    <th scope="col" className="px-4 py-3.5 w-10 text-center">
+                      <button
+                        type="button"
+                        onClick={handleSelectAllVisibleRestock}
+                        className="text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
+                        title="Select all visible requests"
+                        aria-label="Select all visible requests"
+                      >
+                        {paginatedRestockRequests.length > 0 &&
+                        paginatedRestockRequests.every((r) =>
+                          selectedRestockRequestIds.includes(r.id),
+                        ) ? (
+                          <CheckSquare className="w-4 h-4 text-blue-600" />
+                        ) : (
+                          <Square className="w-4 h-4" />
+                        )}
+                      </button>
+                    </th>
                     <th scope="col" className="px-6 py-3.5">
                       Request Date & Pharmacist
                     </th>
@@ -951,9 +1087,6 @@ function OrderRequest() {
                     </th>
                     <th scope="col" className="px-6 py-3.5">
                       Requested Units
-                    </th>
-                    <th scope="col" className="px-6 py-3.5">
-                      Clinical Justification / Reason
                     </th>
                     <th scope="col" className="px-6 py-3.5 text-right">
                       Action
@@ -979,8 +1112,27 @@ function OrderRequest() {
                     paginatedRestockRequests.map((req) => (
                       <tr
                         key={req.id}
-                        className="hover:bg-blue-50/30 transition-colors"
+                        className={`hover:bg-blue-50/30 transition-colors ${
+                          selectedRestockRequestIds.includes(req.id)
+                            ? "bg-blue-50/20"
+                            : ""
+                        }`}
                       >
+                        {/* Checkbox */}
+                        <td className="px-4 py-4 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleSelectRestock(req.id)}
+                            className="text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
+                            aria-label={`Select request ${req.id}`}
+                          >
+                            {selectedRestockRequestIds.includes(req.id) ? (
+                              <CheckSquare className="w-4 h-4 text-blue-600" />
+                            ) : (
+                              <Square className="w-4 h-4" />
+                            )}
+                          </button>
+                        </td>
                         {/* Date & Requester */}
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-xs font-semibold text-gray-900">
@@ -1039,27 +1191,28 @@ function OrderRequest() {
                           </div>
                         </td>
 
-                        {/* Clinical Justification / Reason */}
-                        <td className="px-6 py-4 max-w-xs">
-                          <p
-                            className="text-xs text-gray-700 bg-gray-50 p-2.5 rounded-lg border border-gray-200/80 italic line-clamp-2"
-                            title={req.reason}
-                          >
-                            {req.reason || "No clinical remarks specified."}
-                          </p>
-                        </td>
-
                         {/* Actions */}
                         <td className="px-6 py-4 whitespace-nowrap text-right text-xs">
-                          <button
-                            type="button"
-                            onClick={() => handleProcessRestockRequest(req)}
-                            className="btn-primary py-1.5 px-3 text-xs shadow-xs inline-flex items-center gap-1.5 cursor-pointer"
-                            title="Convert this request into a purchase order"
-                          >
-                            <ShoppingCart className="w-3.5 h-3.5" />
-                            <span>Process into PO</span>
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenViewRestockModal(req)}
+                              className="btn-secondary p-1.5 text-gray-600 hover:text-blue-600 cursor-pointer"
+                              title="View Restock Request Details"
+                              aria-label={`View restock request ${req.id}`}
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleProcessRestockRequests([req])}
+                              className="btn-primary py-1.5 px-3 text-xs shadow-xs inline-flex items-center gap-1.5 cursor-pointer font-medium"
+                              title="Convert this request into a purchase order"
+                            >
+                              <ShoppingCart className="w-3.5 h-3.5" />
+                              <span>Process into PO</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -1167,18 +1320,22 @@ function OrderRequest() {
             <thead className="bg-gray-50 text-[11px] uppercase tracking-wider text-gray-500 font-semibold border-b border-gray-200">
               <tr>
                 <th scope="col" className="px-4 py-3.5 w-10 text-center">
-                  <input
-                    type="checkbox"
-                    onChange={handleSelectAllVisible}
-                    checked={
-                      paginatedReorderSkus.length > 0 &&
-                      paginatedReorderSkus.every((s) =>
-                        selectedSkuIds.includes(s.id),
-                      )
-                    }
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  <button
+                    type="button"
+                    onClick={handleSelectAllVisible}
+                    className="text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
                     title="Select all visible on page"
-                  />
+                    aria-label="Select all visible on page"
+                  >
+                    {paginatedReorderSkus.length > 0 &&
+                    paginatedReorderSkus.every((s) =>
+                      selectedSkuIds.includes(s.id),
+                    ) ? (
+                      <CheckSquare className="w-4 h-4 text-blue-600" />
+                    ) : (
+                      <Square className="w-4 h-4" />
+                    )}
+                  </button>
                 </th>
                 <th scope="col" className="px-6 py-3.5">
                   SKU & Medicine
@@ -1222,20 +1379,26 @@ function OrderRequest() {
                       key={item.id}
                       className={`hover:bg-blue-50/30 transition-colors ${
                         isSelected
-                          ? "bg-blue-50/40"
+                          ? "bg-blue-50/20"
                           : item.currentStock <= item.minimumLevel
                             ? "bg-red-50/15"
                             : ""
                       }`}
                     >
                       {/* Checkbox */}
-                      <td className="px-4 py-4 whitespace-nowrap text-center">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleSelectSku(item.id)}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                        />
+                      <td className="px-4 py-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleSelectSku(item.id)}
+                          className="text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
+                          aria-label={`Select SKU ${item.sku}`}
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-blue-600" />
+                          ) : (
+                            <Square className="w-4 h-4" />
+                          )}
+                        </button>
                       </td>
 
                       {/* SKU & Drug Info */}
@@ -1392,20 +1555,24 @@ function OrderRequest() {
         size="4xl"
       >
         <form onSubmit={handleSubmitOrder} className="space-y-4">
-          {/* Linked Restock Request Banner if applicable */}
-          {orderForm.restockRequestId && (
-            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-blue-50/80 border border-blue-200 text-xs text-blue-900">
-              <ClipboardList className="w-4.5 h-4.5 text-blue-600 shrink-0" />
-              <div className="min-w-0 flex-1">
-                <span className="font-bold block">
-                  Fulfilling Pharmacist Restock Request #{orderForm.restockRequestId}
-                </span>
-                <span className="text-[11px] text-blue-700 font-medium">
-                  Submitting this order will link and mark the pharmacist request as fulfilled.
-                </span>
+          {/* Linked Restock Requests Banner if applicable */}
+          {orderForm.restockRequestIds &&
+            orderForm.restockRequestIds.length > 0 && (
+              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-blue-50/80 border border-blue-200 text-xs text-blue-900">
+                <ClipboardList className="w-4.5 h-4.5 text-blue-600 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <span className="font-bold block">
+                    Fulfilling ({orderForm.restockRequestIds.length}) Pharmacist
+                    Restock Request
+                    {orderForm.restockRequestIds.length > 1 ? "s" : ""}
+                  </span>
+                  <span className="text-[11px] text-blue-700 font-medium">
+                    Submitting this consolidated purchase order will fulfill and
+                    link requests #{orderForm.restockRequestIds.join(", #")}.
+                  </span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Supplier, Facility & Priority Header Controls */}
           <div className="p-4 rounded-xl bg-gray-50 border border-gray-200/80 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -1920,6 +2087,253 @@ function OrderRequest() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* 4. MODAL: VIEW RESTOCK REQUEST DETAILS                   */}
+      {/* ======================================================== */}
+      <Modal
+        isOpen={modalMode === "view_restock" && Boolean(selectedRestockForView)}
+        onClose={handleCloseModal}
+        title="Pharmacist Restock Request Details"
+        size="lg"
+      >
+        {selectedRestockForView && (() => {
+          const matchedSku =
+            currentFacilitySkus.find(
+              (s) =>
+                s.id === selectedRestockForView.skuId ||
+                s.sku === selectedRestockForView.skuName,
+            ) ||
+            skuList.find(
+              (s) =>
+                s.id === selectedRestockForView.skuId ||
+                s.sku === selectedRestockForView.skuName,
+            );
+
+          const isStockCritical =
+            matchedSku && matchedSku.currentStock <= matchedSku.minimumLevel;
+          const isStockReorder =
+            matchedSku && matchedSku.currentStock <= matchedSku.reorderLevel;
+
+          return (
+            <div className="space-y-4 text-xs">
+              {/* Top Banner / Header Status */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl bg-blue-50/80 border border-blue-200">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white font-bold shrink-0">
+                    <ClipboardList className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-gray-900 text-sm">
+                        Request #{selectedRestockForView.id}
+                      </span>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                        Pending Fulfillment
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-gray-500">
+                      Pharmacist Replenishment Submission
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block">
+                    Target Facility
+                  </span>
+                  <span className="font-semibold text-gray-800 flex items-center justify-end gap-1">
+                    <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                    {selectedRestockForView.facilityName || currentFacilityName}
+                  </span>
+                </div>
+              </div>
+
+              {/* Requester & Submission Metadata */}
+              <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-gray-50 border border-gray-100">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">
+                    Requested By
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">
+                      <User className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900 leading-tight">
+                        {selectedRestockForView.userName || "Pharmacy Staff"}
+                      </p>
+                      <p className="text-[11px] text-gray-500">Pharmacist</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">
+                    Submission Timestamp
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center font-bold text-xs shrink-0">
+                      <Calendar className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900 leading-tight">
+                        {selectedRestockForView.createdAt
+                          ? new Date(
+                              selectedRestockForView.createdAt,
+                            ).toLocaleDateString(undefined, {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            })
+                          : "N/A"}
+                      </p>
+                      <p className="text-[11px] text-gray-500">
+                        {selectedRestockForView.createdAt
+                          ? new Date(
+                              selectedRestockForView.createdAt,
+                            ).toLocaleTimeString(undefined, {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : ""}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Target Medication Information */}
+              <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-xs space-y-3">
+                <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">
+                  Requested Medication & SKU
+                </span>
+
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+                    <Pill className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-bold text-sm text-gray-900">
+                        {selectedRestockForView.brandName ||
+                          selectedRestockForView.skuName}
+                      </h4>
+                      <span className="font-mono text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-bold">
+                        {selectedRestockForView.skuName}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 mt-0.5 font-medium">
+                      {selectedRestockForView.genericName ||
+                        matchedSku?.genericName ||
+                        "Generic formula unrecorded"}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500">
+                      <span>
+                        {selectedRestockForView.dosageForm ||
+                          matchedSku?.dosageForm ||
+                          "Dosage form N/A"}
+                      </span>
+                      <span>•</span>
+                      <span>
+                        {selectedRestockForView.packagingUnit ||
+                          matchedSku?.packagingUnit ||
+                          "Unit"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stock vs Requirement Metrics */}
+                <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-gray-100 text-center">
+                  <div className="p-2.5 rounded-lg bg-blue-50/60 border border-blue-100">
+                    <span className="text-[10px] uppercase font-bold text-blue-700 block">
+                      Requested Units
+                    </span>
+                    <span className="font-extrabold text-blue-900 text-base">
+                      {selectedRestockForView.requestedUnits}
+                    </span>
+                    <span className="text-[10px] text-blue-600 block">
+                      units
+                    </span>
+                  </div>
+
+                  <div
+                    className={`p-2.5 rounded-lg border ${
+                      isStockCritical
+                        ? "bg-red-50 border-red-100 text-red-900"
+                        : isStockReorder
+                        ? "bg-amber-50 border-amber-100 text-amber-900"
+                        : "bg-gray-50 border-gray-100 text-gray-900"
+                    }`}
+                  >
+                    <span className="text-[10px] uppercase font-bold text-gray-500 block">
+                      Current Stock
+                    </span>
+                    <span className="font-bold text-base">
+                      {matchedSku ? matchedSku.currentStock : "—"}
+                    </span>
+                    <span className="text-[10px] text-gray-500 block">
+                      {isStockCritical
+                        ? "Critical stock"
+                        : isStockReorder
+                        ? "Under reorder"
+                        : "Current level"}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-gray-50 border border-gray-100">
+                    <span className="text-[10px] uppercase font-bold text-gray-500 block">
+                      Reorder Threshold
+                    </span>
+                    <span className="font-bold text-base text-gray-800">
+                      {matchedSku ? matchedSku.reorderLevel : "—"}
+                    </span>
+                    <span className="text-[10px] text-gray-500 block">
+                      Min: {matchedSku ? matchedSku.minimumLevel : "—"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Full Clinical Justification / Remarks */}
+              <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-200/80 space-y-1.5">
+                <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider block">
+                  Clinical Justification & Remarks
+                </span>
+                <p className="text-xs text-gray-800 bg-white p-3 rounded-lg border border-gray-200/60 italic leading-relaxed whitespace-pre-wrap">
+                  {selectedRestockForView.reason
+                    ? `"${selectedRestockForView.reason}"`
+                    : "No specific clinical notes or justification provided."}
+                </p>
+              </div>
+
+              {/* Action Buttons in Modal Footer */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="btn-secondary text-xs"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const reqToProcess = selectedRestockForView;
+                    handleCloseModal();
+                    handleProcessRestockRequests([reqToProcess]);
+                  }}
+                  className="btn-primary text-xs flex items-center gap-1.5"
+                >
+                  <ShoppingCart className="w-3.5 h-3.5" />
+                  <span>Process into PO</span>
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
     </div>
   );

@@ -101,15 +101,6 @@ public class OrderService {
         savedOrder.setPurchaseOrderNum(formattedPoNumber);
         savedOrder = orderRepository.save(savedOrder);
 
-        // If this purchase order fulfills a Pharmacist Restock Request, link it
-        if (request.getRestockRequestId() != null) {
-            final Order orderForRestock = savedOrder;
-            restockRequestRepository.findById(request.getRestockRequestId()).ifPresent(rr -> {
-                rr.setOrder(orderForRestock);
-                restockRequestRepository.save(rr);
-            });
-        }
-
         List<OrderedItem> orderedItems = new ArrayList<>();
         List<OrderItemResponseDto> itemResponses = new ArrayList<>();
 
@@ -129,6 +120,24 @@ public class OrderService {
         List<OrderedItem> savedItems = orderedItemRepository.saveAll(orderedItems);
         for (OrderedItem savedItem : savedItems) {
             itemResponses.add(mapToItemResponseDto(savedItem));
+        }
+
+        // If this purchase order fulfills Pharmacist Restock Requests, link them to the Order and matching OrderedItem
+        if (request.getRestockRequestIds() != null && !request.getRestockRequestIds().isEmpty()) {
+            final Order orderForRestock = savedOrder;
+            for (Long rId : request.getRestockRequestIds()) {
+                if (rId == null) continue;
+                restockRequestRepository.findById(rId).ifPresent(rr -> {
+                    rr.setOrder(orderForRestock);
+                    if (rr.getSku() != null) {
+                        savedItems.stream()
+                                .filter(si -> si.getSku() != null && si.getSku().getId().equals(rr.getSku().getId()))
+                                .findFirst()
+                                .ifPresent(rr::setOrderedItem);
+                    }
+                    restockRequestRepository.save(rr);
+                });
+            }
         }
 
         OrderResponseDto response = mapToOrderResponseDto(savedOrder, itemResponses);

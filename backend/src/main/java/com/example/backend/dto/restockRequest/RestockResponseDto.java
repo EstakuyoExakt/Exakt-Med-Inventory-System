@@ -27,6 +27,7 @@ public class RestockResponseDto {
     private Long requestedUnits;
     private String reason;
     private Long orderId;
+    private Long orderedItemId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String message;
