@@ -53,15 +53,14 @@ export const DEFAULT_SUPPLIER_FORM = {
 // ==========================================
 export const ADJUSTMENT_REASONS = [
   "Dispensed",
-  "Physical Cycle Count Discrepancy",
-  "Damaged Goods / Packaging Compromised",
-  "Spillage / Broken Ampoules",
-  "Internal Quality Audit Adjustment",
-  "Clinical Sample / Laboratory Use",
+  "Count Discrepancy",
+  "Packaging Compromised",
+  "Damaged Goods",
+  "Audit Adjustment",
+  "Clinical Sample",
   "Return from Department",
   "Other Correction",
 ];
-
 
 // ==========================================
 // SKU Management & Stock Actions

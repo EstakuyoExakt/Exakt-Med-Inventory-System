@@ -11,7 +11,6 @@ import {
   Trash2,
   Sliders,
   Pencil,
-  ArrowRightLeft,
   Building2,
   PackagePlus,
 } from "lucide-react";
@@ -292,7 +291,7 @@ function SkuManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
-  // Modal State: 'add' | 'view' | 'edit' | 'delete' | 'adjust' | 'transfer' | 'restock' | null
+  // Modal State: 'add' | 'view' | 'edit' | 'delete' | 'adjust' | 'restock' | null
   const [modalMode, setModalMode] = useState(null);
   const [selectedSku, setSelectedSku] = useState(null);
   const [formData, setFormData] = useState(DEFAULT_SKU_FORM_DATA);
@@ -379,11 +378,6 @@ function SkuManagement() {
     DEFAULT_STOCK_ADJUSTMENT,
   );
 
-  const [transferFormData, setTransferFormData] = useState({
-    targetLocation: facilities[1]?.name || "Exakt Northside Medical Wing",
-    transferQuantity: 10,
-    notes: "",
-  });
 
   // Filter SKUs that reference the current active facility
   const currentFacilitySkus = useMemo(() => {
@@ -595,20 +589,6 @@ function SkuManagement() {
     setModalMode("adjust");
   };
 
-  const handleOpenTransferModal = (skuItem) => {
-    setSelectedSku(skuItem);
-    const availableFacilities = facilities.filter(
-      (f) => f.name !== currentFacilityName,
-    );
-    setTransferFormData({
-      targetLocation:
-        availableFacilities[0]?.name || "Exakt Northside Medical Wing",
-      transferQuantity: Math.min(50, skuItem.currentStock || 10),
-      notes: "",
-    });
-    clearErrors();
-    setModalMode("transfer");
-  };
 
   const handleOpenRestockModal = (skuItem = null) => {
     if (skuItem && skuItem.id) {
@@ -902,69 +882,6 @@ function SkuManagement() {
     handleCloseModal();
   };
 
-  // Submit Transfer Stock Action
-  const handleSaveTransferStock = (e) => {
-    e.preventDefault();
-    if (!selectedSku) return;
-
-    const errors = {};
-    const transferQty = Number(transferFormData.transferQuantity);
-
-    if (!transferFormData.targetLocation) {
-      errors.targetLocation = "Please select a destination facility.";
-    } else if (transferFormData.targetLocation === currentFacilityName) {
-      errors.targetLocation =
-        "Destination facility cannot be the same as origin.";
-    }
-
-    if (isNaN(transferQty) || transferQty <= 0) {
-      errors.transferQuantity = "Transfer quantity must be greater than 0.";
-    } else if (transferQty > selectedSku.currentStock) {
-      errors.transferQuantity = `Cannot transfer more than available stock (${selectedSku.currentStock}).`;
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      return;
-    }
-
-    // Deduct stock from origin SKU and add/create in destination facility
-    setSkuList((prev) => {
-      // 1. Deduct from origin SKU
-      const updated = prev.map((s) =>
-        s.id === selectedSku.id
-          ? { ...s, currentStock: Math.max(0, s.currentStock - transferQty) }
-          : s,
-      );
-
-      // 2. Check if target facility already has this SKU code
-      const targetExistingIndex = updated.findIndex(
-        (s) =>
-          s.sku === selectedSku.sku &&
-          s.facility === transferFormData.targetLocation,
-      );
-
-      if (targetExistingIndex !== -1) {
-        updated[targetExistingIndex] = {
-          ...updated[targetExistingIndex],
-          currentStock: updated[targetExistingIndex].currentStock + transferQty,
-        };
-      } else {
-        // Create new SKU entry in target facility with transferred stock
-        updated.push({
-          ...selectedSku,
-          id: Date.now(),
-          facility: transferFormData.targetLocation,
-          currentStock: transferQty,
-          createdAt: new Date().toISOString().split("T")[0],
-        });
-      }
-
-      return updated;
-    });
-
-    handleCloseModal();
-  };
 
   return (
     <div className="w-full max-w-full space-y-6">
@@ -1308,16 +1225,6 @@ function SkuManagement() {
                             <Sliders className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* 2. Transfer Stock to Facility (Batch Action) */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenTransferModal(item)}
-                            className="btn-secondary p-1.5 text-gray-600 hover:text-purple-600 hover:border-purple-300"
-                            title="Transfer Stock to Another Facility"
-                            aria-label="Transfer Stock"
-                          >
-                            <ArrowRightLeft className="w-3.5 h-3.5" />
-                          </button>
 
                           {/* 3. Request Restock */}
                           <button
@@ -1907,147 +1814,6 @@ function SkuManagement() {
         )}
       </Modal>
 
-      {/* ======================================================== */}
-      {/* 3. TRANSFER STOCK MODAL                                  */}
-      {/* ======================================================== */}
-      <Modal
-        isOpen={modalMode === "transfer" && Boolean(selectedSku)}
-        onClose={handleCloseModal}
-        title="Transfer Stock between Facilities"
-        size="md"
-      >
-        {selectedSku && (
-          <form onSubmit={handleSaveTransferStock} className="space-y-4">
-            {/* Origin SKU Card */}
-            <div className="p-3.5 rounded-xl bg-purple-50/50 border border-purple-100 text-xs space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-purple-900 text-sm">
-                  {selectedSku.brandName}
-                </span>
-                <span className="font-bold text-gray-900">
-                  {selectedSku.currentStock} units available
-                </span>
-              </div>
-              <p className="text-purple-700 font-mono font-bold">
-                {selectedSku.sku}
-              </p>
-              <p className="text-gray-500">
-                {selectedSku.genericName} • {selectedSku.dosage} (
-                {selectedSku.packagingUnit})
-              </p>
-              <p className="text-purple-800 font-semibold flex items-center gap-1 pt-1">
-                <Building2 className="w-3.5 h-3.5 text-purple-600" /> Origin
-                Facility: {selectedSku.facility || currentFacilityName}
-              </p>
-            </div>
-
-            {/* Target Destination Facility */}
-            <div>
-              <label
-                htmlFor="sku-transfer-target"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Destination Facility / Branch{" "}
-                <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="sku-transfer-target"
-                value={transferFormData.targetLocation}
-                onChange={(e) =>
-                  setTransferFormData((prev) => ({
-                    ...prev,
-                    targetLocation: e.target.value,
-                  }))
-                }
-                className="input"
-              >
-                {facilities
-                  .filter((f) => f.name !== currentFacilityName)
-                  .map((f) => (
-                    <option key={f.id} value={f.name}>
-                      {f.name}
-                    </option>
-                  ))}
-              </select>
-              {formErrors.targetLocation && (
-                <p className="text-xs text-red-500 mt-1">
-                  {formErrors.targetLocation}
-                </p>
-              )}
-            </div>
-
-            {/* Quantity to Transfer */}
-            <div>
-              <label
-                htmlFor="sku-transfer-qty"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Quantity to Transfer <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="sku-transfer-qty"
-                type="number"
-                min="1"
-                max={selectedSku.currentStock}
-                value={transferFormData.transferQuantity}
-                onChange={(e) =>
-                  setTransferFormData((prev) => ({
-                    ...prev,
-                    transferQuantity: Number(e.target.value),
-                  }))
-                }
-                className="input"
-              />
-              <p className="text-[11px] text-gray-400 mt-1">
-                Max transferable from current stock: {selectedSku.currentStock}{" "}
-                units
-              </p>
-              {formErrors.transferQuantity && (
-                <p className="text-xs text-red-500 mt-1">
-                  {formErrors.transferQuantity}
-                </p>
-              )}
-            </div>
-
-            {/* Transfer Notes */}
-            <div>
-              <label
-                htmlFor="sku-transfer-notes"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Transfer Reference / Waybill (Optional)
-              </label>
-              <input
-                id="sku-transfer-notes"
-                type="text"
-                value={transferFormData.notes}
-                onChange={(e) =>
-                  setTransferFormData((prev) => ({
-                    ...prev,
-                    notes: e.target.value.toUpperCase(),
-                  }))
-                }
-                placeholder="e.g. TRF-2026-0089 — BRANCH REPLENISHMENT"
-                className="input uppercase"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={handleCloseModal}
-                className="btn-secondary"
-              >
-                Cancel
-              </button>
-              <button type="submit" className="btn-primary">
-                <ArrowRightLeft className="w-4 h-4" />
-                <span>Execute Transfer</span>
-              </button>
-            </div>
-          </form>
-        )}
-      </Modal>
 
       {/* ======================================================== */}
       {/* 4. VIEW SKU DETAILS MODAL                                */}
