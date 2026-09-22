@@ -103,13 +103,15 @@ public class BatchService {
 
         Batch savedBatch = batchRepository.save(batch);
 
-        // INCREMENT SKU UNITS using OrderedItem orderedUnits
-        Sku sku = orderedItem.getSku();
-        if (sku != null) {
-            long currentUnits = sku.getUnits() != null ? sku.getUnits() : 0L;
-            long orderedUnits = orderedItem.getOrderedUnits() != null ? orderedItem.getOrderedUnits() : 0L;
-            sku.setUnits(currentUnits + orderedUnits);
-            skuRepository.save(sku);
+        // INCREMENT SKU UNITS only if status is Available (quarantined batches do not increment active SKU units)
+        if (savedBatch.getStatus() == Batch.Status.Available) {
+            Sku sku = orderedItem.getSku();
+            if (sku != null) {
+                long currentUnits = sku.getUnits() != null ? sku.getUnits() : 0L;
+                long unitsToAdd = savedBatch.getUnits() != null ? savedBatch.getUnits() : 0L;
+                sku.setUnits(currentUnits + unitsToAdd);
+                skuRepository.save(sku);
+            }
         }
 
         // UPDATE ORDER STATUS TO RECEIVED
@@ -173,9 +175,34 @@ public class BatchService {
         Batch batch = batchRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Batch not found with id: " + id));
 
-        if (status != null) {
+        Batch.Status oldStatus = batch.getStatus();
+        if (status != null && status != oldStatus) {
             batch.setStatus(status);
+
+            // If released from Quarantined to Available, add units to active SKU inventory
+            if (oldStatus == Batch.Status.Quarantined && status == Batch.Status.Available) {
+                OrderedItem item = batch.getOrderedItem();
+                if (item != null && item.getSku() != null) {
+                    Sku sku = item.getSku();
+                    long currentUnits = sku.getUnits() != null ? sku.getUnits() : 0L;
+                    long unitsToAdd = batch.getUnits() != null ? batch.getUnits() : 0L;
+                    sku.setUnits(currentUnits + unitsToAdd);
+                    skuRepository.save(sku);
+                }
+            }
+            // If moved from Available to Quarantined, deduct units from active SKU inventory
+            else if (oldStatus == Batch.Status.Available && status == Batch.Status.Quarantined) {
+                OrderedItem item = batch.getOrderedItem();
+                if (item != null && item.getSku() != null) {
+                    Sku sku = item.getSku();
+                    long currentUnits = sku.getUnits() != null ? sku.getUnits() : 0L;
+                    long unitsToDeduct = batch.getUnits() != null ? batch.getUnits() : 0L;
+                    sku.setUnits(Math.max(0L, currentUnits - unitsToDeduct));
+                    skuRepository.save(sku);
+                }
+            }
         }
+
         if (notes != null) {
             batch.setNotes(notes.trim());
         }

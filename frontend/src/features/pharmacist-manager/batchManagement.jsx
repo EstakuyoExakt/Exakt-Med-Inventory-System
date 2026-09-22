@@ -51,6 +51,8 @@ function BatchManagement() {
   const [isBatchesLoading, setIsBatchesLoading] = useState(false);
   const [batchesError, setBatchesError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [updateStatusError, setUpdateStatusError] = useState(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSkuFilter, setSelectedSkuFilter] = useState("ALL");
@@ -388,7 +390,38 @@ function BatchManagement() {
     setModalMode(null);
     setSelectedBatch(null);
     setBulkDates({ manufacturingDate: "", expiryDate: "" });
+    setUpdateStatusError(null);
     clearErrors();
+  };
+
+  // Change batch status from Quarantined to Available
+  const handleReleaseFromQuarantine = async (batchId) => {
+    if (!batchId) return;
+    try {
+      setIsUpdatingStatus(true);
+      setUpdateStatusError(null);
+      const updatedDto = await batchService.updateBatchStatus(
+        batchId,
+        "Available",
+        "Released from quarantine by pharmacist",
+      );
+
+      const mapped = mapBatchDtoToItem(updatedDto);
+      setBatchList((prev) =>
+        prev.map((b) => (b.id === batchId ? mapped : b)),
+      );
+      setSelectedBatch(mapped);
+      fetchBatches();
+    } catch (err) {
+      console.error("Failed to release batch from quarantine:", err);
+      setUpdateStatusError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to update batch status to Available.",
+      );
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   };
 
   // When PO is chosen in dropdown, auto-populate SKU items so each gets its own batch
@@ -1317,6 +1350,13 @@ function BatchManagement() {
       >
         {selectedBatch && (
           <div className="space-y-4">
+            {updateStatusError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{updateStatusError}</span>
+              </div>
+            )}
+
             {/* Header Card */}
             <div className="flex items-start gap-4 p-4 rounded-xl bg-gray-50 border border-gray-100">
               <div
@@ -1455,6 +1495,26 @@ function BatchManagement() {
               >
                 Close Dossier
               </button>
+              {selectedBatch.isQuarantined && (
+                <button
+                  type="button"
+                  onClick={() => handleReleaseFromQuarantine(selectedBatch.id)}
+                  disabled={isUpdatingStatus}
+                  className="btn-primary py-1.5 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white border-none flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs font-semibold"
+                >
+                  {isUpdatingStatus ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Releasing to Available...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Release to Available</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         )}
