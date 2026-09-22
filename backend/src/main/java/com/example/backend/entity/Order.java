@@ -15,7 +15,8 @@ public class Order {
     public enum Status {
         Pending,
         Approved,
-        Denied
+        Denied,
+        Received
     }
 
     @Id

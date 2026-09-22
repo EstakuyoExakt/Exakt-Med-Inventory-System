@@ -29,40 +29,28 @@ import useAuth from "../../hooks/useAuth";
 import useError from "../../hooks/useError";
 import { validateBatchForm } from "../../validators/batch.validator";
 
-// Data & Service Imports
-import { batches as initialBatches } from "../../data/batches";
-import { initialSkus } from "../../data/skuManagement";
-import { facilities } from "../../data/facility";
+// Service Imports
 import orderService from "../../services/order";
+import batchService from "../../services/batch";
 
 function BatchManagement() {
   const { facility } = useAuth();
 
   // Automatically detect current active facility from auth session
   const currentFacilityName = useMemo(() => {
-    return (
-      facility?.name || facilities[0]?.name || "Exakt Central General Hospital"
-    );
+    return facility?.name || "Hospital Facility";
   }, [facility]);
 
-  // Distribute initial lots across hospital facilities
-  const [batchList, setBatchList] = useState(() =>
-    initialBatches.map((b, idx) => {
-      const facilityOptions = facilities.map((f) => f.name);
-      const assignedLoc =
-        b.location ||
-        facilityOptions[idx % Math.min(4, facilityOptions.length)] ||
-        "Exakt Central General Hospital";
+  const activeFacilityId = useMemo(() => {
+    return facility?.id || 1;
+  }, [facility]);
 
-      return {
-        ...b,
-        location: assignedLoc,
-        isQuarantined: b.isQuarantined || false,
-        quarantineReason: b.quarantineReason || "",
-        quarantineDate: b.quarantineDate || "",
-      };
-    }),
-  );
+  // Real batches loaded directly from backend API (no mock data fallback)
+  const [batchList, setBatchList] = useState([]);
+
+  const [isBatchesLoading, setIsBatchesLoading] = useState(false);
+  const [batchesError, setBatchesError] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSkuFilter, setSelectedSkuFilter] = useState("ALL");
@@ -75,10 +63,15 @@ function BatchManagement() {
   const [modalMode, setModalMode] = useState(null);
   const [selectedBatch, setSelectedBatch] = useState(null);
 
-  // Filter batches to display ONLY those belonging to the CURRENT facility
+  // Filter batches to display only those belonging to the current facility
   const currentFacilityBatches = useMemo(() => {
-    return batchList.filter((b) => b.location === currentFacilityName);
-  }, [batchList, currentFacilityName]);
+    return batchList.filter(
+      (b) =>
+        (b.facilityId && b.facilityId === activeFacilityId) ||
+        !b.location ||
+        b.location === currentFacilityName,
+    );
+  }, [batchList, activeFacilityId, currentFacilityName]);
 
   // Form State for Receive Stock via PO (Individual batch per SKU)
   const getInitialReceiveFormData = () => ({
@@ -104,27 +97,26 @@ function BatchManagement() {
     clearError,
   } = useError();
 
-  // Helper map for SKU metadata lookup
-  const skuMetaMap = useMemo(() => {
-    const map = {};
-    initialSkus.forEach((s) => {
-      map[s.sku] = s;
-    });
-    return map;
-  }, []);
-
   // Live Approved Purchase Orders for Current Facility
   const [approvedOrders, setApprovedOrders] = useState([]);
   const [isOrdersLoading, setIsOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState(null);
 
-  const activeFacilityId = useMemo(() => {
-    return (
-      facility?.id ||
-      facilities.find((f) => f.name === currentFacilityName)?.id ||
-      1
+  // Dynamically extract unique SKUs from real batches for filtering
+  const availableSkus = useMemo(() => {
+    const skuMap = new Map();
+    currentFacilityBatches.forEach((b) => {
+      if (b.sku && !skuMap.has(b.sku)) {
+        skuMap.set(b.sku, {
+          sku: b.sku,
+          brandName: b.brandName || b.sku,
+        });
+      }
+    });
+    return Array.from(skuMap.values()).sort((a, b) =>
+      a.sku.localeCompare(b.sku),
     );
-  }, [facility, currentFacilityName]);
+  }, [currentFacilityBatches]);
 
   const normalizeApprovedOrder = useCallback(
     (po) => {
@@ -182,7 +174,11 @@ function BatchManagement() {
         "Approved",
       );
       if (Array.isArray(data)) {
-        setApprovedOrders(data.map(normalizeApprovedOrder));
+        setApprovedOrders(
+          data
+            .filter((po) => po.status === "Approved")
+            .map(normalizeApprovedOrder),
+        );
       } else {
         setApprovedOrders([]);
       }
@@ -202,6 +198,75 @@ function BatchManagement() {
   useEffect(() => {
     fetchApprovedOrders();
   }, [fetchApprovedOrders]);
+
+  // Convert backend BatchResponseDto to table display model
+  const mapBatchDtoToItem = useCallback(
+    (dto) => {
+      const isQuarantined = dto.status === "Quarantined";
+      return {
+        id: dto.id,
+        batchNumber: dto.batchNum,
+        sku: dto.skuName || `SKU-${dto.skuId || ""}`,
+        brandName: dto.brandName || "Medicine",
+        genericName: dto.genericName || "—",
+        dosageForm: dto.dosageForm || "—",
+        packagingUnit: dto.packagingUnit || "—",
+        manufacturingDate: dto.manufactureDate,
+        expiryDate: dto.expiryDate,
+        quantity: Number(dto.units ?? dto.quantity) || 0,
+        units: Number(dto.units ?? dto.quantity) || 0,
+        location: dto.facilityName || currentFacilityName,
+        facilityId: dto.facilityId,
+        poReference:
+          dto.poNumber ||
+          (dto.orderId
+            ? `PO-${String(dto.orderId).padStart(5, "0")}`
+            : "Direct Receipt"),
+        isQuarantined,
+        quarantineReason: isQuarantined
+          ? dto.notes || "Quality inspection hold"
+          : "",
+        quarantineDate: dto.receivedAt ? dto.receivedAt.split("T")[0] : "",
+        quarantineNotes: dto.notes || "",
+        status: dto.status,
+        receivedAt: dto.receivedAt,
+        orderedItemId: dto.orderedItemId,
+      };
+    },
+    [currentFacilityName],
+  );
+
+  // Fetch batches for current active facility from backend
+  const fetchBatches = useCallback(async () => {
+    if (!activeFacilityId) {
+      setBatchList([]);
+      return;
+    }
+    try {
+      setIsBatchesLoading(true);
+      setBatchesError(null);
+      const data = await batchService.getBatchesByFacility(activeFacilityId);
+      if (Array.isArray(data)) {
+        setBatchList(data.map(mapBatchDtoToItem));
+      } else {
+        setBatchList([]);
+      }
+    } catch (err) {
+      console.error("Failed to load batches from server:", err);
+      setBatchesError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to load batches from server.",
+      );
+      setBatchList([]);
+    } finally {
+      setIsBatchesLoading(false);
+    }
+  }, [activeFacilityId, mapBatchDtoToItem]);
+
+  useEffect(() => {
+    fetchBatches();
+  }, [fetchBatches]);
 
   // Selected PO Details lookup from real approved orders
   const selectedPoDetails = useMemo(() => {
@@ -233,9 +298,8 @@ function BatchManagement() {
   // Filtered Batches for Current Facility
   const filteredBatches = useMemo(() => {
     return currentFacilityBatches.filter((batch) => {
-      const skuData = skuMetaMap[batch.sku] || {};
-      const brandName = batch.brandName || skuData.brandName || "";
-      const genericName = batch.genericName || skuData.genericName || "";
+      const brandName = batch.brandName || "";
+      const genericName = batch.genericName || "";
 
       const matchesSearch =
         batch.batchNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -273,7 +337,6 @@ function BatchManagement() {
     selectedSkuFilter,
     selectedExpiryFilter,
     selectedStatusFilter,
-    skuMetaMap,
   ]);
 
   // Pagination calculation
@@ -405,7 +468,7 @@ function BatchManagement() {
   };
 
   // Submit Received Batches: creates a distinct batch intake per SKU
-  const handleSaveReceivedBatch = (e) => {
+  const handleSaveReceivedBatch = async (e) => {
     e.preventDefault();
 
     if (!receiveFormData.poNumber) {
@@ -433,30 +496,45 @@ function BatchManagement() {
       return;
     }
 
-    // Create a distinct batch intake for every SKU inside the purchase order
-    const newBatches = receiveFormData.items.map((item, idx) => ({
-      id: Date.now() + idx,
-      batchNumber: item.batchNumber.trim().toUpperCase(),
-      sku: item.sku,
-      brandName: item.brandName,
-      genericName: item.genericName,
-      dosageForm: item.dosageForm,
-      packagingUnit: item.packagingUnit,
-      manufacturingDate: item.manufacturingDate,
-      expiryDate: item.expiryDate,
-      quantity: Number(item.quantity) || 0,
-      location: currentFacilityName, // Automatically saved to current facility
-      poReference: selectedPoDetails.orderNumber,
-      isQuarantined: Boolean(item.isQuarantined),
-      quarantineReason: item.isQuarantined ? "Quality inspection hold" : "",
-      quarantineDate: item.isQuarantined
-        ? new Date().toISOString().split("T")[0]
-        : "",
-      quarantineNotes: item.isQuarantined ? (item.quarantineNotes || "") : "",
-    }));
+    try {
+      setIsSubmitting(true);
+      clearErrors();
 
-    setBatchList((prev) => [...newBatches, ...prev]);
-    handleCloseModal();
+      // Format payload for backend batch bulk endpoint
+      const batchPayload = receiveFormData.items.map((item) => ({
+        facilityId: activeFacilityId,
+        orderedItemId: item.orderedItemId || item.id,
+        batchNum: item.batchNumber.trim().toUpperCase(),
+        manufactureDate: item.manufacturingDate,
+        expiryDate: item.expiryDate,
+        status: item.isQuarantined ? "Quarantined" : "Available",
+        notes: item.isQuarantined
+          ? item.quarantineNotes || "Quality inspection hold"
+          : null,
+      }));
+
+      // Call backend bulk batch intake API (this increments Sku.units by orderedItem.orderedUnits)
+      const savedBatchDtos = await batchService.receiveBatchesBulk(batchPayload);
+
+      if (Array.isArray(savedBatchDtos) && savedBatchDtos.length > 0) {
+        const newlyCreated = savedBatchDtos.map(mapBatchDtoToItem);
+        setBatchList((prev) => [...newlyCreated, ...prev]);
+      }
+
+      // Re-fetch batches and orders to synchronize frontend state
+      await Promise.all([fetchBatches(), fetchApprovedOrders()]);
+
+      handleCloseModal();
+    } catch (err) {
+      console.error("Failed to receive batch:", err);
+      const serverMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to receive batch. Please verify batch numbers and dates.";
+      setFormErrors({ general: serverMessage });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -600,9 +678,9 @@ function BatchManagement() {
               className="input py-2 text-xs w-full sm:w-48"
             >
               <option value="ALL">All SKUs</option>
-              {initialSkus.map((s) => (
+              {availableSkus.map((s) => (
                 <option key={s.sku} value={s.sku}>
-                  {s.sku} ({s.brandName})
+                  {s.sku} {s.brandName ? `(${s.brandName})` : ""}
                 </option>
               ))}
             </select>
@@ -656,9 +734,20 @@ function BatchManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {paginatedBatches.length > 0 ? (
+              {isBatchesLoading ? (
+                <tr>
+                  <td
+                    colSpan="5"
+                    className="px-6 py-12 text-center text-gray-400"
+                  >
+                    <Loader2 className="w-8 h-8 mx-auto mb-2 text-blue-500 animate-spin" />
+                    <p className="text-sm font-medium text-gray-600">
+                      Loading batches for {currentFacilityName}...
+                    </p>
+                  </td>
+                </tr>
+              ) : paginatedBatches.length > 0 ? (
                 paginatedBatches.map((batch) => {
-                  const skuData = skuMetaMap[batch.sku] || {};
                   const expInfo = getExpiryStatus(batch.expiryDate);
 
                   return (
@@ -694,18 +783,12 @@ function BatchManagement() {
                               </span>
                             </div>
                             <div className="text-xs text-gray-500 font-medium mt-0.5">
-                              {batch.brandName ||
-                                skuData.brandName ||
-                                "Medicine"}{" "}
+                              {batch.brandName || "Medicine"}{" "}
                               <span className="text-gray-400 font-normal">
                                 (
-                                {batch.genericName ||
-                                  skuData.genericName ||
-                                  "—"}{" "}
+                                {batch.genericName || "—"}{" "}
                                 •{" "}
-                                {batch.dosageForm ||
-                                  skuData.dosage ||
-                                  "Standard"}
+                                {batch.dosageForm || "Standard"}
                                 )
                               </span>
                             </div>
@@ -722,7 +805,7 @@ function BatchManagement() {
                           </span>
                         </div>
                         <div className="text-[11px] text-gray-400 mt-0.5">
-                          {skuData.packagingUnit || "Standard Packaging"}
+                          {batch.packagingUnit || "Standard Packaging"}
                         </div>
                       </td>
 
@@ -822,6 +905,13 @@ function BatchManagement() {
         size="4xl"
       >
         <form onSubmit={handleSaveReceivedBatch} className="space-y-4">
+          {formErrors.general && (
+            <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              <span>{formErrors.general}</span>
+            </div>
+          )}
+
           {/* PO Number Dropdown */}
           <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200">
             {isOrdersLoading ? (
@@ -1188,17 +1278,29 @@ function BatchManagement() {
             <button
               type="submit"
               disabled={
-                !selectedPoDetails || !receiveFormData.items || receiveFormData.items.length === 0
+                isSubmitting ||
+                !selectedPoDetails ||
+                !receiveFormData.items ||
+                receiveFormData.items.length === 0
               }
-              className="btn-primary flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-primary flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>
-                Confirm Stock Receipt
-                {receiveFormData.items?.length > 1
-                  ? ` (All ${receiveFormData.items.length} Medicines)`
-                  : ""}
-              </span>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Recording Stock...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>
+                    Confirm Stock Receipt
+                    {receiveFormData.items?.length > 1
+                      ? ` (All ${receiveFormData.items.length} Medicines)`
+                      : ""}
+                  </span>
+                </>
+              )}
             </button>
           </div>
         </form>
@@ -1238,10 +1340,10 @@ function BatchManagement() {
                   </span>
                 </div>
                 <p className="text-xs text-gray-600 mt-0.5 font-medium">
-                  {skuMetaMap[selectedBatch.sku]?.brandName || "Medicine"}{" "}
+                  {selectedBatch.brandName || "Medicine"}{" "}
                   <span className="text-gray-400 font-normal">
-                    ({skuMetaMap[selectedBatch.sku]?.genericName} •{" "}
-                    {skuMetaMap[selectedBatch.sku]?.dosage})
+                    ({selectedBatch.genericName || "—"} •{" "}
+                    {selectedBatch.dosageForm || "Standard"})
                   </span>
                 </p>
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
