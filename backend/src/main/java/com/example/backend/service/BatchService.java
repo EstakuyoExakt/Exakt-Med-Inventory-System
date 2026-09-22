@@ -12,10 +12,12 @@ import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.OrderRepository;
 import com.example.backend.repository.OrderedItemRepository;
 import com.example.backend.repository.SkuRepository;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -140,12 +142,15 @@ public class BatchService {
     }
 
     // 3. GET ALL BATCHES BY FACILITY (with optional Status filter)
-    @Transactional(readOnly = true)
+    @Transactional
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Pharmacist', 'Procurement')")
     public List<BatchResponseDto> getBatchesByFacility(Long facilityId, Batch.Status status) {
         if (facilityId == null) {
             throw new RuntimeException("Facility ID is required.");
         }
+
+        // Auto-expire any batches whose expiry date has passed and deduct SKU units
+        processExpiredBatches();
 
         List<Batch> batches;
         if (status != null) {
@@ -168,7 +173,7 @@ public class BatchService {
         return mapToResponseDto(batch);
     }
 
-    // 5. UPDATE BATCH STATUS & NOTES (Quarantine / Release)
+    // 5. UPDATE BATCH STATUS & NOTES (Quarantine / Release / Expiry)
     @Transactional
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Pharmacist')")
     public BatchResponseDto updateBatchStatus(Long id, Batch.Status status, String notes) {
@@ -179,28 +184,24 @@ public class BatchService {
         if (status != null && status != oldStatus) {
             batch.setStatus(status);
 
-            // If released from Quarantined to Available, add units to active SKU inventory
+            // 1. Quarantined -> Available: add units to active SKU inventory
             if (oldStatus == Batch.Status.Quarantined && status == Batch.Status.Available) {
-                OrderedItem item = batch.getOrderedItem();
-                if (item != null && item.getSku() != null) {
-                    Sku sku = item.getSku();
-                    long currentUnits = sku.getUnits() != null ? sku.getUnits() : 0L;
-                    long unitsToAdd = batch.getUnits() != null ? batch.getUnits() : 0L;
-                    sku.setUnits(currentUnits + unitsToAdd);
-                    skuRepository.save(sku);
-                }
+                adjustSkuUnits(batch, batch.getUnits());
             }
-            // If moved from Available to Quarantined, deduct units from active SKU inventory
+            // 2. Available -> Quarantined: deduct units from active SKU inventory
             else if (oldStatus == Batch.Status.Available && status == Batch.Status.Quarantined) {
-                OrderedItem item = batch.getOrderedItem();
-                if (item != null && item.getSku() != null) {
-                    Sku sku = item.getSku();
-                    long currentUnits = sku.getUnits() != null ? sku.getUnits() : 0L;
-                    long unitsToDeduct = batch.getUnits() != null ? batch.getUnits() : 0L;
-                    sku.setUnits(Math.max(0L, currentUnits - unitsToDeduct));
-                    skuRepository.save(sku);
-                }
+                adjustSkuUnits(batch, -batch.getUnits());
             }
+            // 3. Available -> Expired: deduct units from active SKU inventory
+            else if (oldStatus == Batch.Status.Available && status == Batch.Status.Expired) {
+                adjustSkuUnits(batch, -batch.getUnits());
+            }
+            // 4. Expired -> Available: add units back if mistakenly marked expired
+            else if (oldStatus == Batch.Status.Expired && status == Batch.Status.Available) {
+                adjustSkuUnits(batch, batch.getUnits());
+            }
+            // Note: transitions between Quarantined and Expired do not affect active SKU inventory,
+            // as neither state's units are counted toward active Sku.units.
         }
 
         if (notes != null) {
@@ -209,6 +210,45 @@ public class BatchService {
 
         Batch updated = batchRepository.save(batch);
         return mapToResponseDto(updated);
+    }
+
+    // 6. PROCESS EXPIRED BATCHES (Deducts SKU units & sets status to Expired)
+    @Transactional
+    public int processExpiredBatches() {
+        LocalDate today = LocalDate.now();
+        List<Batch> expiredBatches = batchRepository.findByStatusAndExpiryDateLessThanEqual(
+                Batch.Status.Available, today);
+
+        for (Batch batch : expiredBatches) {
+            batch.setStatus(Batch.Status.Expired);
+            adjustSkuUnits(batch, -batch.getUnits());
+            String autoNote = "Auto-expired on " + today;
+            if (batch.getNotes() == null || batch.getNotes().isBlank()) {
+                batch.setNotes(autoNote);
+            } else {
+                batch.setNotes(batch.getNotes() + " | " + autoNote);
+            }
+            batchRepository.save(batch);
+        }
+        return expiredBatches.size();
+    }
+
+    // 7. SCHEDULED DAILY MIDNIGHT EXPIRATION RUN
+    @Scheduled(cron = "0 0 0 * * ?")
+    public void autoExpireBatchesScheduled() {
+        processExpiredBatches();
+    }
+
+    // HELPER: ADJUST ACTIVE SKU UNITS
+    private void adjustSkuUnits(Batch batch, long delta) {
+        OrderedItem item = batch.getOrderedItem();
+        if (item != null && item.getSku() != null) {
+            Sku sku = item.getSku();
+            long currentUnits = sku.getUnits() != null ? sku.getUnits() : 0L;
+            long newUnits = Math.max(0L, currentUnits + delta);
+            sku.setUnits(newUnits);
+            skuRepository.save(sku);
+        }
     }
 
     // MAPPER HELPER

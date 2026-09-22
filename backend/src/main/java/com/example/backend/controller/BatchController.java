@@ -49,12 +49,19 @@ public class BatchController {
         return ResponseEntity.ok(batchService.getBatchById(id));
     }
 
-    // 5. UPDATE BATCH STATUS (Quarantine / Release)
+    // 5. UPDATE BATCH STATUS (Quarantine / Release / Expiry)
     @PatchMapping("/{id}/status")
     public ResponseEntity<BatchResponseDto> updateBatchStatus(
             @PathVariable Long id,
             @RequestParam Batch.Status status,
             @RequestParam(required = false) String notes) {
         return ResponseEntity.ok(batchService.updateBatchStatus(id, status, notes));
+    }
+
+    // 6. PROCESS EXPIRED BATCHES (Manual / On-Demand Trigger)
+    @PostMapping("/process-expired")
+    public ResponseEntity<String> processExpiredBatches() {
+        int count = batchService.processExpiredBatches();
+        return ResponseEntity.ok("Processed " + count + " expired batches.");
     }
 }

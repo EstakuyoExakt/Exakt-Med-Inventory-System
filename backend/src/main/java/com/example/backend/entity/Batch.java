@@ -15,7 +15,8 @@ public class Batch {
 
     public enum Status {
         Quarantined,
-        Available
+        Available,
+        Expired
     }
 
     @Id

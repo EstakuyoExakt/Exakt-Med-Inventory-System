@@ -282,7 +282,7 @@ function BatchManagement() {
 
   const totalActiveStock = useMemo(() => {
     return currentFacilityBatches
-      .filter((b) => !b.isQuarantined)
+      .filter((b) => !b.isQuarantined && b.status !== "Expired")
       .reduce((sum, b) => sum + (Number(b.quantity) || 0), 0);
   }, [currentFacilityBatches]);
 
@@ -324,9 +324,14 @@ function BatchManagement() {
 
       let matchesStatus = true;
       if (selectedStatusFilter === "ACTIVE") {
-        matchesStatus = !batch.isQuarantined && batch.quantity > 0;
+        matchesStatus =
+          !batch.isQuarantined &&
+          batch.status !== "Expired" &&
+          batch.quantity > 0;
       } else if (selectedStatusFilter === "QUARANTINED") {
         matchesStatus = batch.isQuarantined;
+      } else if (selectedStatusFilter === "EXPIRED") {
+        matchesStatus = batch.status === "Expired";
       } else if (selectedStatusFilter === "DEPLETED") {
         matchesStatus = batch.quantity === 0;
       }
@@ -739,6 +744,7 @@ function BatchManagement() {
               <option value="ALL">All Statuses</option>
               <option value="ACTIVE">Active & Available</option>
               <option value="QUARANTINED">Quarantined Only</option>
+              <option value="EXPIRED">Expired Only</option>
               <option value="DEPLETED">Depleted (0 Qty)</option>
             </select>
           </div>
@@ -866,6 +872,11 @@ function BatchManagement() {
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-red-100 text-red-800 border border-red-200">
                             <ShieldAlert className="w-3.5 h-3.5 text-red-600" />
                             Quarantined
+                          </span>
+                        ) : batch.status === "Expired" ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
+                            Expired
                           </span>
                         ) : batch.quantity === 0 ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
@@ -1361,11 +1372,17 @@ function BatchManagement() {
             <div className="flex items-start gap-4 p-4 rounded-xl bg-gray-50 border border-gray-100">
               <div
                 className={`flex h-12 w-12 items-center justify-center rounded-xl font-bold text-white shadow-sm shrink-0 ${
-                  selectedBatch.isQuarantined ? "bg-red-600" : "bg-blue-600"
+                  selectedBatch.isQuarantined
+                    ? "bg-red-600"
+                    : selectedBatch.status === "Expired"
+                    ? "bg-amber-600"
+                    : "bg-blue-600"
                 }`}
               >
                 {selectedBatch.isQuarantined ? (
                   <ShieldAlert className="w-6 h-6" />
+                ) : selectedBatch.status === "Expired" ? (
+                  <AlertTriangle className="w-6 h-6" />
                 ) : (
                   <Package className="w-6 h-6" />
                 )}
@@ -1391,11 +1408,15 @@ function BatchManagement() {
                     className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${
                       selectedBatch.isQuarantined
                         ? "bg-red-100 text-red-800 border-red-200"
+                        : selectedBatch.status === "Expired"
+                        ? "bg-amber-100 text-amber-800 border-amber-300"
                         : "bg-emerald-100 text-emerald-800 border-emerald-200"
                     }`}
                   >
                     {selectedBatch.isQuarantined
                       ? "Under Quarantine"
+                      : selectedBatch.status === "Expired"
+                      ? "Batch Expired (Deducted from SKU Units)"
                       : "Active & Available"}
                   </span>
                   {selectedBatch.poReference && (

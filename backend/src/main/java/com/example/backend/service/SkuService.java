@@ -21,13 +21,16 @@ public class SkuService {
     private final SkuRepository skuRepository;
     private final FacilityRepository facilityRepository;
     private final LibMedicineRepository libMedicineRepository;
+    private final BatchService batchService;
 
     public SkuService(SkuRepository skuRepository,
                       FacilityRepository facilityRepository,
-                      LibMedicineRepository libMedicineRepository) {
+                      LibMedicineRepository libMedicineRepository,
+                      BatchService batchService) {
         this.skuRepository = skuRepository;
         this.facilityRepository = facilityRepository;
         this.libMedicineRepository = libMedicineRepository;
+        this.batchService = batchService;
     }
 
     // 1. CREATE SKU (Units field is automatically defaulted to 0 by @PrePersist in Sku entity)
@@ -64,8 +67,12 @@ public class SkuService {
     }
 
     // 2. GET ALL SKUS (Optionally filtered by facilityId)
+    @Transactional
     @PreAuthorize("isAuthenticated()")
     public List<SkuResponseDto> getAllSkus(Long facilityId) {
+        // Automatically deduct units for any batches that reached/passed expiry date
+        batchService.processExpiredBatches();
+
         List<Sku> skus;
         if (facilityId != null) {
             if (!facilityRepository.existsById(facilityId)) {
@@ -140,8 +147,10 @@ public class SkuService {
     }
 
     // 6. SEARCH SKUS (by brandName, sku name, and medicine name)
+    @Transactional
     @PreAuthorize("isAuthenticated()")
     public List<SkuResponseDto> searchSkus(String search, Long facilityId) {
+        batchService.processExpiredBatches();
         String query = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
         return skuRepository.searchSkus(query, facilityId)
                 .stream()
@@ -150,8 +159,10 @@ public class SkuService {
     }
 
     // 7. GET SKUS THAT NEED REORDERING (units <= reorderLevel, excluding active Pending/Approved orders)
+    @Transactional
     @PreAuthorize("isAuthenticated()")
     public List<SkuResponseDto> getReorderNeededSkus(Long facilityId, String search) {
+        batchService.processExpiredBatches();
         String query = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
         return skuRepository.findReorderNeededSkus(facilityId, query)
                 .stream()
