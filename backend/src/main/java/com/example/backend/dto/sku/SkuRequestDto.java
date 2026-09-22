@@ -31,8 +31,6 @@ public class SkuRequestDto {
     @NotBlank(message = "Packaging unit is required")
     private String packagingUnit;
 
-    private Long units;
-
     @NotNull(message = "Minimum level is required")
     private Long minimumLevel;
 

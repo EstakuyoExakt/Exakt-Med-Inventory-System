@@ -801,7 +801,6 @@ function SkuManagement() {
           brandName: formData.brandName.trim().toUpperCase(),
           dosageForm: formData.dosageForm.trim().toUpperCase(),
           packagingUnit: (formData.packagingUnit || "").trim().toUpperCase(),
-          units: Number(selectedSku.currentStock ?? selectedSku.units ?? 0),
           minimumLevel: Number(formData.minimumLevel),
           reorderLevel: Number(formData.reorderLevel),
           maximumLevel: Number(formData.maximumLevel),

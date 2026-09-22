@@ -121,9 +121,6 @@ public class SkuService {
         existingSku.setBrandName(request.getBrandName().trim());
         existingSku.setDosageForm(request.getDosageForm().trim());
         existingSku.setPackagingUnit(request.getPackagingUnit().trim());
-        if (request.getUnits() != null) {
-            existingSku.setUnits(request.getUnits());
-        }
         existingSku.setMinimumLevel(request.getMinimumLevel());
         existingSku.setReorderLevel(request.getReorderLevel());
         existingSku.setMaximumLevel(request.getMaximumLevel());
