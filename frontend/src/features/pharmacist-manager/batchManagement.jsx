@@ -80,22 +80,22 @@ function BatchManagement() {
     return batchList.filter((b) => b.location === currentFacilityName);
   }, [batchList, currentFacilityName]);
 
-  // Form State for Receive Stock via PO
+  // Form State for Receive Stock via PO (Individual batch per SKU)
   const getInitialReceiveFormData = () => ({
     poNumber: "",
-    sku: "",
-    batchNumber: "",
-    manufacturingDate: "",
-    expiryDate: "",
-    quantity: "",
+    items: [],
     location: currentFacilityName,
-    isQuarantined: false,
-    quarantineNotes: "",
   });
 
   const [receiveFormData, setReceiveFormData] = useState(
     getInitialReceiveFormData,
   );
+
+  // Quick autofill state for common dates across multi-SKU receipts
+  const [bulkDates, setBulkDates] = useState({
+    manufacturingDate: "",
+    expiryDate: "",
+  });
 
   const {
     errors: formErrors,
@@ -308,6 +308,7 @@ function BatchManagement() {
   // Receive Stock via PO
   const handleOpenReceiveModal = () => {
     setReceiveFormData(getInitialReceiveFormData());
+    setBulkDates({ manufacturingDate: "", expiryDate: "" });
     clearErrors();
     setSelectedBatch(null);
     setModalMode("receive");
@@ -323,37 +324,87 @@ function BatchManagement() {
   const handleCloseModal = () => {
     setModalMode(null);
     setSelectedBatch(null);
+    setBulkDates({ manufacturingDate: "", expiryDate: "" });
     clearErrors();
   };
 
-  // When PO is chosen in dropdown, auto-populate details while keeping location on currentFacility
+  // When PO is chosen in dropdown, auto-populate SKU items so each gets its own batch
   const handlePoChange = (e) => {
     const poNum = e?.target?.value ?? e;
     const po = approvedOrders.find((p) => p.orderNumber === poNum);
 
     if (po) {
-      setReceiveFormData((prev) => ({
-        ...prev,
+      setReceiveFormData({
         poNumber: po.orderNumber,
-        sku: po.sku,
-        batchNumber: "",
-        quantity: po.totalQuantity || "",
         location: currentFacilityName,
-      }));
+        items: (po.items || []).map((item) => ({
+          orderedItemId: item.id,
+          skuId: item.skuId,
+          sku: item.sku,
+          brandName: item.brandName,
+          genericName: item.genericName,
+          dosageForm: item.dosageForm,
+          packagingUnit: item.packagingUnit,
+          quantity: item.quantity,
+          batchNumber: "",
+          manufacturingDate: "",
+          expiryDate: "",
+          isQuarantined: false,
+          quarantineNotes: "",
+        })),
+      });
     } else {
-      setReceiveFormData((prev) => ({
-        ...prev,
-        poNumber: "",
-        sku: "",
-        batchNumber: "",
-        quantity: "",
-        location: currentFacilityName,
-      }));
+      setReceiveFormData(getInitialReceiveFormData());
     }
-    clearError("poNumber");
+    clearErrors();
   };
 
-  // Submit Received Batch (Receives 100% complete delivery for all medicines in PO)
+  // Update batch details for an individual SKU item
+  const handleItemBatchChange = (index, field, value) => {
+    setReceiveFormData((prev) => {
+      const nextItems = [...prev.items];
+      nextItems[index] = {
+        ...nextItems[index],
+        [field]: value,
+      };
+      return {
+        ...prev,
+        items: nextItems,
+      };
+    });
+
+    const errorKey = `item_${index}_${field}`;
+    if (formErrors[errorKey]) {
+      clearError(errorKey);
+    }
+  };
+
+  // Apply common dates across all SKUs in the current PO
+  const handleApplyBulkDates = () => {
+    if (!bulkDates.manufacturingDate && !bulkDates.expiryDate) return;
+
+    setReceiveFormData((prev) => ({
+      ...prev,
+      items: prev.items.map((item) => ({
+        ...item,
+        manufacturingDate: bulkDates.manufacturingDate || item.manufacturingDate,
+        expiryDate: bulkDates.expiryDate || item.expiryDate,
+      })),
+    }));
+
+    if (bulkDates.manufacturingDate) {
+      receiveFormData.items.forEach((_, idx) => {
+        clearError(`item_${idx}_manufacturingDate`);
+      });
+    }
+    if (bulkDates.expiryDate) {
+      receiveFormData.items.forEach((_, idx) => {
+        clearError(`item_${idx}_expiryDate`);
+      });
+    }
+  };
+
+  // Submit Received Batches: creates a distinct batch intake per SKU
   const handleSaveReceivedBatch = (e) => {
     e.preventDefault();
 
@@ -364,66 +415,45 @@ function BatchManagement() {
 
     if (
       !selectedPoDetails ||
-      !selectedPoDetails.items ||
-      selectedPoDetails.items.length === 0
+      !receiveFormData.items ||
+      receiveFormData.items.length === 0
     ) {
       setFormErrors({
-        poNumber: "Selected purchase order contains no items to receive.",
+        poNumber: "Selected purchase order contains no medicines to receive.",
       });
       return;
     }
 
-    const { errors } = validateBatchForm(
-      {
-        ...receiveFormData,
-        quantity:
-          selectedPoDetails.totalQuantity || receiveFormData.quantity || 1,
-      },
-      {
-        batchList,
-      },
-    );
-    const finalErrors = { ...errors };
-    if (!receiveFormData.poNumber) {
-      finalErrors.poNumber = "Please select a Purchase Order (PO).";
-    }
+    const { errors, isValid } = validateBatchForm(receiveFormData, {
+      batchList,
+    });
 
-    if (Object.keys(finalErrors).length > 0) {
-      setFormErrors(finalErrors);
+    if (!isValid) {
+      setFormErrors(errors);
       return;
     }
 
-    const itemsToReceive = selectedPoDetails.items || [];
-    const isMultiItem = itemsToReceive.length > 1;
-    const baseBatch = receiveFormData.batchNumber.trim().toUpperCase();
-
-    // Create a batch intake for every medicine inside the purchase order
-    const newBatches = itemsToReceive.map((item, idx) => {
-      const lotNumber = isMultiItem ? `${baseBatch}-${idx + 1}` : baseBatch;
-
-      return {
-        id: Date.now() + idx,
-        batchNumber: lotNumber,
-        sku: item.sku,
-        brandName: item.brandName,
-        genericName: item.genericName,
-        dosageForm: item.dosageForm,
-        packagingUnit: item.packagingUnit,
-        manufacturingDate: receiveFormData.manufacturingDate,
-        expiryDate: receiveFormData.expiryDate,
-        quantity: Number(item.quantity) || 0,
-        location: currentFacilityName, // Automatically saved to current facility
-        poReference: selectedPoDetails.orderNumber,
-        isQuarantined: receiveFormData.isQuarantined,
-        quarantineReason: "",
-        quarantineDate: receiveFormData.isQuarantined
-          ? new Date().toISOString().split("T")[0]
-          : "",
-        quarantineNotes: receiveFormData.isQuarantined
-          ? receiveFormData.quarantineNotes
-          : "",
-      };
-    });
+    // Create a distinct batch intake for every SKU inside the purchase order
+    const newBatches = receiveFormData.items.map((item, idx) => ({
+      id: Date.now() + idx,
+      batchNumber: item.batchNumber.trim().toUpperCase(),
+      sku: item.sku,
+      brandName: item.brandName,
+      genericName: item.genericName,
+      dosageForm: item.dosageForm,
+      packagingUnit: item.packagingUnit,
+      manufacturingDate: item.manufacturingDate,
+      expiryDate: item.expiryDate,
+      quantity: Number(item.quantity) || 0,
+      location: currentFacilityName, // Automatically saved to current facility
+      poReference: selectedPoDetails.orderNumber,
+      isQuarantined: Boolean(item.isQuarantined),
+      quarantineReason: item.isQuarantined ? "Quality inspection hold" : "",
+      quarantineDate: item.isQuarantined
+        ? new Date().toISOString().split("T")[0]
+        : "",
+      quarantineNotes: item.isQuarantined ? (item.quarantineNotes || "") : "",
+    }));
 
     setBatchList((prev) => [...newBatches, ...prev]);
     handleCloseModal();
@@ -789,7 +819,7 @@ function BatchManagement() {
         isOpen={modalMode === "receive"}
         onClose={handleCloseModal}
         title="Receive Stock via Purchase Order"
-        size="3xl"
+        size="4xl"
       >
         <form onSubmit={handleSaveReceivedBatch} className="space-y-4">
           {/* PO Number Dropdown */}
@@ -841,7 +871,7 @@ function BatchManagement() {
 
           {/* PO Selected Details Card */}
           {selectedPoDetails ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-200 text-xs space-y-2.5">
                 <div className="flex items-start justify-between gap-2 border-b border-gray-200 pb-2">
                   <div>
@@ -899,45 +929,239 @@ function BatchManagement() {
                 </div>
               </div>
 
-              {/* Complete Delivery Medicines Intake List */}
-              <div className="border border-blue-100 rounded-xl overflow-hidden bg-white shadow-xs">
-                <div className="px-3.5 py-2 bg-blue-50/80 border-b border-blue-100 flex items-center justify-between text-xs">
-                  <span className="font-bold text-blue-950 flex items-center gap-1.5">
-                    <Pill className="w-3.5 h-3.5 text-blue-600" />
-                    Medicines to Receive (100% Complete Delivery)
+              {/* Optional Quick Autofill Dates Bar (for multi-item POs) */}
+              {receiveFormData.items?.length > 1 && (
+                <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-200 text-xs">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2 text-blue-900 font-semibold text-xs">
+                      <Calendar className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span>Quick Autofill Dates across All Medicines (Optional):</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                      <input
+                        type="date"
+                        value={bulkDates.manufacturingDate}
+                        onChange={(e) =>
+                          setBulkDates((prev) => ({
+                            ...prev,
+                            manufacturingDate: e.target.value,
+                          }))
+                        }
+                        title="Common Manufacturing Date"
+                        className="input py-1 px-2 text-xs bg-white w-36"
+                      />
+                      <input
+                        type="date"
+                        value={bulkDates.expiryDate}
+                        onChange={(e) =>
+                          setBulkDates((prev) => ({
+                            ...prev,
+                            expiryDate: e.target.value,
+                          }))
+                        }
+                        title="Common Expiration Date"
+                        className="input py-1 px-2 text-xs bg-white w-36"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleApplyBulkDates}
+                        className="btn-secondary py-1 px-2.5 text-xs text-blue-700 border-blue-300 hover:bg-blue-50 cursor-pointer whitespace-nowrap"
+                      >
+                        Apply Dates to All
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Per-SKU Stock Intake Cards */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+                    <Package className="w-4 h-4 text-blue-600" />
+                    Medicines to Receive ({receiveFormData.items?.length || 0}) — Individual Batch Allocation
                   </span>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded border border-emerald-200">
-                    Receive All
+                  <span className="text-[11px] text-gray-500 font-medium">
+                    Each SKU receives its own lot & expiration data
                   </span>
                 </div>
-                <div className="max-h-44 overflow-y-auto divide-y divide-gray-100 text-xs">
-                  {selectedPoDetails.items.map((item, idx) => (
+
+                <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                  {receiveFormData.items?.map((item, idx) => (
                     <div
-                      key={item.id || idx}
-                      className="p-3 flex items-center justify-between hover:bg-gray-50/60 transition-colors"
+                      key={item.orderedItemId || item.sku || idx}
+                      className="p-4 rounded-xl border border-gray-200 bg-white shadow-xs space-y-3"
                     >
-                      <div className="min-w-0 pr-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-gray-900 truncate">
-                            {item.brandName}
-                          </span>
-                          <span className="font-mono text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200 shrink-0">
-                            {item.sku}
+                      {/* SKU Header */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0 border border-blue-100">
+                            <Pill className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-gray-900 text-sm">
+                                {item.brandName}
+                              </span>
+                              <span className="font-mono text-[11px] text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-bold">
+                                {item.sku}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-gray-500 mt-0.5">
+                              {item.genericName} • {item.dosageForm} ({item.packagingUnit})
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-gray-500">Delivered:</span>
+                          <span className="font-mono font-bold text-gray-900 text-sm bg-gray-50 border border-gray-200 px-2.5 py-0.5 rounded-lg">
+                            {Number(item.quantity || 0).toLocaleString()} units
                           </span>
                         </div>
-                        <p className="text-[11px] text-gray-500 mt-0.5 truncate">
-                          {item.genericName} • {item.dosageForm} (
-                          {item.packagingUnit})
-                        </p>
                       </div>
-                      <div className="text-right shrink-0">
-                        <span className="font-mono font-bold text-gray-900 text-sm">
-                          {Number(item.quantity || 0).toLocaleString()}
-                        </span>
-                        <span className="text-[11px] text-gray-500 ml-1">
-                          units
-                        </span>
+
+                      {/* Batch Inputs for this specific SKU */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Batch / Lot Number */}
+                        <div>
+                          <label
+                            htmlFor={`receive-batch-number-${idx}`}
+                            className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1"
+                          >
+                            Lot / Batch Number <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            id={`receive-batch-number-${idx}`}
+                            type="text"
+                            value={item.batchNumber || ""}
+                            onChange={(e) =>
+                              handleItemBatchChange(idx, "batchNumber", e.target.value)
+                            }
+                            placeholder={`e.g. BAT-${item.sku.replace("SKU-", "")}-01`}
+                            className={`input uppercase font-mono text-xs ${
+                              formErrors[`item_${idx}_batchNumber`]
+                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                                : ""
+                            }`}
+                          />
+                          {formErrors[`item_${idx}_batchNumber`] && (
+                            <p className="text-[11px] text-red-500 mt-1">
+                              {formErrors[`item_${idx}_batchNumber`]}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Manufacturing Date */}
+                        <div>
+                          <label
+                            htmlFor={`receive-batch-mfg-${idx}`}
+                            className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1"
+                          >
+                            Manufacturing Date <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            id={`receive-batch-mfg-${idx}`}
+                            type="date"
+                            value={item.manufacturingDate || ""}
+                            onChange={(e) =>
+                              handleItemBatchChange(idx, "manufacturingDate", e.target.value)
+                            }
+                            className={`input text-xs ${
+                              formErrors[`item_${idx}_manufacturingDate`]
+                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                                : ""
+                            }`}
+                          />
+                          {formErrors[`item_${idx}_manufacturingDate`] && (
+                            <p className="text-[11px] text-red-500 mt-1">
+                              {formErrors[`item_${idx}_manufacturingDate`]}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Expiration Date */}
+                        <div>
+                          <label
+                            htmlFor={`receive-batch-exp-${idx}`}
+                            className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1"
+                          >
+                            Expiration Date <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            id={`receive-batch-exp-${idx}`}
+                            type="date"
+                            value={item.expiryDate || ""}
+                            onChange={(e) =>
+                              handleItemBatchChange(idx, "expiryDate", e.target.value)
+                            }
+                            className={`input text-xs ${
+                              formErrors[`item_${idx}_expiryDate`]
+                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                                : ""
+                            }`}
+                          />
+                          {formErrors[`item_${idx}_expiryDate`] && (
+                            <p className="text-[11px] text-red-500 mt-1">
+                              {formErrors[`item_${idx}_expiryDate`]}
+                            </p>
+                          )}
+                        </div>
                       </div>
+
+                      {/* Quarantine / Inspection Checkbox for this SKU */}
+                      <div className="pt-2 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <label className="inline-flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(item.isQuarantined)}
+                            onChange={(e) =>
+                              handleItemBatchChange(idx, "isQuarantined", e.target.checked)
+                            }
+                            className="rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                          />
+                          <span className="text-xs font-semibold text-gray-700 flex items-center gap-1">
+                            <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                            Flag / Quarantine this medicine (Inspection Required)
+                          </span>
+                        </label>
+
+                        {item.isQuarantined && (
+                          <span className="text-[11px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                            Will be locked upon receipt
+                          </span>
+                        )}
+                      </div>
+
+                      {item.isQuarantined && (
+                        <div>
+                          <label
+                            htmlFor={`receive-batch-quarantine-notes-${idx}`}
+                            className="block text-[11px] font-semibold text-red-900 uppercase tracking-wider mb-1"
+                          >
+                            Quarantine Notes / QA Remarks <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            id={`receive-batch-quarantine-notes-${idx}`}
+                            type="text"
+                            value={item.quarantineNotes || ""}
+                            onChange={(e) =>
+                              handleItemBatchChange(idx, "quarantineNotes", e.target.value)
+                            }
+                            placeholder="e.g. Temperature recorder logged 14°C excursion during freight"
+                            className={`input text-xs bg-red-50/20 ${
+                              formErrors[`item_${idx}_quarantineNotes`]
+                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                                : ""
+                            }`}
+                          />
+                          {formErrors[`item_${idx}_quarantineNotes`] && (
+                            <p className="text-[11px] text-red-500 mt-1">
+                              {formErrors[`item_${idx}_quarantineNotes`]}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -953,223 +1177,6 @@ function BatchManagement() {
             </div>
           )}
 
-          {/* Batch & Inspection Fields */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-            {/* Batch Number */}
-            <div>
-              <label
-                htmlFor="receive-batch-number"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                {selectedPoDetails?.items?.length > 1
-                  ? "Base Lot / Batch Prefix"
-                  : "Lot / Batch Number"}{" "}
-                <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="receive-batch-number"
-                type="text"
-                value={receiveFormData.batchNumber || ""}
-                onChange={(e) =>
-                  setReceiveFormData((prev) => ({
-                    ...prev,
-                    batchNumber: e.target.value,
-                  }))
-                }
-                placeholder="BAT-2026-0103"
-                className={`input uppercase font-mono ${
-                  formErrors.batchNumber
-                    ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
-                    : ""
-                }`}
-              />
-              {selectedPoDetails?.items?.length > 1 && (
-                <p className="text-[10px] text-gray-500 mt-1">
-                  Each medicine will be assigned sub-lot:{" "}
-                  <span className="font-mono font-semibold text-gray-700">
-                    {receiveFormData.batchNumber || "BAT-XXXX"}-1
-                  </span>
-                  ,{" "}
-                  <span className="font-mono font-semibold text-gray-700">
-                    {receiveFormData.batchNumber || "BAT-XXXX"}-2
-                  </span>
-                  ...
-                </p>
-              )}
-              {formErrors.batchNumber && (
-                <p className="text-xs text-red-500 mt-1">
-                  {formErrors.batchNumber}
-                </p>
-              )}
-            </div>
-
-            {/* Received Quantity (Auto-complete) */}
-            <div>
-              <label
-                htmlFor="receive-batch-quantity"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Total Received Quantity (Units){" "}
-              </label>
-              <input
-                id="receive-batch-quantity"
-                type="text"
-                readOnly
-                value={
-                  selectedPoDetails
-                    ? `${selectedPoDetails.totalQuantity?.toLocaleString() || 0} units (${selectedPoDetails.items.length} ${selectedPoDetails.items.length === 1 ? "medicine" : "medicines"})`
-                    : ""
-                }
-                placeholder="Auto-calculated from PO"
-                className="input bg-gray-50 font-mono font-bold text-gray-800 cursor-not-allowed"
-              />
-            </div>
-
-            {/* Manufacturing Date */}
-            <div>
-              <label
-                htmlFor="receive-batch-mfg"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Manufacturing Date <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="receive-batch-mfg"
-                type="date"
-                value={receiveFormData.manufacturingDate}
-                onChange={(e) =>
-                  setReceiveFormData((prev) => ({
-                    ...prev,
-                    manufacturingDate: e.target.value,
-                  }))
-                }
-                className="input"
-              />
-              {formErrors.manufacturingDate && (
-                <p className="text-xs text-red-500 mt-1">
-                  {formErrors.manufacturingDate}
-                </p>
-              )}
-            </div>
-
-            {/* Expiry Date */}
-            <div>
-              <label
-                htmlFor="receive-batch-exp"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Expiration Date <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="receive-batch-exp"
-                type="date"
-                value={receiveFormData.expiryDate}
-                onChange={(e) =>
-                  setReceiveFormData((prev) => ({
-                    ...prev,
-                    expiryDate: e.target.value,
-                  }))
-                }
-                className="input"
-              />
-              {formErrors.expiryDate && (
-                <p className="text-xs text-red-500 mt-1">
-                  {formErrors.expiryDate}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* ======================================================== */}
-          {/* QUARANTINE ACTION IN RECEIVING STOCK                     */}
-          {/* ======================================================== */}
-          <div className="mt-4 pt-3 border-t border-gray-200">
-            <div className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/70 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-                    Quality Inspection & Quarantine Action
-                  </h4>
-                  <p className="text-[11px] text-gray-500 mt-0.5">
-                    Evaluate lot integrity upon receiving before releasing to
-                    active dispensing.
-                  </p>
-                </div>
-
-                {/* Quarantine Checkbox / Toggle */}
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={receiveFormData.isQuarantined}
-                    onChange={(e) =>
-                      setReceiveFormData((prev) => ({
-                        ...prev,
-                        isQuarantined: e.target.checked,
-                      }))
-                    }
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
-                </label>
-              </div>
-
-              {receiveFormData.isQuarantined ? (
-                <div className="p-3 rounded-lg bg-red-50 border border-red-200 space-y-3 mt-2">
-                  <div className="flex items-center gap-2 text-xs font-bold text-red-800">
-                    <ShieldAlert className="w-4 h-4 text-red-600" />
-                    <span>
-                      Quarantine Active: This lot will be locked upon receipt
-                    </span>
-                  </div>
-
-
-                  <div>
-                    <label
-                      htmlFor="receive-quarantine-notes"
-                      className="block text-[11px] font-semibold text-red-900 uppercase tracking-wider mb-1"
-                    >
-                      QA Receiving Notes / Remarks{" "}
-                      <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      id="receive-quarantine-notes"
-                      type="text"
-                      value={receiveFormData.quarantineNotes}
-                      onChange={(e) => {
-                        setReceiveFormData((prev) => ({
-                          ...prev,
-                          quarantineNotes: e.target.value,
-                        }));
-                        if (formErrors.quarantineNotes) {
-                          clearError("quarantineNotes");
-                        }
-                      }}
-                      placeholder="e.g. Temperature recorder logged 14°C excursion during freight"
-                      className={`input bg-white text-xs ${
-                        formErrors.quarantineNotes
-                          ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
-                          : ""
-                      }`}
-                    />
-                    {formErrors.quarantineNotes && (
-                      <p className="text-xs text-red-500 mt-1">
-                        {formErrors.quarantineNotes}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50/80 p-2 rounded-lg border border-emerald-200">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>
-                    Quality Inspection Passed — Batch will be released directly
-                    to available stock.
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
             <button
               type="button"
@@ -1181,15 +1188,15 @@ function BatchManagement() {
             <button
               type="submit"
               disabled={
-                !selectedPoDetails || selectedPoDetails.items?.length === 0
+                !selectedPoDetails || !receiveFormData.items || receiveFormData.items.length === 0
               }
               className="btn-primary flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>
                 Confirm Stock Receipt
-                {selectedPoDetails?.items?.length > 1
-                  ? ` (All ${selectedPoDetails.items.length} Medicines)`
+                {receiveFormData.items?.length > 1
+                  ? ` (All ${receiveFormData.items.length} Medicines)`
                   : ""}
               </span>
             </button>
