@@ -21,15 +21,18 @@ public class RestockRequestService {
     private final SkuRepository skuRepository;
     private final FacilityRepository facilityRepository;
     private final UserRepository userRepository;
+    private final AuditLogService auditLogService;
 
     public RestockRequestService(RestockRequestRepository restockRequestRepository,
                                  SkuRepository skuRepository,
                                  FacilityRepository facilityRepository,
-                                 UserRepository userRepository) {
+                                 UserRepository userRepository,
+                                 AuditLogService auditLogService) {
         this.restockRequestRepository = restockRequestRepository;
         this.skuRepository = skuRepository;
         this.facilityRepository = facilityRepository;
         this.userRepository = userRepository;
+        this.auditLogService = auditLogService;
     }
 
     // 1. CREATE RESTOCK REQUEST (Pharmacist / Admin / SuperAdmin)
@@ -67,6 +70,20 @@ public class RestockRequestService {
         restockRequest.setOrder(null);
 
         RestockRequest saved = restockRequestRepository.save(restockRequest);
+
+        auditLogService.logAction(
+                facility,
+                user,
+                "Inventory",
+                "RESTOCK_REQUEST_CREATED",
+                "Restock Request Submitted (" + saved.getRequestedUnits() + " units)",
+                AuditLog.Severity.INFO,
+                sku.getName(),
+                saved.getId(),
+                "Submitted restock request for " + saved.getRequestedUnits() + " units of '" + sku.getName() + "'. Reason: " + (saved.getReason() != null ? saved.getReason() : "None stated"),
+                "Admin,Pharmacist,Procurement"
+        );
+
         RestockResponseDto response = mapToResponseDto(saved);
         response.setMessage("Restock request submitted successfully.");
         return response;

@@ -10,6 +10,7 @@ import com.example.backend.entity.OrderedItem;
 import com.example.backend.entity.Sku;
 import com.example.backend.entity.Supplier;
 import com.example.backend.entity.RestockRequest;
+import com.example.backend.entity.AuditLog;
 import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.OrderRepository;
 import com.example.backend.repository.OrderedItemRepository;
@@ -34,19 +35,22 @@ public class OrderService {
     private final SkuRepository skuRepository;
     private final FacilityRepository facilityRepository;
     private final RestockRequestRepository restockRequestRepository;
+    private final AuditLogService auditLogService;
 
     public OrderService(OrderRepository orderRepository,
                         OrderedItemRepository orderedItemRepository,
                         SupplierRepository supplierRepository,
                         SkuRepository skuRepository,
                         FacilityRepository facilityRepository,
-                        RestockRequestRepository restockRequestRepository) {
+                        RestockRequestRepository restockRequestRepository,
+                        AuditLogService auditLogService) {
         this.orderRepository = orderRepository;
         this.orderedItemRepository = orderedItemRepository;
         this.supplierRepository = supplierRepository;
         this.skuRepository = skuRepository;
         this.facilityRepository = facilityRepository;
         this.restockRequestRepository = restockRequestRepository;
+        this.auditLogService = auditLogService;
     }
 
     // 1. CREATE PURCHASE ORDER REQUEST
@@ -140,6 +144,18 @@ public class OrderService {
             }
         }
 
+        auditLogService.logAction(
+                facility,
+                "Purchasing",
+                "PURCHASE_ORDER_CREATED",
+                "Purchase Order Created (" + savedOrder.getPurchaseOrderNum() + ")",
+                AuditLog.Severity.INFO,
+                savedOrder.getPurchaseOrderNum(),
+                savedOrder.getId(),
+                "Created purchase order requisition " + savedOrder.getPurchaseOrderNum() + " (" + savedOrder.getTotalOrderedUnits() + " units) for vendor '" + (supplier != null ? supplier.getName() : "") + "'. Total: ₱" + savedOrder.getTotalPrice() + ".",
+                "Admin,Procurement"
+        );
+
         OrderResponseDto response = mapToOrderResponseDto(savedOrder, itemResponses);
         response.setMessage("Purchase order request created successfully.");
         return response;
@@ -214,6 +230,22 @@ public class OrderService {
         }
 
         Order updatedOrder = orderRepository.save(order);
+
+        AuditLog.Severity severity = newStatus == Order.Status.Approved
+                ? AuditLog.Severity.SUCCESS
+                : (newStatus == Order.Status.Denied ? AuditLog.Severity.WARNING : AuditLog.Severity.INFO);
+
+        auditLogService.logAction(
+                updatedOrder.getFacility(),
+                "Purchasing",
+                "PURCHASE_ORDER_" + newStatus.name().toUpperCase(),
+                "Purchase Order " + newStatus + " (" + updatedOrder.getPurchaseOrderNum() + ")",
+                severity,
+                updatedOrder.getPurchaseOrderNum(),
+                updatedOrder.getId(),
+                "Purchase order " + updatedOrder.getPurchaseOrderNum() + " status transitioned to " + newStatus + "." + (notes != null && !notes.isBlank() ? " Notes: " + notes : ""),
+                "Admin,Procurement"
+        );
 
         List<OrderedItem> items = orderedItemRepository.findByOrderId(updatedOrder.getId());
         List<OrderItemResponseDto> itemDtos = items.stream()

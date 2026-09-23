@@ -19,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.example.backend.entity.AuditLog;
+
 @Service
 public class UserService {
 
@@ -26,15 +28,18 @@ public class UserService {
     private final FacilityRepository facilityRepository;
     private final UserFacilityLinkRepository userFacilityLinkRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuditLogService auditLogService;
 
     public UserService(UserRepository userRepository,
                        FacilityRepository facilityRepository,
                        UserFacilityLinkRepository userFacilityLinkRepository,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder,
+                       AuditLogService auditLogService) {
         this.userRepository = userRepository;
         this.facilityRepository = facilityRepository;
         this.userFacilityLinkRepository = userFacilityLinkRepository;
         this.passwordEncoder = passwordEncoder;
+        this.auditLogService = auditLogService;
     }
 
     // 1. CREATE USER (SuperAdmin only)
@@ -68,6 +73,18 @@ public class UserService {
             link.setFacility(facility);
             userFacilityLinkRepository.save(link);
             linkedFacilityId = facility.getId();
+
+            auditLogService.logAction(
+                    facility,
+                    "Security & Access",
+                    "USER_CREATED",
+                    "User Account Created (" + savedUser.getUsername() + ")",
+                    AuditLog.Severity.SUCCESS,
+                    savedUser.getUsername(),
+                    savedUser.getId(),
+                    "Created user account for '" + savedUser.getName() + "' (@" + savedUser.getUsername() + ") with role " + savedUser.getRole() + " assigned to facility '" + facility.getName() + "'.",
+                    "Admin"
+            );
         }
 
         return mapToResponseDto(savedUser, linkedFacilityId, "User created successfully");
@@ -130,6 +147,26 @@ public class UserService {
             userFacilityLinkRepository.save(link);
         }
 
+        Facility targetFacility = null;
+        List<UserFacilityLink> links = userFacilityLinkRepository.findByUserId(updatedUser.getId());
+        if (!links.isEmpty()) {
+            targetFacility = links.get(0).getFacility();
+        }
+
+        if (targetFacility != null) {
+            auditLogService.logAction(
+                    targetFacility,
+                    "Security & Access",
+                    "USER_UPDATED",
+                    "User Account Updated (" + updatedUser.getUsername() + ")",
+                    AuditLog.Severity.INFO,
+                    updatedUser.getUsername(),
+                    updatedUser.getId(),
+                    "Updated user account profile for @" + updatedUser.getUsername() + " (" + updatedUser.getName() + ").",
+                    "Admin"
+            );
+        }
+
         return mapToResponseDto(updatedUser, "User updated successfully");
     }
 
@@ -145,9 +182,29 @@ public class UserService {
             throw new AccessDeniedException("SuperAdmin accounts cannot be deleted");
         }
 
+        Facility targetFacility = null;
+        List<UserFacilityLink> links = userFacilityLinkRepository.findByUserId(targetUser.getId());
+        if (!links.isEmpty()) {
+            targetFacility = links.get(0).getFacility();
+        }
+
         // Remove any facility links first
         userFacilityLinkRepository.deleteByUserId(id);
         userRepository.delete(targetUser);
+
+        if (targetFacility != null) {
+            auditLogService.logAction(
+                    targetFacility,
+                    "Security & Access",
+                    "USER_DELETED",
+                    "User Account Deleted (" + targetUser.getUsername() + ")",
+                    AuditLog.Severity.WARNING,
+                    targetUser.getUsername(),
+                    targetUser.getId(),
+                    "Deleted user account @" + targetUser.getUsername() + " (" + targetUser.getName() + ").",
+                    "Admin"
+            );
+        }
     }
 
     // Helper: Retrieve the currently authenticated User entity

@@ -14,19 +14,24 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.example.backend.entity.AuditLog;
+
 @Service
 public class FacilityService {
 
     private final FacilityRepository facilityRepository;
     private final ProjectRepository projectRepository;
     private final UserFacilityLinkRepository userFacilityLinkRepository;
+    private final AuditLogService auditLogService;
 
     public FacilityService(FacilityRepository facilityRepository,
                            ProjectRepository projectRepository,
-                           UserFacilityLinkRepository userFacilityLinkRepository) {
+                           UserFacilityLinkRepository userFacilityLinkRepository,
+                           AuditLogService auditLogService) {
         this.facilityRepository = facilityRepository;
         this.projectRepository = projectRepository;
         this.userFacilityLinkRepository = userFacilityLinkRepository;
+        this.auditLogService = auditLogService;
     }
 
     // 1. CREATE FACILITY (SuperAdmin and Admin)
@@ -52,6 +57,18 @@ public class FacilityService {
         // Auto-generate facilityCode format: FAC-001, FAC-010, etc.
         savedFacility.setFacilityCode(String.format("FAC-%03d", savedFacility.getId()));
         savedFacility = facilityRepository.save(savedFacility);
+
+        auditLogService.logAction(
+                savedFacility,
+                "Facility Management",
+                "FACILITY_CREATED",
+                "Facility Registered (" + savedFacility.getName() + ")",
+                AuditLog.Severity.SUCCESS,
+                savedFacility.getName(),
+                savedFacility.getId(),
+                "Registered new facility '" + savedFacility.getName() + "' (" + savedFacility.getFacilityCode() + ") under project '" + project.getName() + "'.",
+                "Admin"
+        );
 
         return mapToResponseDto(savedFacility, "Facility Created Successfully");
     }
@@ -92,6 +109,19 @@ public class FacilityService {
         }
 
         Facility updatedFacility = facilityRepository.save(existingFacility);
+
+        auditLogService.logAction(
+                updatedFacility,
+                "Facility Management",
+                "FACILITY_UPDATED",
+                "Facility Details Updated (" + updatedFacility.getName() + ")",
+                AuditLog.Severity.INFO,
+                updatedFacility.getName(),
+                updatedFacility.getId(),
+                "Updated profile and contact information for facility '" + updatedFacility.getName() + "'.",
+                "Admin"
+        );
+
         return mapToResponseDto(updatedFacility, "Facility Updated Successfully");
     }
 

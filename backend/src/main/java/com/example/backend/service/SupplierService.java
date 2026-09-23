@@ -4,6 +4,7 @@ import com.example.backend.dto.supplier.SupplierRequestDto;
 import com.example.backend.dto.supplier.SupplierResponseDto;
 import com.example.backend.entity.Facility;
 import com.example.backend.entity.Supplier;
+import com.example.backend.entity.AuditLog;
 import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.SupplierRepository;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,10 +19,14 @@ public class SupplierService {
 
     private final SupplierRepository supplierRepository;
     private final FacilityRepository facilityRepository;
+    private final AuditLogService auditLogService;
 
-    public SupplierService(SupplierRepository supplierRepository, FacilityRepository facilityRepository) {
+    public SupplierService(SupplierRepository supplierRepository,
+                           FacilityRepository facilityRepository,
+                           AuditLogService auditLogService) {
         this.supplierRepository = supplierRepository;
         this.facilityRepository = facilityRepository;
+        this.auditLogService = auditLogService;
     }
 
     // 1. CREATE SUPPLIER (SuperAdmin only)
@@ -46,6 +51,19 @@ public class SupplierService {
         supplier.setStatus(request.getStatus() != null ? request.getStatus() : Supplier.Status.Active);
 
         Supplier savedSupplier = supplierRepository.save(supplier);
+
+        auditLogService.logAction(
+                facility,
+                "Supplier Management",
+                "SUPPLIER_CREATED",
+                "Supplier Added (" + savedSupplier.getName() + ")",
+                AuditLog.Severity.SUCCESS,
+                savedSupplier.getName(),
+                savedSupplier.getId(),
+                "Registered vendor '" + savedSupplier.getName() + "' (Contact: " + savedSupplier.getContactPerson() + ", " + savedSupplier.getEmail() + "). Terms: " + savedSupplier.getPaymentTerms() + ".",
+                "Admin,Procurement"
+        );
+
         return mapToResponseDto(savedSupplier, "Supplier created successfully");
     }
 
@@ -105,16 +123,41 @@ public class SupplierService {
         }
 
         Supplier updatedSupplier = supplierRepository.save(supplier);
+
+        auditLogService.logAction(
+                updatedSupplier.getFacility(),
+                "Supplier Management",
+                "SUPPLIER_UPDATED",
+                "Supplier Details Updated (" + updatedSupplier.getName() + ")",
+                AuditLog.Severity.INFO,
+                updatedSupplier.getName(),
+                updatedSupplier.getId(),
+                "Updated profile and payment terms for vendor '" + updatedSupplier.getName() + "'.",
+                "Admin,Procurement"
+        );
+
         return mapToResponseDto(updatedSupplier, "Supplier updated successfully");
     }
 
     // 5. DELETE SUPPLIER (SuperAdmin only)
     @PreAuthorize("hasRole('SuperAdmin')")
     public void deleteSupplier(Long id) {
-        if (!supplierRepository.existsById(id)) {
-            throw new RuntimeException("Supplier not found with id: " + id);
-        }
-        supplierRepository.deleteById(id);
+        Supplier supplier = supplierRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Supplier not found with id: " + id));
+
+        supplierRepository.delete(supplier);
+
+        auditLogService.logAction(
+                supplier.getFacility(),
+                "Supplier Management",
+                "SUPPLIER_DELETED",
+                "Supplier Removed (" + supplier.getName() + ")",
+                AuditLog.Severity.WARNING,
+                supplier.getName(),
+                supplier.getId(),
+                "Removed vendor '" + supplier.getName() + "' from facility records.",
+                "Admin,Procurement"
+        );
     }
 
     // Helper: Map Supplier entity to SupplierResponseDto

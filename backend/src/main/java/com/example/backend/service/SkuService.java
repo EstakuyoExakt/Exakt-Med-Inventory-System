@@ -4,6 +4,7 @@ import com.example.backend.dto.sku.SkuRequestDto;
 import com.example.backend.dto.sku.SkuResponseDto;
 import com.example.backend.dto.sku.SkuStockAdjustmentDto;
 import com.example.backend.dto.sku.StockAdjustmentLogResponseDto;
+import com.example.backend.entity.AuditLog;
 import com.example.backend.entity.Facility;
 import com.example.backend.entity.LibMedicine;
 import com.example.backend.entity.Sku;
@@ -31,6 +32,7 @@ public class SkuService {
     private final LibMedicineRepository libMedicineRepository;
     private final BatchService batchService;
     private final StockAdjustmentLogRepository stockAdjustmentLogRepository;
+    private final AuditLogService auditLogService;
     private final UserRepository userRepository;
 
     public SkuService(SkuRepository skuRepository,
@@ -38,12 +40,14 @@ public class SkuService {
                       LibMedicineRepository libMedicineRepository,
                       BatchService batchService,
                       StockAdjustmentLogRepository stockAdjustmentLogRepository,
+                      AuditLogService auditLogService,
                       UserRepository userRepository) {
         this.skuRepository = skuRepository;
         this.facilityRepository = facilityRepository;
         this.libMedicineRepository = libMedicineRepository;
         this.batchService = batchService;
         this.stockAdjustmentLogRepository = stockAdjustmentLogRepository;
+        this.auditLogService = auditLogService;
         this.userRepository = userRepository;
     }
 
@@ -77,6 +81,20 @@ public class SkuService {
         sku.setMaximumLevel(request.getMaximumLevel());
 
         Sku savedSku = skuRepository.save(sku);
+
+        auditLogService.logAction(
+                facility,
+                getCurrentUser(),
+                "SKU Catalog",
+                "SKU_CREATED",
+                "New SKU Created (" + savedSku.getName() + ")",
+                AuditLog.Severity.SUCCESS,
+                savedSku.getName(),
+                savedSku.getId(),
+                "Registered new SKU '" + savedSku.getName() + "' (" + (savedSku.getBrandName() != null ? savedSku.getBrandName() : "") + ") in catalog.",
+                "Admin,Pharmacist"
+        );
+
         return mapToResponseDto(savedSku, "SKU created successfully");
     }
 
@@ -146,6 +164,20 @@ public class SkuService {
         existingSku.setMaximumLevel(request.getMaximumLevel());
 
         Sku updatedSku = skuRepository.save(existingSku);
+
+        auditLogService.logAction(
+                updatedSku.getFacility(),
+                getCurrentUser(),
+                "SKU Catalog",
+                "SKU_UPDATED",
+                "SKU Details Updated (" + updatedSku.getName() + ")",
+                AuditLog.Severity.INFO,
+                updatedSku.getName(),
+                updatedSku.getId(),
+                "Updated SKU details for '" + updatedSku.getName() + "'. Dosage: " + updatedSku.getDosageForm() + ", Reorder: " + updatedSku.getReorderLevel() + ", Max: " + updatedSku.getMaximumLevel() + ".",
+                "Admin,Pharmacist"
+        );
+
         return mapToResponseDto(updatedSku, "SKU updated successfully");
     }
 
@@ -153,10 +185,23 @@ public class SkuService {
     @Transactional
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Pharmacist')")
     public void deleteSku(Long id) {
-        if (!skuRepository.existsById(id)) {
-            throw new RuntimeException("SKU not found with id: " + id);
-        }
-        skuRepository.deleteById(id);
+        Sku sku = skuRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("SKU not found with id: " + id));
+
+        skuRepository.delete(sku);
+
+        auditLogService.logAction(
+                sku.getFacility(),
+                getCurrentUser(),
+                "SKU Catalog",
+                "SKU_DELETED",
+                "SKU Deleted (" + sku.getName() + ")",
+                AuditLog.Severity.WARNING,
+                sku.getName(),
+                sku.getId(),
+                "Deleted SKU '" + sku.getName() + "' from inventory catalog.",
+                "Admin,Pharmacist"
+        );
     }
 
     // 5b. ADJUST SKU STOCK (Physical count / write-off / correction)
@@ -211,6 +256,43 @@ public class SkuService {
         log.setReason(request.getReason());
         log.setNotes(request.getNotes() != null ? request.getNotes().trim() : null);
         stockAdjustmentLogRepository.save(log);
+
+        // Record central Audit Log entry
+        long delta = newUnits - currentUnits;
+        AuditLog.Severity severity = delta < 0 ? AuditLog.Severity.WARNING : AuditLog.Severity.INFO;
+        String action = switch (request.getType()) {
+            case ADD -> "STOCK_ADDITION";
+            case SUBTRACT -> "STOCK_DEDUCTION";
+            case SET -> "STOCK_RECONCILIATION";
+        };
+        String actionLabel = switch (request.getType()) {
+            case ADD -> "Stock Addition (+" + request.getAmount() + " units)";
+            case SUBTRACT -> "Stock Deduction (-" + request.getAmount() + " units)";
+            case SET -> "Stock Count Reconciliation (" + newUnits + " units)";
+        };
+        String description = String.format(
+                "Stock adjusted for SKU '%s' (%s). Previous: %d units, Change: %+d units, New Stock: %d units. Reason: %s.%s",
+                savedSku.getName(),
+                savedSku.getBrandName() != null ? savedSku.getBrandName() : "",
+                currentUnits,
+                delta,
+                newUnits,
+                request.getReason(),
+                (request.getNotes() != null && !request.getNotes().isBlank()) ? " Notes: " + request.getNotes().trim() : ""
+        );
+
+        auditLogService.logAction(
+                savedSku.getFacility(),
+                getCurrentUser(),
+                "Inventory",
+                action,
+                actionLabel,
+                severity,
+                savedSku.getName(),
+                savedSku.getId(),
+                description,
+                "Admin,Pharmacist"
+        );
 
         return mapToResponseDto(savedSku, "Stock adjusted successfully");
     }

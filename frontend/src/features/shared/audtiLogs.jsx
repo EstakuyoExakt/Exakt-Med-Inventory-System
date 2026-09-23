@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   History,
   Shield,
@@ -19,6 +19,8 @@ import {
   Activity,
   Terminal,
   ArrowUpDown,
+  RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 
 // Common Components & Hooks
@@ -30,26 +32,90 @@ import useRole from "../../hooks/useRole";
 import useAuth from "../../hooks/useAuth";
 import { ROLES } from "../../config/roles";
 
-// Mock Data & Facilities
-import {
-  auditLogs as initialLogs,
-  AUDIT_MODULES,
-  AUDIT_SEVERITIES,
-} from "../../data/auditLogs";
+// Services & Facilities
 import { facilities } from "../../data/facility";
+import auditLogService from "../../services/auditLog";
 
-function AuditLogs() {
+const AUDIT_MODULES = [
+  "All Modules",
+  "Inventory",
+  "Purchasing",
+  "SKU Catalog",
+  "Supplier Management",
+  "Facility Management",
+  "Security & Access",
+];
+
+const AUDIT_SEVERITIES = [
+  "All Severities",
+  "info",
+  "success",
+  "warning",
+  "critical",
+];
+
+function AuditLogs({
+  facilityId: propFacilityId,
+  facilityName: propFacilityName,
+}) {
   const { role, isAdmin } = useRole();
   const { facility } = useAuth();
 
   // Automatically detect current active facility
   const currentFacilityName = useMemo(() => {
     return (
-      facility?.name || facilities[0]?.name || "Exakt Central General Hospital"
+      propFacilityName ||
+      facility?.name ||
+      facilities[0]?.name ||
+      "Exakt Central General Hospital"
     );
-  }, [facility]);
+  }, [propFacilityName, facility]);
 
-  const [logs] = useState(initialLogs);
+  const targetFacilityId = useMemo(() => {
+    return (
+      propFacilityId ||
+      facility?.id ||
+      facilities.find((f) => f.name === currentFacilityName)?.id ||
+      1
+    );
+  }, [propFacilityId, facility?.id, currentFacilityName]);
+
+  const [logs, setLogs] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Fetch logs from backend
+  const fetchLogs = useCallback(async () => {
+    if (!targetFacilityId) {
+      setLogs([]);
+      setIsLoading(false);
+      return;
+    }
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await auditLogService.getAuditLogs(targetFacilityId);
+      if (Array.isArray(data)) {
+        setLogs(data);
+      } else {
+        setLogs([]);
+      }
+    } catch (err) {
+      console.error("Failed to load backend audit logs:", err);
+      setError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to load audit logs from backend.",
+      );
+      setLogs([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [targetFacilityId]);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState("");
@@ -66,27 +132,47 @@ function AuditLogs() {
   const scopedLogs = useMemo(() => {
     if (!role) return [];
     return logs.filter((item) => {
+      const itemFacility =
+        item.facility ||
+        (item.facilityId
+          ? facilities.find((f) => f.id === item.facilityId)?.name
+          : null);
       const matchesFacility =
-        (item.facility || facilities[0]?.name) === currentFacilityName;
+        !itemFacility ||
+        itemFacility === currentFacilityName ||
+        (item.facilityId && item.facilityId === targetFacilityId);
+
       if (!matchesFacility) return false;
       if (isAdmin) return true; // Admin sees all logs within the facility
-      return item.visibleRoles?.includes(role);
+      if (!item.visibleRoles) return true;
+      if (Array.isArray(item.visibleRoles)) {
+        return item.visibleRoles.includes(role);
+      }
+      if (typeof item.visibleRoles === "string") {
+        return item.visibleRoles
+          .split(",")
+          .map((r) => r.trim())
+          .includes(role);
+      }
+      return true;
     });
-  }, [logs, role, isAdmin, currentFacilityName]);
+  }, [logs, role, isAdmin, currentFacilityName, targetFacilityId]);
 
   // 2. KPI Metrics based on facility & role-scoped logs
   const metrics = useMemo(() => {
     const total = scopedLogs.length;
     const critical = scopedLogs.filter(
-      (l) => l.severity === "critical",
+      (l) => l.severity?.toLowerCase() === "critical",
     ).length;
     const warning = scopedLogs.filter(
-      (l) => l.severity === "warning",
+      (l) => l.severity?.toLowerCase() === "warning",
     ).length;
     const success = scopedLogs.filter(
-      (l) => l.severity === "success",
+      (l) => l.severity?.toLowerCase() === "success",
     ).length;
-    const info = scopedLogs.filter((l) => l.severity === "info").length;
+    const info = scopedLogs.filter(
+      (l) => l.severity?.toLowerCase() === "info",
+    ).length;
     return { total, critical, warning, success, info };
   }, [scopedLogs]);
 
@@ -94,21 +180,29 @@ function AuditLogs() {
   const filteredLogs = useMemo(() => {
     return scopedLogs.filter((log) => {
       const q = searchQuery.toLowerCase().trim();
+      const idStr = String(log.logCode || log.id || "").toLowerCase();
+      const userNameStr = String(log.userName || "").toLowerCase();
+      const actionLabelStr = String(log.actionLabel || "").toLowerCase();
+      const actionStr = String(log.action || "").toLowerCase();
+      const targetStr = String(log.target || "").toLowerCase();
+      const facilityStr = String(log.facility || "").toLowerCase();
+      const descriptionStr = String(log.description || "").toLowerCase();
+
       const matchesSearch =
-        log.id.toLowerCase().includes(q) ||
-        log.userName.toLowerCase().includes(q) ||
-        log.actionLabel.toLowerCase().includes(q) ||
-        log.target.toLowerCase().includes(q) ||
-        log.facility.toLowerCase().includes(q) ||
-        log.description.toLowerCase().includes(q) ||
-        log.ipAddress.toLowerCase().includes(q);
+        idStr.includes(q) ||
+        userNameStr.includes(q) ||
+        actionLabelStr.includes(q) ||
+        actionStr.includes(q) ||
+        targetStr.includes(q) ||
+        facilityStr.includes(q) ||
+        descriptionStr.includes(q);
 
       const matchesModule =
         selectedModule === "All Modules" || log.module === selectedModule;
 
       const matchesSeverity =
         selectedSeverity === "All Severities" ||
-        log.severity.toLowerCase() === selectedSeverity.toLowerCase();
+        log.severity?.toLowerCase() === selectedSeverity.toLowerCase();
 
       return matchesSearch && matchesModule && matchesSeverity;
     });
@@ -205,26 +299,26 @@ function AuditLogs() {
       "User Name",
       "User Role",
       "Action",
+      "Action Code",
       "Module",
       "Severity",
       "Target",
       "Facility",
-      "IP Address",
       "Description",
     ];
 
     const rows = filteredLogs.map((l) => [
-      `"${l.id}"`,
-      `"${l.timestamp}"`,
-      `"${l.userName}"`,
-      `"${l.userRole}"`,
-      `"${l.actionLabel}"`,
-      `"${l.module}"`,
-      `"${l.severity}"`,
-      `"${l.target}"`,
-      `"${l.facility}"`,
-      `"${l.ipAddress}"`,
-      `"${l.description.replace(/"/g, '""')}"`,
+      `"${l.logCode || l.id}"`,
+      `"${l.timestamp || ""}"`,
+      `"${l.userName || ""}"`,
+      `"${l.userRole || ""}"`,
+      `"${l.actionLabel || ""}"`,
+      `"${l.action || ""}"`,
+      `"${l.module || ""}"`,
+      `"${l.severity || ""}"`,
+      `"${l.target || ""}"`,
+      `"${l.facility || ""}"`,
+      `"${(l.description || "").replace(/"/g, '""')}"`,
     ]);
 
     const csvContent =
@@ -261,11 +355,28 @@ function AuditLogs() {
           </div>
           <p className="text-sm text-gray-500 mt-1">
             Immutable chronological record of inventory transactions, catalog
-            modifications, approvals, and security events for <span className="font-semibold text-gray-700">{currentFacilityName}</span>
+            modifications, approvals, and security events for{" "}
+            <span className="font-semibold text-gray-700">
+              {currentFacilityName}
+            </span>
           </p>
         </div>
 
         <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={fetchLogs}
+            disabled={isLoading}
+            className="btn-secondary text-xs shadow-xs flex items-center gap-1.5"
+            title="Refresh audit records"
+          >
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${
+                isLoading ? "animate-spin text-blue-600" : ""
+              }`}
+            />
+            <span>Refresh</span>
+          </button>
           <button
             type="button"
             onClick={handleExportCSV}
@@ -434,10 +545,46 @@ function AuditLogs() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {paginatedLogs.length > 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td
+                    colSpan="6"
+                    className="px-6 py-12 text-center text-gray-500"
+                  >
+                    <RefreshCw className="w-8 h-8 mx-auto mb-2 text-blue-500 animate-spin" />
+                    <p className="text-sm font-semibold text-gray-700">
+                      Loading audit records...
+                    </p>
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td
+                    colSpan="6"
+                    className="px-6 py-12 text-center text-red-500"
+                  >
+                    <AlertTriangle className="w-9 h-9 mx-auto mb-2 text-red-400" />
+                    <p className="text-base font-semibold text-gray-800">
+                      Error Loading Audit Logs
+                    </p>
+                    <p className="text-xs text-red-600 mt-1 max-w-md mx-auto">
+                      {error}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={fetchLogs}
+                      className="mt-3 btn-secondary text-xs inline-flex items-center gap-1.5"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Retry</span>
+                    </button>
+                  </td>
+                </tr>
+              ) : paginatedLogs.length > 0 ? (
                 paginatedLogs.map((log) => {
                   const severityInfo = getSeverityBadge(log.severity);
                   const SeverityIcon = severityInfo.icon;
+                  const logCode = log.logCode || log.id;
 
                   return (
                     <tr
@@ -448,7 +595,7 @@ function AuditLogs() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
                           <span className="font-mono font-bold text-blue-700 text-xs bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
-                            {log.id}
+                            {logCode}
                           </span>
                         </div>
                         <div className="flex items-center gap-1 text-[11px] text-gray-400 mt-1 font-mono">
@@ -573,7 +720,7 @@ function AuditLogs() {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-mono font-bold text-blue-800 text-base">
-                    {selectedLog.id}
+                    {selectedLog.logCode || selectedLog.id}
                   </span>
                   <span
                     className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
@@ -591,7 +738,7 @@ function AuditLogs() {
 
               <div className="text-right">
                 <span className="text-[11px] font-mono font-semibold text-gray-600 bg-white/80 px-2.5 py-1 rounded-md border border-gray-200/80 block">
-                  IP: {selectedLog.ipAddress}
+                  Action: {selectedLog.action}
                 </span>
               </div>
             </div>

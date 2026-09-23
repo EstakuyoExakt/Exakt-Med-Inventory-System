@@ -7,6 +7,7 @@ import com.example.backend.entity.Facility;
 import com.example.backend.entity.Order;
 import com.example.backend.entity.OrderedItem;
 import com.example.backend.entity.Sku;
+import com.example.backend.entity.AuditLog;
 import com.example.backend.repository.BatchRepository;
 import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.OrderRepository;
@@ -30,17 +31,20 @@ public class BatchService {
     private final SkuRepository skuRepository;
     private final FacilityRepository facilityRepository;
     private final OrderRepository orderRepository;
+    private final AuditLogService auditLogService;
 
     public BatchService(BatchRepository batchRepository,
                         OrderedItemRepository orderedItemRepository,
                         SkuRepository skuRepository,
                         FacilityRepository facilityRepository,
-                        OrderRepository orderRepository) {
+                        OrderRepository orderRepository,
+                        AuditLogService auditLogService) {
         this.batchRepository = batchRepository;
         this.orderedItemRepository = orderedItemRepository;
         this.skuRepository = skuRepository;
         this.facilityRepository = facilityRepository;
         this.orderRepository = orderRepository;
+        this.auditLogService = auditLogService;
     }
 
     // 1. RECEIVE SINGLE BATCH (Pharmacist / Admin / SuperAdmin)
@@ -122,6 +126,18 @@ public class BatchService {
             order.setStatus(Order.Status.Received);
             orderRepository.save(order);
         }
+
+        auditLogService.logAction(
+                savedBatch.getFacility(),
+                "Inventory",
+                "BATCH_RECEIVED",
+                "Batch Stock Received (" + savedBatch.getUnits() + " units)",
+                AuditLog.Severity.SUCCESS,
+                savedBatch.getBatchNum(),
+                savedBatch.getId(),
+                "Received batch '" + savedBatch.getBatchNum() + "' (" + savedBatch.getUnits() + " units) for SKU '" + (orderedItem.getSku() != null ? orderedItem.getSku().getName() : "") + "'. Expiry: " + savedBatch.getExpiryDate() + ".",
+                "Admin,Pharmacist"
+        );
 
         return mapToResponseDto(savedBatch);
     }
@@ -209,6 +225,19 @@ public class BatchService {
         }
 
         Batch updated = batchRepository.save(batch);
+
+        auditLogService.logAction(
+                updated.getFacility(),
+                "Inventory",
+                "BATCH_STATUS_UPDATED",
+                "Batch Status Changed (" + oldStatus + " -> " + status + ")",
+                status == Batch.Status.Quarantined ? AuditLog.Severity.WARNING : AuditLog.Severity.INFO,
+                updated.getBatchNum(),
+                updated.getId(),
+                "Updated batch status for '" + updated.getBatchNum() + "' from " + oldStatus + " to " + status + "." + (notes != null && !notes.isBlank() ? " Notes: " + notes : ""),
+                "Admin,Pharmacist"
+        );
+
         return mapToResponseDto(updated);
     }
 
@@ -229,6 +258,19 @@ public class BatchService {
                 batch.setNotes(batch.getNotes() + " | " + autoNote);
             }
             batchRepository.save(batch);
+
+            auditLogService.logAction(
+                    batch.getFacility(),
+                    null,
+                    "Inventory",
+                    "BATCH_EXPIRED",
+                    "Batch Expired (" + batch.getBatchNum() + ")",
+                    AuditLog.Severity.CRITICAL,
+                    batch.getBatchNum(),
+                    batch.getId(),
+                    "Batch '" + batch.getBatchNum() + "' passed expiration date (" + batch.getExpiryDate() + "). Automatically deducted " + batch.getUnits() + " units from active SKU inventory.",
+                    "Admin,Pharmacist"
+            );
         }
         return expiredBatches.size();
     }

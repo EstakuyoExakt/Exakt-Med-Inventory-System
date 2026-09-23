@@ -21,19 +21,24 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import com.example.backend.entity.AuditLog;
+
 @Service
 public class FacilityAssignService {
     
     private final UserRepository userRepository;
     private final FacilityRepository facilityRepository;
     private final UserFacilityLinkRepository userFacilityLinkRepository;
+    private final AuditLogService auditLogService;
 
     public FacilityAssignService(UserRepository userRepository,
                                  FacilityRepository facilityRepository,
-                                 UserFacilityLinkRepository userFacilityLinkRepository) {
+                                 UserFacilityLinkRepository userFacilityLinkRepository,
+                                 AuditLogService auditLogService) {
         this.userRepository = userRepository;
         this.facilityRepository = facilityRepository;
         this.userFacilityLinkRepository = userFacilityLinkRepository;
+        this.auditLogService = auditLogService;
     }
 
     // 1. ASSIGN 1 OR MORE USERS (ADMIN / PHARMACIST / PROCUREMENT) TO A FACILITY
@@ -78,6 +83,19 @@ public class FacilityAssignService {
             return "All specified users are already assigned to facility '" + facility.getName() + "'";
         }
 
+        auditLogService.logAction(
+                facility,
+                currentUser,
+                "Security & Access",
+                "FACILITY_USERS_ASSIGNED",
+                "Users Assigned to Facility",
+                AuditLog.Severity.INFO,
+                facility.getName(),
+                facility.getId(),
+                "Assigned users " + assignedUsernames + " to facility '" + facility.getName() + "'.",
+                "Admin"
+        );
+
         return "Successfully assigned users " + assignedUsernames + " to facility '" + facility.getName() + "'";
     }
 
@@ -109,6 +127,19 @@ public class FacilityAssignService {
         if (unassignedUserIds.isEmpty()) {
             return "None of the specified users were assigned to facility '" + facility.getName() + "'";
         }
+
+        auditLogService.logAction(
+                facility,
+                currentUser,
+                "Security & Access",
+                "FACILITY_USERS_UNASSIGNED",
+                "Users Unassigned from Facility",
+                AuditLog.Severity.WARNING,
+                facility.getName(),
+                facility.getId(),
+                "Unassigned " + unassignedUserIds.size() + " user(s) (IDs: " + unassignedUserIds + ") from facility '" + facility.getName() + "'.",
+                "Admin"
+        );
 
         return "Successfully unassigned user IDs " + unassignedUserIds + " from facility '" + facility.getName() + "'";
     }

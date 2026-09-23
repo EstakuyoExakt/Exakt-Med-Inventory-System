@@ -55,12 +55,14 @@ public class AuditLogService {
 
         AuditLog log = new AuditLog();
         log.setFacility(facility);
-        log.setUser(user);
 
-        if (user != null) {
-            log.setUserName(user.getName() != null && !user.getName().isBlank() ? user.getName() : user.getUsername());
-            if (user.getRole() != null) {
-                log.setUserRole(user.getRole().name());
+        User actingUser = user != null ? user : getCurrentUser();
+        log.setUser(actingUser);
+
+        if (actingUser != null) {
+            log.setUserName(actingUser.getName() != null && !actingUser.getName().isBlank() ? actingUser.getName() : actingUser.getUsername());
+            if (actingUser.getRole() != null) {
+                log.setUserRole(actingUser.getRole().name());
             }
         } else {
             log.setUserName("System");
@@ -78,6 +80,20 @@ public class AuditLogService {
         log.setCreatedAt(LocalDateTime.now());
 
         return auditLogRepository.save(log);
+    }
+
+    // Overloaded helper that automatically detects current authenticated user
+    @Transactional
+    public AuditLog logAction(Facility facility,
+                              String module,
+                              String action,
+                              String actionLabel,
+                              AuditLog.Severity severity,
+                              String target,
+                              Long targetId,
+                              String description,
+                              String visibleRoles) {
+        return logAction(facility, getCurrentUser(), module, action, actionLabel, severity, target, targetId, description, visibleRoles);
     }
 
     // 2. QUERY AUDIT LOGS BY FACILITY (with multi-tenant isolation and role-based visibility)
@@ -156,7 +172,7 @@ public class AuditLogService {
         return dto;
     }
 
-    private User getCurrentUser() {
+    public User getCurrentUser() {
         try {
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             if (authentication != null && authentication.isAuthenticated()) {
