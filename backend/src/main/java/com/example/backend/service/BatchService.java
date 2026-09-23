@@ -239,6 +239,37 @@ public class BatchService {
         processExpiredBatches();
     }
 
+    // 8. DEDUCT BATCHES ACCORDING TO FEFO (FIRST EXPIRE FIRST OUT)
+    @Transactional
+    public void deductBatchesFEFO(Long skuId, Long facilityId, long unitsToDeduct) {
+        if (unitsToDeduct <= 0 || skuId == null || facilityId == null) {
+            return;
+        }
+
+        List<Batch> availableBatches = batchRepository.findAvailableBatchesForSkuFEFO(
+                skuId, facilityId, Batch.Status.Available);
+
+        long remaining = unitsToDeduct;
+        for (Batch batch : availableBatches) {
+            if (remaining <= 0) {
+                break;
+            }
+            long currentBatchUnits = batch.getUnits() != null ? batch.getUnits() : 0L;
+            if (currentBatchUnits <= 0) {
+                continue;
+            }
+
+            if (currentBatchUnits <= remaining) {
+                remaining -= currentBatchUnits;
+                batch.setUnits(0L);
+            } else {
+                batch.setUnits(currentBatchUnits - remaining);
+                remaining = 0L;
+            }
+            batchRepository.save(batch);
+        }
+    }
+
     // HELPER: ADJUST ACTIVE SKU UNITS
     private void adjustSkuUnits(Batch batch, long delta) {
         OrderedItem item = batch.getOrderedItem();

@@ -163,11 +163,14 @@ public class SkuService {
     @Transactional
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Pharmacist')")
     public SkuResponseDto adjustStock(Long id, SkuStockAdjustmentDto request) {
+        batchService.processExpiredBatches();
+
         Sku sku = skuRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("SKU not found with id: " + id));
 
         long currentUnits = sku.getUnits() != null ? sku.getUnits() : 0L;
         long newUnits;
+        long unitsToDeduct = 0L;
 
         switch (request.getType()) {
             case ADD -> newUnits = currentUnits + request.getAmount();
@@ -176,13 +179,24 @@ public class SkuService {
                     throw new RuntimeException("Cannot deduct more than current stock (" + currentUnits + " units).");
                 }
                 newUnits = currentUnits - request.getAmount();
+                unitsToDeduct = request.getAmount();
             }
-            case SET -> newUnits = request.getAmount();
+            case SET -> {
+                newUnits = request.getAmount();
+                if (newUnits < currentUnits) {
+                    unitsToDeduct = currentUnits - newUnits;
+                }
+            }
             default -> throw new IllegalArgumentException("Unknown adjustment type: " + request.getType());
         }
 
         sku.setUnits(newUnits);
         Sku savedSku = skuRepository.save(sku);
+
+        // FEFO: Deduct from the nearest expiring available batches
+        if (unitsToDeduct > 0 && savedSku.getFacility() != null) {
+            batchService.deductBatchesFEFO(savedSku.getId(), savedSku.getFacility().getId(), unitsToDeduct);
+        }
 
         // Record stock adjustment log entry
         StockAdjustmentLog log = new StockAdjustmentLog();
