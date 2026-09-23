@@ -207,30 +207,86 @@ const extractDosageFormFromDescription = (description, rawPackageCode) => {
   return "";
 };
 
+const extractSkuIdentifierGeneric = (generic, dosage) => {
+  if (!generic && !dosage) return "";
+
+  const effectiveDosage = dosage || extractDosageFromDescription(generic) || "";
+
+  // 1. Isolate the generic active ingredient names from any trailing dosage/container text
+  let ingredientText = generic || "";
+  if (
+    effectiveDosage &&
+    ingredientText.toLowerCase().includes(effectiveDosage.toLowerCase())
+  ) {
+    ingredientText = ingredientText.substring(
+      0,
+      ingredientText.toLowerCase().indexOf(effectiveDosage.toLowerCase()),
+    );
+  } else {
+    // Find the start of dosage units or strength numbers
+    const doseMatch = ingredientText.match(
+      /\b\d+(?:\.\d+)?\s*(?:%|mg|mcg|µg|g|iu|units?|u|meq|mmol)\b/i,
+    );
+    if (doseMatch && doseMatch.index > 0) {
+      ingredientText = ingredientText.substring(0, doseMatch.index);
+    }
+  }
+
+  // 2. Extract 4-letter codes for each active ingredient (handles combinations like "ALUMINUM HYDROXIDE + MAGNESIUM HYDROXIDE")
+  let genericCode = "";
+  if (ingredientText.includes("+")) {
+    const parts = ingredientText
+      .split("+")
+      .map((part) => {
+        const words = part.trim().split(/\s+/);
+        if (!words || words.length === 0 || !words[0]) return "";
+        const clean = words[0].replace(/[^a-zA-Z]/g, "");
+        return clean.slice(0, 4).toUpperCase();
+      })
+      .filter(Boolean);
+    genericCode = parts.join("+");
+  } else {
+    const words = ingredientText.trim().split(/\s+/);
+    const firstWord =
+      words && words.length > 0 && words[0] ? words[0] : ingredientText;
+    const clean = firstWord.replace(/[^a-zA-Z]/g, "");
+    genericCode = clean.slice(0, 4).toUpperCase();
+  }
+
+  // 3. Extract dosage numbers (handles combinations like "225 mg + 200 mg/5 mL" -> "225+200")
+  let dosageDigits = "";
+  if (effectiveDosage) {
+    if (String(effectiveDosage).includes("+")) {
+      const doseParts = String(effectiveDosage)
+        .split("+")
+        .map((part) => {
+          const m = part.match(/\d+(?:\.\d+)?/);
+          return m ? m[0] : "";
+        })
+        .filter(Boolean);
+      dosageDigits = doseParts.join("+");
+    } else {
+      const nums = String(effectiveDosage).match(/\d+/g);
+      if (nums) {
+        if (String(effectiveDosage).includes("/")) {
+          dosageDigits = nums.slice(0, 2).join("");
+        } else {
+          dosageDigits = nums[0];
+        }
+      }
+    }
+  }
+
+  return `${genericCode}${dosageDigits}`;
+};
+
 const generateSkuCode = (brand, generic, dosage, form, packagingUnit) => {
   const brandCode = (brand || "")
     .replace(/[^a-zA-Z0-9]/g, "")
     .slice(0, 4)
     .toUpperCase();
 
-  let genericCode = (generic || "")
-    .replace(/[^a-zA-Z]/g, "")
-    .slice(0, 4)
-    .toUpperCase();
-
-  let dosageDigits = "";
-  if (dosage) {
-    const nums = String(dosage).match(/\d+/g);
-    if (nums) {
-      if (String(dosage).includes("+") || String(dosage).includes("/")) {
-        dosageDigits = nums.slice(0, 2).join("");
-      } else {
-        dosageDigits = nums[0];
-      }
-    }
-  }
-
-  const genericStrength = `${genericCode}${dosageDigits}`;
+  const genericStrength = extractSkuIdentifierGeneric(generic, dosage);
   const formCode =
     (form && FORM_CODES[form]) || (form ? form.slice(0, 3).toUpperCase() : "");
   const packSize = packagingUnit ? extractPackSize(packagingUnit) : "";
