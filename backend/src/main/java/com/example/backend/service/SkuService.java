@@ -2,6 +2,7 @@ package com.example.backend.service;
 
 import com.example.backend.dto.sku.SkuRequestDto;
 import com.example.backend.dto.sku.SkuResponseDto;
+import com.example.backend.dto.sku.SkuStockAdjustmentDto;
 import com.example.backend.entity.Facility;
 import com.example.backend.entity.LibMedicine;
 import com.example.backend.entity.Sku;
@@ -144,6 +145,33 @@ public class SkuService {
             throw new RuntimeException("SKU not found with id: " + id);
         }
         skuRepository.deleteById(id);
+    }
+
+    // 5b. ADJUST SKU STOCK (Physical count / write-off / correction)
+    @Transactional
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Pharmacist')")
+    public SkuResponseDto adjustStock(Long id, SkuStockAdjustmentDto request) {
+        Sku sku = skuRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("SKU not found with id: " + id));
+
+        long currentUnits = sku.getUnits() != null ? sku.getUnits() : 0L;
+        long newUnits;
+
+        switch (request.getType()) {
+            case ADD -> newUnits = currentUnits + request.getAmount();
+            case SUBTRACT -> {
+                if (request.getAmount() > currentUnits) {
+                    throw new RuntimeException("Cannot deduct more than current stock (" + currentUnits + " units).");
+                }
+                newUnits = currentUnits - request.getAmount();
+            }
+            case SET -> newUnits = request.getAmount();
+            default -> throw new IllegalArgumentException("Unknown adjustment type: " + request.getType());
+        }
+
+        sku.setUnits(newUnits);
+        Sku savedSku = skuRepository.save(sku);
+        return mapToResponseDto(savedSku, "Stock adjusted successfully");
     }
 
     // 6. SEARCH SKUS (by brandName, sku name, and medicine name)

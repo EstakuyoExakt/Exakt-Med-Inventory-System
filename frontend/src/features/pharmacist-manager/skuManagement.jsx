@@ -841,14 +841,14 @@ function SkuManagement() {
   };
 
   // Submit Stock Adjustment Action
-  const handleSaveStockAdjustment = (e) => {
+  const handleSaveStockAdjustment = async (e) => {
     e.preventDefault();
     if (!selectedSku) return;
 
     const errors = {};
     const amt = Number(adjustFormData.amount);
 
-    if (isNaN(amt) || amt < 0) {
+    if (adjustFormData.amount === "" || isNaN(amt) || amt < 0) {
       errors.amount = "Please enter a valid non-negative quantity.";
     } else if (
       adjustFormData.type === "SUBTRACT" &&
@@ -862,24 +862,29 @@ function SkuManagement() {
       return;
     }
 
-    setSkuList((prev) =>
-      prev.map((s) => {
-        if (s.id === selectedSku.id) {
-          let newStock = s.currentStock;
-          if (adjustFormData.type === "ADD") {
-            newStock += amt;
-          } else if (adjustFormData.type === "SUBTRACT") {
-            newStock = Math.max(0, newStock - amt);
-          } else if (adjustFormData.type === "SET") {
-            newStock = amt;
-          }
-          return { ...s, currentStock: newStock };
-        }
-        return s;
-      }),
-    );
+    try {
+      setIsSubmitting(true);
+      clearErrors();
+      await skuService.adjustStock(selectedSku.id, {
+        type: adjustFormData.type,
+        amount: amt,
+        reason: adjustFormData.reason,
+        notes: adjustFormData.notes ? adjustFormData.notes.trim() : null,
+      });
 
-    handleCloseModal();
+      await fetchSkus(searchQuery);
+      handleCloseModal();
+    } catch (err) {
+      console.error("Failed to adjust stock:", err);
+      setFormErrors({
+        general:
+          err.response?.data?.message ||
+          err.message ||
+          "Failed to adjust stock. Please try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
 
@@ -1641,6 +1646,12 @@ function SkuManagement() {
       >
         {selectedSku && (
           <form onSubmit={handleSaveStockAdjustment} className="space-y-4">
+            {formErrors.general && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{formErrors.general}</span>
+              </div>
+            )}
             {/* SKU Context Card */}
             <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-between text-xs">
               <div>
@@ -1805,9 +1816,17 @@ function SkuManagement() {
               >
                 Cancel
               </button>
-              <button type="submit" className="btn-primary">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="btn-primary disabled:opacity-50"
+              >
                 <Sliders className="w-4 h-4" />
-                <span>Apply Stock Adjustment</span>
+                <span>
+                  {isSubmitting
+                    ? "Applying Adjustment..."
+                    : "Apply Stock Adjustment"}
+                </span>
               </button>
             </div>
           </form>

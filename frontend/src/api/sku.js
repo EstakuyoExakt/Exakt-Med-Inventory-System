@@ -22,6 +22,7 @@ const skuApi = {
   getSkuById: (id) => `${API_URL}/${id}`,
   updateSku: (id) => `${API_URL}/${id}`,
   deleteSku: (id) => `${API_URL}/${id}`,
+  adjustStock: (id) => `${API_URL}/${id}/adjust-stock`,
   getReorderNeededSkus: (facilityId = null, search = "") => {
     const params = new URLSearchParams();
     if (facilityId) params.append("facilityId", facilityId);

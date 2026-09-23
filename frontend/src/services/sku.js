@@ -66,6 +66,14 @@ const skuService = {
     return response.data;
   },
 
+  adjustStock: async (id, adjustmentData, config = {}) => {
+    const response = await axios.patch(skuApi.adjustStock(id), adjustmentData, {
+      ...config,
+      headers: getAuthHeaders(config),
+    });
+    return response.data;
+  },
+
   getReorderNeededSkus: async (facilityId = null, search = "", config = {}) => {
     const response = await axios.get(
       skuApi.getReorderNeededSkus(facilityId, search),

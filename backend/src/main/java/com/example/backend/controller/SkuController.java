@@ -2,6 +2,7 @@ package com.example.backend.controller;
 
 import com.example.backend.dto.sku.SkuRequestDto;
 import com.example.backend.dto.sku.SkuResponseDto;
+import com.example.backend.dto.sku.SkuStockAdjustmentDto;
 import com.example.backend.service.SkuService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -73,5 +74,13 @@ public class SkuController {
     public ResponseEntity<String> deleteSku(@PathVariable Long id) {
         skuService.deleteSku(id);
         return ResponseEntity.ok("SKU deleted successfully");
+    }
+
+    // 7. ADJUST SKU STOCK
+    @PatchMapping("/{id:[0-9]+}/adjust-stock")
+    public ResponseEntity<SkuResponseDto> adjustStock(
+            @PathVariable Long id,
+            @Valid @RequestBody SkuStockAdjustmentDto request) {
+        return ResponseEntity.ok(skuService.adjustStock(id, request));
     }
 }
