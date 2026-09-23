@@ -38,11 +38,11 @@ function BatchManagement() {
 
   // Automatically detect current active facility from auth session
   const currentFacilityName = useMemo(() => {
-    return facility?.name || "Hospital Facility";
+    return facility?.name || "";
   }, [facility]);
 
   const activeFacilityId = useMemo(() => {
-    return facility?.id || 1;
+    return facility?.id || null;
   }, [facility]);
 
   // Real batches loaded directly from backend API (no mock data fallback)
@@ -67,13 +67,9 @@ function BatchManagement() {
 
   // Filter batches to display only those belonging to the current facility
   const currentFacilityBatches = useMemo(() => {
-    return batchList.filter(
-      (b) =>
-        (b.facilityId && b.facilityId === activeFacilityId) ||
-        !b.location ||
-        b.location === currentFacilityName,
-    );
-  }, [batchList, activeFacilityId, currentFacilityName]);
+    if (!activeFacilityId) return [];
+    return batchList.filter((b) => b.facilityId === activeFacilityId);
+  }, [batchList, activeFacilityId]);
 
   // Form State for Receive Stock via PO (Individual batch per SKU)
   const getInitialReceiveFormData = () => ({
@@ -168,6 +164,10 @@ function BatchManagement() {
   );
 
   const fetchApprovedOrders = useCallback(async () => {
+    if (!activeFacilityId) {
+      setApprovedOrders([]);
+      return;
+    }
     try {
       setIsOrdersLoading(true);
       setOrdersError(null);
@@ -531,6 +531,11 @@ function BatchManagement() {
 
     if (!isValid) {
       setFormErrors(errors);
+      return;
+    }
+
+    if (!activeFacilityId) {
+      setFormErrors({ poNumber: "Operating facility could not be determined. Please re-select your active facility." });
       return;
     }
 

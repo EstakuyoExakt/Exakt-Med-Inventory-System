@@ -287,10 +287,10 @@ function UserManagement() {
           name: formData.name.trim(),
           username: formData.username.trim(),
           email: formData.email.trim(),
-          phone: formData.phone.trim() || "+63 900 000 0000",
+          phone: formData.phone.trim() || null,
           role: formData.role,
           status: formData.status === "Active",
-          password: formData.password || "exaktpassword",
+          password: formData.password,
           facilityId:
             formData.role === ROLES.PHARMACIST ||
             formData.role === ROLES.PROCUREMENT

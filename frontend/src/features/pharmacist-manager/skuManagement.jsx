@@ -28,9 +28,7 @@ import libMedicineService from "../../services/libMedicine";
 import skuService from "../../services/sku";
 import restockRequestService from "../../services/restockRequest";
 
-// Data & Constants Imports
-import { initialSkus } from "../../data/skuManagement";
-import { facilities } from "../../data/facility";
+// Constants Imports
 import {
   FORM_CODES,
   DEFAULT_SKU_FORM_DATA,
@@ -337,18 +335,14 @@ function SkuManagement() {
 
   // Automatically detect current active facility
   const currentFacilityName = useMemo(() => {
-    return (
-      facility?.name || facilities[0]?.name || "Exakt Central General Hospital"
-    );
+    return facility?.name || "";
   }, [facility]);
 
   const targetFacilityId = useMemo(() => {
-    return (
-      facility?.id || facilities.find((f) => f.name === currentFacilityName)?.id
-    );
-  }, [facility?.id, currentFacilityName]);
+    return facility?.id || null;
+  }, [facility]);
 
-  const [skuList, setSkuList] = useState(initialSkus);
+  const [skuList, setSkuList] = useState([]);
   const [isLoadingSkus, setIsLoadingSkus] = useState(false);
   const [skuError, setSkuError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -448,10 +442,9 @@ function SkuManagement() {
 
   // Filter SKUs that reference the current active facility
   const currentFacilitySkus = useMemo(() => {
-    return skuList.filter(
-      (s) => (s.facility || facilities[0]?.name) === currentFacilityName,
-    );
-  }, [skuList, currentFacilityName]);
+    if (!targetFacilityId) return [];
+    return skuList.filter((s) => s.facilityId === targetFacilityId);
+  }, [skuList, targetFacilityId]);
 
   // Calculate Metrics for Current Facility
   const totalSkus = currentFacilitySkus.length;
@@ -709,12 +702,12 @@ function SkuManagement() {
 
     try {
       setIsRestockSubmitting(true);
-      const targetFacilityId =
+      const targetFacilityIdToUse =
         facility?.id ||
         selectedSku?.facilityId ||
-        facilities.find((f) => f.name === currentFacilityName)?.id;
+        targetFacilityId;
 
-      if (!targetFacilityId) {
+      if (!targetFacilityIdToUse) {
         setFormErrors({
           skuId:
             "Active facility could not be determined. Please re-select your operating facility.",
@@ -724,7 +717,7 @@ function SkuManagement() {
 
       const payload = {
         skuId: Number(restockFormData.skuId),
-        facilityId: Number(targetFacilityId),
+        facilityId: Number(targetFacilityIdToUse),
         requestedUnits: units,
         reason: restockFormData.reason ? restockFormData.reason.trim() : null,
       };
@@ -809,16 +802,23 @@ function SkuManagement() {
       return;
     }
 
-    const targetFacilityId =
+    const targetFacilityIdToSave =
       facility?.id ||
-      facilities.find((f) => f.name === currentFacilityName)?.id ||
-      1;
+      selectedSku?.facilityId ||
+      targetFacilityId;
+
+    if (!targetFacilityIdToSave) {
+      setFormErrors({
+        sku: "Active operating facility could not be determined. Please ensure you are logged into a valid facility.",
+      });
+      return;
+    }
 
     setIsSubmitting(true);
     try {
       if (modalMode === "add") {
         const payload = {
-          facilityId: Number(targetFacilityId),
+          facilityId: Number(targetFacilityIdToSave),
           medicineId: Number(formData.medicineId),
           name: formData.sku.trim().toUpperCase(),
           brandName: formData.brandName.trim().toUpperCase(),
@@ -845,17 +845,19 @@ function SkuManagement() {
       } else if (modalMode === "edit" && selectedSku) {
         const editFacilityId =
           selectedSku.facilityId ||
-          facility?.id ||
-          facilities.find(
-            (f) => f.name === (selectedSku.facility || currentFacilityName),
-          )?.id ||
-          1;
+          targetFacilityIdToSave;
+
+        const editMedicineId = formData.medicineId || selectedSku.medicineId;
+        if (!editMedicineId) {
+          setFormErrors({
+            medicineId: "Associated medicine ID is missing.",
+          });
+          return;
+        }
 
         const payload = {
           facilityId: Number(editFacilityId),
-          medicineId: Number(
-            formData.medicineId || selectedSku.medicineId || 1,
-          ),
+          medicineId: Number(editMedicineId),
           name: formData.sku.trim().toUpperCase(),
           brandName: formData.brandName.trim().toUpperCase(),
           dosageForm: formData.dosageForm.trim().toUpperCase(),
@@ -909,12 +911,11 @@ function SkuManagement() {
       handleCloseModal();
     } catch (err) {
       console.error("Failed to delete SKU from server:", err);
-      // Fallback: remove locally so UI responds
-      setSkuList((prev) => prev.filter((s) => s.id !== selectedSku.id));
-      if (paginatedSkus.length === 1 && currentPage > 1) {
-        setCurrentPage((prev) => prev - 1);
-      }
-      handleCloseModal();
+      const errorMsg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to delete SKU from server.";
+      setSkuError(errorMsg);
     } finally {
       setIsSubmitting(false);
     }

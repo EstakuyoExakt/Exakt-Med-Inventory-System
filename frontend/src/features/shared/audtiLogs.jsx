@@ -33,7 +33,6 @@ import useAuth from "../../hooks/useAuth";
 import { ROLES } from "../../config/roles";
 
 // Services & Facilities
-import { facilities } from "../../data/facility";
 import auditLogService from "../../services/auditLog";
 
 const AUDIT_MODULES = [
@@ -63,22 +62,12 @@ function AuditLogs({
 
   // Automatically detect current active facility
   const currentFacilityName = useMemo(() => {
-    return (
-      propFacilityName ||
-      facility?.name ||
-      facilities[0]?.name ||
-      "Exakt Central General Hospital"
-    );
+    return propFacilityName || facility?.name || "";
   }, [propFacilityName, facility]);
 
   const targetFacilityId = useMemo(() => {
-    return (
-      propFacilityId ||
-      facility?.id ||
-      facilities.find((f) => f.name === currentFacilityName)?.id ||
-      1
-    );
-  }, [propFacilityId, facility?.id, currentFacilityName]);
+    return propFacilityId || facility?.id || null;
+  }, [propFacilityId, facility?.id]);
 
   const [logs, setLogs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -130,17 +119,11 @@ function AuditLogs({
 
   // 1. Facility & Role Scoped Logs: Filter logs accessible to the current logged-in user's role and active facility
   const scopedLogs = useMemo(() => {
-    if (!role) return [];
+    if (!role || !targetFacilityId) return [];
     return logs.filter((item) => {
-      const itemFacility =
-        item.facility ||
-        (item.facilityId
-          ? facilities.find((f) => f.id === item.facilityId)?.name
-          : null);
       const matchesFacility =
-        !itemFacility ||
-        itemFacility === currentFacilityName ||
-        (item.facilityId && item.facilityId === targetFacilityId);
+        item.facilityId === targetFacilityId ||
+        item.facility === currentFacilityName;
 
       if (!matchesFacility) return false;
       if (isAdmin) return true; // Admin sees all logs within the facility

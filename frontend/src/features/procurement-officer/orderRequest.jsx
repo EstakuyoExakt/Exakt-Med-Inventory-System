@@ -30,10 +30,7 @@ import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 import SuccessModal from "../../components/common/successModal";
 
-// Data & Service Imports
-import { initialSkus } from "../../data/skuManagement";
-import { suppliers } from "../../data/supplier";
-import { facilities } from "../../data/facility";
+// Constants & Helper Imports
 import { getStockStatus } from "../../utils/helpers";
 import { DEFAULT_ORDER_FORM } from "../../utils/constants";
 import useAuth from "../../hooks/useAuth";
@@ -101,10 +98,7 @@ const mapDtoToSku = (dto) => {
     dosage: extractDosageFromDescription(dto.drugDescription) || "",
     dosageForm: dto.dosageForm || "",
     packagingUnit: dto.packagingUnit || "",
-    type:
-      dto.type ||
-      initialSkus.find((s) => s.sku === dto.name)?.type ||
-      "General",
+    type: dto.dosageForm || "General",
     currentStock: Number(dto.units ?? 0),
     units: Number(dto.units ?? 0),
     minimumLevel: Number(dto.minimumLevel ?? 0),
@@ -125,15 +119,17 @@ function OrderRequest() {
 
   // Automatically detect current active facility
   const currentFacilityName = useMemo(() => {
-    return (
-      facility?.name || facilities[0]?.name || "Exakt Central General Hospital"
-    );
+    return facility?.name || "";
   }, [facility]);
 
-  const [skuList, setSkuList] = useState(initialSkus);
+  const targetFacilityId = useMemo(() => {
+    return facility?.id || null;
+  }, [facility]);
+
+  const [skuList, setSkuList] = useState([]);
   const [isLoadingSkus, setIsLoadingSkus] = useState(false);
   const [skuError, setSkuError] = useState(null);
-  const [supplierList, setSupplierList] = useState(suppliers);
+  const [supplierList, setSupplierList] = useState([]);
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUrgency, setSelectedUrgency] = useState("ALL");
@@ -146,9 +142,6 @@ function OrderRequest() {
       try {
         setIsLoadingSkus(true);
         setSkuError(null);
-        const targetFacilityId =
-          facility?.id ||
-          facilities.find((f) => f.name === currentFacilityName)?.id;
 
         if (!targetFacilityId) {
           setSkuList([]);
@@ -188,13 +181,14 @@ function OrderRequest() {
 
   // Fetch suppliers from backend API
   const fetchSuppliers = useCallback(async () => {
+    if (!targetFacilityId) {
+      setSupplierList([]);
+      return;
+    }
     try {
       setIsLoadingSuppliers(true);
-      const targetFacilityId =
-        facility?.id ||
-        facilities.find((f) => f.name === currentFacilityName)?.id;
       const data = await supplierService.getAllSuppliers(targetFacilityId);
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setSupplierList(data);
       }
     } catch (err) {
@@ -202,7 +196,7 @@ function OrderRequest() {
     } finally {
       setIsLoadingSuppliers(false);
     }
-  }, [facility?.id, currentFacilityName]);
+  }, [targetFacilityId]);
 
   useEffect(() => {
     fetchSuppliers();
@@ -218,10 +212,9 @@ function OrderRequest() {
 
   // Filter SKUs that reference the current active facility
   const currentFacilitySkus = useMemo(() => {
-    return skuList.filter(
-      (s) => (s.facility || facilities[0]?.name) === currentFacilityName,
-    );
-  }, [skuList, currentFacilityName]);
+    if (!targetFacilityId) return [];
+    return skuList.filter((s) => s.facilityId === targetFacilityId);
+  }, [skuList, targetFacilityId]);
 
   // Multi-Selection State for Table Checkboxes
   const [selectedSkuIds, setSelectedSkuIds] = useState([]);
@@ -241,12 +234,13 @@ function OrderRequest() {
 
   // Fetch Restock Requests from backend API (Pending only - awaiting PO creation)
   const fetchRestockRequests = useCallback(async () => {
+    if (!targetFacilityId) {
+      setRestockRequests([]);
+      return;
+    }
     try {
       setIsLoadingRestockRequests(true);
       setRestockRequestError(null);
-      const targetFacilityId =
-        facility?.id ||
-        facilities.find((f) => f.name === currentFacilityName)?.id;
 
       const data = await restockRequestService.getAllRestockRequests(
         targetFacilityId,
@@ -341,7 +335,7 @@ function OrderRequest() {
   // Multi-Item Order Form State
   const [orderForm, setOrderForm] = useState({
     ...DEFAULT_ORDER_FORM,
-    supplierId: suppliers[0]?.id || 1,
+    supplierId: "",
     targetFacility: currentFacilityName,
     restockRequestIds: [],
   });
@@ -481,7 +475,7 @@ function OrderRequest() {
 
     setOrderForm({
       supplierId:
-        activeSuppliers[0]?.id || supplierList[0]?.id || suppliers[0]?.id || 1,
+        activeSuppliers[0]?.id ? String(activeSuppliers[0].id) : (supplierList[0]?.id ? String(supplierList[0].id) : ""),
       targetFacility: currentFacilityName,
       priority: hasCritical ? "Urgent" : "Normal",
       totalCost: "",
@@ -532,7 +526,7 @@ function OrderRequest() {
         skuList.find((s) => s.id === req.skuId || s.sku === req.skuName);
 
       return {
-        id: req.skuId || matchedSku?.id || 1,
+        id: req.skuId || matchedSku?.id,
         sku: req.skuName || matchedSku?.sku || "",
         brandName: req.brandName || matchedSku?.brandName || "",
         genericName: req.genericName || matchedSku?.genericName || "",
@@ -544,7 +538,7 @@ function OrderRequest() {
         minimumLevel: matchedSku?.minimumLevel ?? 0,
         maximumLevel: matchedSku?.maximumLevel ?? 0,
         reorderLevel: matchedSku?.reorderLevel ?? 0,
-        quantity: Number(req.requestedUnits) || 100,
+        quantity: Number(req.requestedUnits) || 1,
         price: "",
       };
     });
@@ -559,7 +553,7 @@ function OrderRequest() {
 
     setOrderForm({
       supplierId:
-        activeSuppliers[0]?.id || supplierList[0]?.id || suppliers[0]?.id || 1,
+        activeSuppliers[0]?.id ? String(activeSuppliers[0].id) : (supplierList[0]?.id ? String(supplierList[0].id) : ""),
       targetFacility: currentFacilityName,
       priority: "Normal",
       totalCost: "",
@@ -697,16 +691,20 @@ function OrderRequest() {
     }
 
     const supplierObj =
-      supplierList.find((s) => s.id === Number(orderForm.supplierId)) ||
-      suppliers.find((s) => s.id === Number(orderForm.supplierId));
+      supplierList.find((s) => s.id === Number(orderForm.supplierId));
 
-    const targetFacilityId =
-      facility?.id ||
-      facilities.find((f) => f.name === currentFacilityName)?.id ||
-      1;
+    const targetFacilityIdToSave =
+      facility?.id || targetFacilityId;
+
+    if (!targetFacilityIdToSave) {
+      setFormErrors({
+        supplierId: "Operating facility could not be determined. Please re-select your facility.",
+      });
+      return;
+    }
 
     const orderPayload = {
-      facilityId: Number(targetFacilityId),
+      facilityId: Number(targetFacilityIdToSave),
       supplierId: Number(orderForm.supplierId),
       priority: orderForm.priority || "Normal",
       totalPrice: Math.round(computedTotalCost),
@@ -721,7 +719,7 @@ function OrderRequest() {
           (s) => s.sku === i.sku || s.id === i.id,
         );
         return {
-          skuId: matchedSku?.id || i.id || 1,
+          skuId: matchedSku?.id || i.id,
           orderedUnits: Number(i.quantity) || 1,
           price: Math.round(Number(i.price) || 0),
         };

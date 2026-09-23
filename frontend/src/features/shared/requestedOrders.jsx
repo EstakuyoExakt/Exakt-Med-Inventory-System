@@ -31,9 +31,8 @@ import Modal from "../../components/common/modal";
 import RoleGuard from "../../components/guard/roleGuard";
 import { ROLES } from "../../config/roles";
 
-// Services & Facilities
+// Services & Hooks
 import orderService from "../../services/order";
-import { facilities } from "../../data/facility";
 import useAuth from "../../hooks/useAuth";
 
 // Helper to normalize backend OrderResponseDto into view model
@@ -78,9 +77,11 @@ function RequestedOrders() {
 
   // Automatically detect current active facility
   const currentFacilityName = useMemo(() => {
-    return (
-      facility?.name || facilities[0]?.name || "Exakt Central General Hospital"
-    );
+    return facility?.name || "";
+  }, [facility]);
+
+  const targetFacilityId = useMemo(() => {
+    return facility?.id || null;
   }, [facility]);
 
   const [orders, setOrders] = useState([]);
@@ -96,10 +97,11 @@ function RequestedOrders() {
 
   // Fetch real order data from backend
   const fetchOrders = useCallback(async () => {
-    const targetFacilityId =
-      facility?.id ||
-      facilities.find((f) => f.name === currentFacilityName)?.id ||
-      1;
+    if (!targetFacilityId) {
+      setOrders([]);
+      setIsLoading(false);
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -120,7 +122,7 @@ function RequestedOrders() {
     } finally {
       setIsLoading(false);
     }
-  }, [facility?.id, currentFacilityName]);
+  }, [targetFacilityId]);
 
   useEffect(() => {
     fetchOrders();
@@ -128,10 +130,11 @@ function RequestedOrders() {
 
   // Filter orders that reference the current active facility
   const currentFacilityOrders = useMemo(() => {
+    if (!targetFacilityId) return [];
     return orders.filter(
-      (o) => (o.targetFacility || facilities[0]?.name) === currentFacilityName,
+      (o) => o.facilityId === targetFacilityId || o.targetFacility === currentFacilityName,
     );
-  }, [orders, currentFacilityName]);
+  }, [orders, targetFacilityId, currentFacilityName]);
 
   // Modals state
   const [selectedOrder, setSelectedOrder] = useState(null);

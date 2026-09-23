@@ -10,7 +10,7 @@ export const DEFAULT_USER_FORM = {
   phone: "",
   role: ROLES.PHARMACIST,
   status: "Active",
-  password: "exaktpassword",
+  password: "",
 };
 
 // ==========================================
