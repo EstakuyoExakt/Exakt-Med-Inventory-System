@@ -61,6 +61,17 @@ public class RestockRequestService {
             user = getCurrentUser();
         }
 
+        // Prevent duplicate restock requests until the previous request's order is Received
+        List<RestockRequest> existingActive = restockRequestRepository
+                .findActiveRestockRequestsByFacilityIdAndSkuId(facility.getId(), sku.getId());
+        if (!existingActive.isEmpty()) {
+            RestockRequest existing = existingActive.get(0);
+            String currentStatus = existing.getOrder() == null ? "Requested" : existing.getOrder().getStatus().name();
+            throw new RuntimeException("A restock request is already active for this SKU (" 
+                    + existing.getRequestedUnits() + " units, Status: " + currentStatus 
+                    + "). A new request can only be submitted once the current restock is Received.");
+        }
+
         RestockRequest restockRequest = new RestockRequest();
         restockRequest.setFacility(facility);
         restockRequest.setSku(sku);
@@ -157,6 +168,10 @@ public class RestockRequestService {
 
         if (entity.getOrder() != null) {
             dto.setOrderId(entity.getOrder().getId());
+            dto.setPurchaseOrderNum(entity.getOrder().getPurchaseOrderNum());
+            dto.setStatus(entity.getOrder().getStatus() != null ? entity.getOrder().getStatus().name() : "Ordered");
+        } else {
+            dto.setStatus("Requested");
         }
 
         if (entity.getOrderedItem() != null) {

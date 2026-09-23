@@ -29,4 +29,11 @@ public class SkuResponseDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String message;
+
+    // Restock request tracking
+    private Boolean hasPendingRestock;
+    private Long pendingRestockUnits;
+    private Long pendingRestockRequestId;
+    private LocalDateTime pendingRestockCreatedAt;
+    private String pendingRestockStatus;
 }

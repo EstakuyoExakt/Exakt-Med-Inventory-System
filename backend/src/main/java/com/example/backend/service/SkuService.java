@@ -10,8 +10,10 @@ import com.example.backend.entity.LibMedicine;
 import com.example.backend.entity.Sku;
 import com.example.backend.entity.StockAdjustmentLog;
 import com.example.backend.entity.User;
+import com.example.backend.entity.RestockRequest;
 import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.LibMedicineRepository;
+import com.example.backend.repository.RestockRequestRepository;
 import com.example.backend.repository.SkuRepository;
 import com.example.backend.repository.StockAdjustmentLogRepository;
 import com.example.backend.repository.UserRepository;
@@ -21,7 +23,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -34,6 +38,7 @@ public class SkuService {
     private final StockAdjustmentLogRepository stockAdjustmentLogRepository;
     private final AuditLogService auditLogService;
     private final UserRepository userRepository;
+    private final RestockRequestRepository restockRequestRepository;
 
     public SkuService(SkuRepository skuRepository,
                       FacilityRepository facilityRepository,
@@ -41,7 +46,8 @@ public class SkuService {
                       BatchService batchService,
                       StockAdjustmentLogRepository stockAdjustmentLogRepository,
                       AuditLogService auditLogService,
-                      UserRepository userRepository) {
+                      UserRepository userRepository,
+                      RestockRequestRepository restockRequestRepository) {
         this.skuRepository = skuRepository;
         this.facilityRepository = facilityRepository;
         this.libMedicineRepository = libMedicineRepository;
@@ -49,6 +55,7 @@ public class SkuService {
         this.stockAdjustmentLogRepository = stockAdjustmentLogRepository;
         this.auditLogService = auditLogService;
         this.userRepository = userRepository;
+        this.restockRequestRepository = restockRequestRepository;
     }
 
     // 1. CREATE SKU (Units field is automatically defaulted to 0 by @PrePersist in Sku entity)
@@ -113,8 +120,10 @@ public class SkuService {
         batchService.processExpiredBatches();
 
         List<Sku> skus = skuRepository.findByFacilityId(facilityId);
+        Map<Long, List<RestockRequest>> activeRestockMap = getActiveRestockMap(facilityId);
+
         return skus.stream()
-                .map(sku -> mapToResponseDto(sku, null))
+                .map(sku -> mapToResponseDto(sku, null, activeRestockMap.get(sku.getId())))
                 .collect(Collectors.toList());
     }
 
@@ -336,9 +345,10 @@ public class SkuService {
 
         batchService.processExpiredBatches();
         String query = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
-        return skuRepository.searchSkus(query, facilityId)
-                .stream()
-                .map(sku -> mapToResponseDto(sku, null))
+        List<Sku> skus = skuRepository.searchSkus(query, facilityId);
+        Map<Long, List<RestockRequest>> activeRestockMap = getActiveRestockMap(facilityId);
+        return skus.stream()
+                .map(sku -> mapToResponseDto(sku, null, activeRestockMap.get(sku.getId())))
                 .collect(Collectors.toList());
     }
 
@@ -355,14 +365,25 @@ public class SkuService {
 
         batchService.processExpiredBatches();
         String query = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
-        return skuRepository.findReorderNeededSkus(facilityId, query)
-                .stream()
-                .map(sku -> mapToResponseDto(sku, null))
+        List<Sku> skus = skuRepository.findReorderNeededSkus(facilityId, query);
+        Map<Long, List<RestockRequest>> activeRestockMap = getActiveRestockMap(facilityId);
+        return skus.stream()
+                .map(sku -> mapToResponseDto(sku, null, activeRestockMap.get(sku.getId())))
                 .collect(Collectors.toList());
     }
 
-    // Helper: Map Sku entity to SkuResponseDto
-    private SkuResponseDto mapToResponseDto(Sku sku, String message) {
+    private Map<Long, List<RestockRequest>> getActiveRestockMap(Long facilityId) {
+        if (facilityId == null) {
+            return Collections.emptyMap();
+        }
+        return restockRequestRepository.findActiveRestockRequestsByFacilityId(facilityId)
+                .stream()
+                .filter(r -> r.getSku() != null && r.getSku().getId() != null)
+                .collect(Collectors.groupingBy(r -> r.getSku().getId()));
+    }
+
+    // Helper: Map Sku entity to SkuResponseDto with restock enrichment
+    private SkuResponseDto mapToResponseDto(Sku sku, String message, List<RestockRequest> activeRestocks) {
         SkuResponseDto dto = new SkuResponseDto();
         dto.setId(sku.getId());
 
@@ -388,7 +409,36 @@ public class SkuService {
         dto.setUpdatedAt(sku.getUpdatedAt());
         dto.setMessage(message);
 
+        if (activeRestocks != null && !activeRestocks.isEmpty()) {
+            dto.setHasPendingRestock(true);
+            long totalUnits = activeRestocks.stream()
+                    .mapToLong(r -> r.getRequestedUnits() != null ? r.getRequestedUnits() : 0L)
+                    .sum();
+            dto.setPendingRestockUnits(totalUnits);
+            RestockRequest latest = activeRestocks.get(0);
+            dto.setPendingRestockRequestId(latest.getId());
+            dto.setPendingRestockCreatedAt(latest.getCreatedAt());
+            String status = latest.getOrder() == null ? "Requested" : latest.getOrder().getStatus().name();
+            dto.setPendingRestockStatus(status);
+        } else {
+            dto.setHasPendingRestock(false);
+            dto.setPendingRestockUnits(0L);
+            dto.setPendingRestockRequestId(null);
+            dto.setPendingRestockCreatedAt(null);
+            dto.setPendingRestockStatus(null);
+        }
+
         return dto;
+    }
+
+    // Overloaded helper for single-entity callers
+    private SkuResponseDto mapToResponseDto(Sku sku, String message) {
+        List<RestockRequest> active = null;
+        if (sku.getFacility() != null && sku.getId() != null) {
+            active = restockRequestRepository.findActiveRestockRequestsByFacilityIdAndSkuId(
+                    sku.getFacility().getId(), sku.getId());
+        }
+        return mapToResponseDto(sku, message, active);
     }
 
     private StockAdjustmentLogResponseDto mapAdjustmentLogToDto(StockAdjustmentLog log) {

@@ -13,6 +13,7 @@ import {
   Pencil,
   Building2,
   PackagePlus,
+  Clock,
 } from "lucide-react";
 
 // Common Components
@@ -319,6 +320,11 @@ const mapDtoToSku = (dto) => {
     facilityId: dto.facilityId,
     facility: dto.facilityName || "",
     status: "Active",
+    hasPendingRestock: Boolean(dto.hasPendingRestock),
+    pendingRestockUnits: Number(dto.pendingRestockUnits || 0),
+    pendingRestockRequestId: dto.pendingRestockRequestId || null,
+    pendingRestockCreatedAt: dto.pendingRestockCreatedAt || null,
+    pendingRestockStatus: dto.pendingRestockStatus || null,
     createdAt: dto.createdAt
       ? String(dto.createdAt).split("T")[0]
       : new Date().toISOString().split("T")[0],
@@ -691,6 +697,16 @@ function SkuManagement() {
       return;
     }
 
+    const targetSku =
+      selectedSku ||
+      currentFacilitySkus.find((s) => String(s.id) === String(restockFormData.skuId));
+    if (targetSku?.hasPendingRestock) {
+      setFormErrors({
+        requestedUnits: `A restock request is already active for this SKU (${targetSku.pendingRestockUnits} units, Status: ${targetSku.pendingRestockStatus || "Requested"}). A new request can only be submitted once the current order is Received.`,
+      });
+      return;
+    }
+
     try {
       setIsRestockSubmitting(true);
       const targetFacilityId =
@@ -724,6 +740,7 @@ function SkuManagement() {
       });
       setIsRestockSuccessModalOpen(true);
       handleCloseModal();
+      await fetchSkus(searchQuery);
     } catch (err) {
       console.error("Failed to submit restock request:", err);
       const serverMessage =
@@ -1166,13 +1183,27 @@ function SkuManagement() {
                             <Pill className="w-4 h-4" />
                           </div>
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-semibold text-gray-900 text-sm">
                                 {item.brandName}
                               </span>
                               <span className="font-mono text-[11px] text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-bold">
                                 {item.sku}
                               </span>
+                              {item.hasPendingRestock && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
+                                  title={`Active restock request: ${item.pendingRestockUnits} units (${item.pendingRestockStatus || "Requested"}). Can only request again once Received.`}
+                                >
+                                  <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
+                                  <span>Restock: {item.pendingRestockUnits} units</span>
+                                  {item.pendingRestockStatus && (
+                                    <span className="text-[9px] uppercase font-bold px-1 py-0.2 bg-amber-200/60 rounded text-amber-900">
+                                      {item.pendingRestockStatus}
+                                    </span>
+                                  )}
+                                </span>
+                              )}
                             </div>
                             <div className="text-xs text-gray-500">
                               {item.genericName} • {item.dosage}
@@ -1296,8 +1327,16 @@ function SkuManagement() {
                           <button
                             type="button"
                             onClick={() => handleOpenRestockModal(item)}
-                            className="btn-secondary p-1.5 text-gray-600 hover:text-blue-600 hover:border-blue-300"
-                            title="Request Restock for this SKU"
+                            className={`p-1.5 rounded transition-colors ${
+                              item.hasPendingRestock
+                                ? "bg-amber-50 text-amber-700 border border-amber-300 hover:bg-amber-100"
+                                : "btn-secondary text-gray-600 hover:text-blue-600 hover:border-blue-300"
+                            }`}
+                            title={
+                              item.hasPendingRestock
+                                ? `Active restock request (${item.pendingRestockUnits} units, Status: ${item.pendingRestockStatus || "Requested"}). Can only request again once Received.`
+                                : "Request Restock for this SKU"
+                            }
                             aria-label="Request Restock"
                           >
                             <PackagePlus className="w-3.5 h-3.5" />
@@ -1935,6 +1974,23 @@ function SkuManagement() {
               </div>
             </div>
 
+            {/* Active Restock Status Notice in View Details */}
+            {selectedSku.hasPendingRestock && (
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <Clock className="w-4 h-4 text-amber-600 shrink-0 animate-pulse" />
+                  <div>
+                    <span className="font-bold block text-amber-900">
+                      Active Restock Request: {selectedSku.pendingRestockUnits} units
+                    </span>
+                    <span className="text-[11px] text-amber-800">
+                      Status: <strong className="uppercase">{selectedSku.pendingRestockStatus || "Requested"}</strong> • Can request again once Received
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Threshold Gauge Card */}
             <div className="p-4 rounded-xl border border-gray-100 bg-white space-y-3">
               <div className="flex items-center justify-between text-xs">
@@ -2020,10 +2076,27 @@ function SkuManagement() {
               <button
                 type="button"
                 onClick={() => handleOpenRestockModal(selectedSku)}
-                className="btn-secondary text-xs text-blue-700 hover:text-blue-800"
+                className={`text-xs flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium transition-colors ${
+                  selectedSku.hasPendingRestock
+                    ? "bg-amber-50 text-amber-700 border border-amber-300 hover:bg-amber-100"
+                    : "btn-secondary text-blue-700 hover:text-blue-800"
+                }`}
+                title={
+                  selectedSku.hasPendingRestock
+                    ? `Active restock request (${selectedSku.pendingRestockUnits} units, Status: ${selectedSku.pendingRestockStatus || "Requested"}). Can only request again once Received.`
+                    : "Request Restock"
+                }
               >
-                <PackagePlus className="w-3.5 h-3.5" />
-                <span>Request Restock</span>
+                {selectedSku.hasPendingRestock ? (
+                  <Clock className="w-3.5 h-3.5 text-amber-600" />
+                ) : (
+                  <PackagePlus className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {selectedSku.hasPendingRestock
+                    ? `Restock: ${selectedSku.pendingRestockUnits} (${selectedSku.pendingRestockStatus || "Requested"})`
+                    : "Request Restock"}
+                </span>
               </button>
               <button
                 type="button"
@@ -2173,6 +2246,9 @@ function SkuManagement() {
               <option value="">-- Select SKU to Replenish --</option>
               {currentFacilitySkus.map((s) => (
                 <option key={s.id} value={s.id}>
+                  {s.hasPendingRestock
+                    ? `[ACTIVE RESTOCK: ${s.pendingRestockUnits} units (${s.pendingRestockStatus || "Requested"})] `
+                    : ""}
                   {s.sku} — {s.brandName} ({s.genericName}) [Current:{" "}
                   {s.currentStock}, Max: {s.maximumLevel}]
                 </option>
@@ -2184,6 +2260,24 @@ function SkuManagement() {
               </p>
             )}
           </div>
+
+          {/* Active Restock Warning Banner inside Restock Modal */}
+          {selectedSku && selectedSku.hasPendingRestock && (
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block text-amber-900 text-xs">
+                  Active Restock Request Already In Progress
+                </span>
+                <p className="text-[11px] text-amber-800 mt-0.5">
+                  This SKU already has an active restock request for{" "}
+                  <strong>{selectedSku.pendingRestockUnits} units</strong> (Status:{" "}
+                  <strong className="uppercase">{selectedSku.pendingRestockStatus || "Requested"}</strong>).
+                  Per inventory control rules, a new restock request can only be submitted once the current order has been <strong>Received</strong>.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Selected SKU Inventory Summary card if SKU is chosen */}
           {selectedSku && (
@@ -2292,13 +2386,27 @@ function SkuManagement() {
             </button>
             <button
               type="submit"
-              disabled={isRestockSubmitting}
-              className="btn-primary text-xs flex items-center gap-1.5"
+              disabled={isRestockSubmitting || selectedSku?.hasPendingRestock}
+              className={`text-xs flex items-center gap-1.5 ${
+                selectedSku?.hasPendingRestock
+                  ? "bg-gray-200 text-gray-400 cursor-not-allowed px-4 py-2 rounded-lg font-medium"
+                  : "btn-primary"
+              }`}
+              title={
+                selectedSku?.hasPendingRestock
+                  ? "Restock request already active until Received"
+                  : ""
+              }
             >
               {isRestockSubmitting ? (
                 <>
                   <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   <span>Submitting Request...</span>
+                </>
+              ) : selectedSku?.hasPendingRestock ? (
+                <>
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Restock Already Active</span>
                 </>
               ) : (
                 <>
