@@ -122,9 +122,7 @@ const extractPackagingFromDescription = (description) => {
   const formMatch = trimmed.match(formKeywords);
   if (formMatch) {
     const formIndex = trimmed.indexOf(formMatch[0]);
-    const afterForm = trimmed
-      .substring(formIndex + formMatch[0].length)
-      .trim();
+    const afterForm = trimmed.substring(formIndex + formMatch[0].length).trim();
     if (afterForm) {
       let cleaned = afterForm.trim();
       if (cleaned.startsWith("(") && cleaned.endsWith(")")) {
@@ -282,6 +280,12 @@ function SkuManagement() {
     );
   }, [facility]);
 
+  const targetFacilityId = useMemo(() => {
+    return (
+      facility?.id || facilities.find((f) => f.name === currentFacilityName)?.id
+    );
+  }, [facility?.id, currentFacilityName]);
+
   const [skuList, setSkuList] = useState(initialSkus);
   const [isLoadingSkus, setIsLoadingSkus] = useState(false);
   const [skuError, setSkuError] = useState(null);
@@ -320,9 +324,6 @@ function SkuManagement() {
       try {
         setIsLoadingSkus(true);
         setSkuError(null);
-        const targetFacilityId =
-          facility?.id ||
-          facilities.find((f) => f.name === currentFacilityName)?.id;
 
         if (!targetFacilityId) {
           setSkuList([]);
@@ -350,7 +351,7 @@ function SkuManagement() {
         setIsLoadingSkus(false);
       }
     },
-    [facility?.id, currentFacilityName],
+    [targetFacilityId],
   );
 
   useEffect(() => {
@@ -382,7 +383,6 @@ function SkuManagement() {
   const [adjustFormData, setAdjustFormData] = useState(
     DEFAULT_STOCK_ADJUSTMENT,
   );
-
 
   // Filter SKUs that reference the current active facility
   const currentFacilitySkus = useMemo(() => {
@@ -428,9 +428,7 @@ function SkuManagement() {
         (item.genericName || "")
           .toLowerCase()
           .includes(searchQuery.toLowerCase()) ||
-        (item.dosage || "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase());
+        (item.dosage || "").toLowerCase().includes(searchQuery.toLowerCase());
 
       let matchesStock = true;
       if (selectedStockFilter === "OPTIMAL") {
@@ -594,7 +592,6 @@ function SkuManagement() {
     setModalMode("adjust");
   };
 
-
   const handleOpenRestockModal = (skuItem = null) => {
     if (skuItem && skuItem.id) {
       setSelectedSku(skuItem);
@@ -647,7 +644,8 @@ function SkuManagement() {
 
       if (!targetFacilityId) {
         setFormErrors({
-          skuId: "Active facility could not be determined. Please re-select your operating facility.",
+          skuId:
+            "Active facility could not be determined. Please re-select your operating facility.",
         });
         return;
       }
@@ -761,7 +759,8 @@ function SkuManagement() {
 
         const responseDto = await skuService.createSku(payload);
         const newSkuItem = mapDtoToSku(responseDto);
-        if (!newSkuItem.genericName) newSkuItem.genericName = formData.genericName;
+        if (!newSkuItem.genericName)
+          newSkuItem.genericName = formData.genericName;
         if (!newSkuItem.dosage) newSkuItem.dosage = formData.dosage;
         if (!newSkuItem.facility) newSkuItem.facility = currentFacilityName;
 
@@ -781,7 +780,9 @@ function SkuManagement() {
 
         const payload = {
           facilityId: Number(editFacilityId),
-          medicineId: Number(formData.medicineId || selectedSku.medicineId || 1),
+          medicineId: Number(
+            formData.medicineId || selectedSku.medicineId || 1,
+          ),
           name: formData.sku.trim().toUpperCase(),
           brandName: formData.brandName.trim().toUpperCase(),
           dosageForm: formData.dosageForm.trim().toUpperCase(),
@@ -794,7 +795,8 @@ function SkuManagement() {
         const responseDto = await skuService.updateSku(selectedSku.id, payload);
         const updatedItem = mapDtoToSku(responseDto);
         if (!updatedItem.genericName)
-          updatedItem.genericName = formData.genericName || selectedSku.genericName;
+          updatedItem.genericName =
+            formData.genericName || selectedSku.genericName;
         if (!updatedItem.dosage)
           updatedItem.dosage = formData.dosage || selectedSku.dosage;
         if (!updatedItem.facility)
@@ -891,7 +893,6 @@ function SkuManagement() {
       setIsSubmitting(false);
     }
   };
-
 
   return (
     <div className="w-full max-w-full space-y-6">
@@ -1234,7 +1235,6 @@ function SkuManagement() {
                           >
                             <Sliders className="w-3.5 h-3.5" />
                           </button>
-
 
                           {/* 3. Request Restock */}
                           <button
@@ -1838,7 +1838,6 @@ function SkuManagement() {
         )}
       </Modal>
 
-
       {/* ======================================================== */}
       {/* 4. VIEW SKU DETAILS MODAL                                */}
       {/* ======================================================== */}
@@ -2077,7 +2076,8 @@ function SkuManagement() {
                 Target Facility: {currentFacilityName}
               </span>
               <span className="text-[11px] text-blue-700 font-medium">
-                This replenishment request will be routed to Procurement for ordering.
+                This replenishment request will be routed to Procurement for
+                ordering.
               </span>
             </div>
           </div>
@@ -2117,7 +2117,8 @@ function SkuManagement() {
               <option value="">-- Select SKU to Replenish --</option>
               {currentFacilitySkus.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.sku} — {s.brandName} ({s.genericName}) [Current: {s.currentStock}, Max: {s.maximumLevel}]
+                  {s.sku} — {s.brandName} ({s.genericName}) [Current:{" "}
+                  {s.currentStock}, Max: {s.maximumLevel}]
                 </option>
               ))}
             </select>
