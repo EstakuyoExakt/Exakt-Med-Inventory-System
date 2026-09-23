@@ -3,13 +3,20 @@ package com.example.backend.service;
 import com.example.backend.dto.sku.SkuRequestDto;
 import com.example.backend.dto.sku.SkuResponseDto;
 import com.example.backend.dto.sku.SkuStockAdjustmentDto;
+import com.example.backend.dto.sku.StockAdjustmentLogResponseDto;
 import com.example.backend.entity.Facility;
 import com.example.backend.entity.LibMedicine;
 import com.example.backend.entity.Sku;
+import com.example.backend.entity.StockAdjustmentLog;
+import com.example.backend.entity.User;
 import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.LibMedicineRepository;
 import com.example.backend.repository.SkuRepository;
+import com.example.backend.repository.StockAdjustmentLogRepository;
+import com.example.backend.repository.UserRepository;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,15 +30,21 @@ public class SkuService {
     private final FacilityRepository facilityRepository;
     private final LibMedicineRepository libMedicineRepository;
     private final BatchService batchService;
+    private final StockAdjustmentLogRepository stockAdjustmentLogRepository;
+    private final UserRepository userRepository;
 
     public SkuService(SkuRepository skuRepository,
                       FacilityRepository facilityRepository,
                       LibMedicineRepository libMedicineRepository,
-                      BatchService batchService) {
+                      BatchService batchService,
+                      StockAdjustmentLogRepository stockAdjustmentLogRepository,
+                      UserRepository userRepository) {
         this.skuRepository = skuRepository;
         this.facilityRepository = facilityRepository;
         this.libMedicineRepository = libMedicineRepository;
         this.batchService = batchService;
+        this.stockAdjustmentLogRepository = stockAdjustmentLogRepository;
+        this.userRepository = userRepository;
     }
 
     // 1. CREATE SKU (Units field is automatically defaulted to 0 by @PrePersist in Sku entity)
@@ -67,22 +80,21 @@ public class SkuService {
         return mapToResponseDto(savedSku, "SKU created successfully");
     }
 
-    // 2. GET ALL SKUS (Optionally filtered by facilityId)
+    // 2. GET ALL SKUS (Strictly required facilityId)
     @Transactional
     @PreAuthorize("isAuthenticated()")
     public List<SkuResponseDto> getAllSkus(Long facilityId) {
+        if (facilityId == null) {
+            throw new RuntimeException("Facility ID is strictly required.");
+        }
+        if (!facilityRepository.existsById(facilityId)) {
+            throw new RuntimeException("Facility not found with id: " + facilityId);
+        }
+
         // Automatically deduct units for any batches that reached/passed expiry date
         batchService.processExpiredBatches();
 
-        List<Sku> skus;
-        if (facilityId != null) {
-            if (!facilityRepository.existsById(facilityId)) {
-                throw new RuntimeException("Facility not found with id: " + facilityId);
-            }
-            skus = skuRepository.findByFacilityId(facilityId);
-        } else {
-            skus = skuRepository.findAll();
-        }
+        List<Sku> skus = skuRepository.findByFacilityId(facilityId);
         return skus.stream()
                 .map(sku -> mapToResponseDto(sku, null))
                 .collect(Collectors.toList());
@@ -171,13 +183,61 @@ public class SkuService {
 
         sku.setUnits(newUnits);
         Sku savedSku = skuRepository.save(sku);
+
+        // Record stock adjustment log entry
+        StockAdjustmentLog log = new StockAdjustmentLog();
+        log.setSku(savedSku);
+        log.setFacility(savedSku.getFacility());
+        log.setUser(getCurrentUser());
+        log.setAdjustmentType(request.getType());
+        log.setPreviousUnits(currentUnits);
+        log.setAdjustedAmount(request.getAmount());
+        log.setDeltaUnits(newUnits - currentUnits);
+        log.setNewUnits(newUnits);
+        log.setReason(request.getReason());
+        log.setNotes(request.getNotes() != null ? request.getNotes().trim() : null);
+        stockAdjustmentLogRepository.save(log);
+
         return mapToResponseDto(savedSku, "Stock adjusted successfully");
+    }
+
+    // 5c. GET ADJUSTMENT LOGS FOR A SPECIFIC SKU
+    @Transactional(readOnly = true)
+    @PreAuthorize("isAuthenticated()")
+    public List<StockAdjustmentLogResponseDto> getAdjustmentLogsBySku(Long skuId) {
+        return stockAdjustmentLogRepository.findBySkuIdOrderByCreatedAtDesc(skuId)
+                .stream()
+                .map(this::mapAdjustmentLogToDto)
+                .collect(Collectors.toList());
+    }
+
+    // 5d. GET ADJUSTMENT LOGS FOR A FACILITY
+    @Transactional(readOnly = true)
+    @PreAuthorize("isAuthenticated()")
+    public List<StockAdjustmentLogResponseDto> getAdjustmentLogsByFacility(Long facilityId) {
+        if (facilityId == null) {
+            throw new RuntimeException("Facility ID is strictly required.");
+        }
+        if (!facilityRepository.existsById(facilityId)) {
+            throw new RuntimeException("Facility not found with id: " + facilityId);
+        }
+        return stockAdjustmentLogRepository.findByFacilityIdOrderByCreatedAtDesc(facilityId)
+                .stream()
+                .map(this::mapAdjustmentLogToDto)
+                .collect(Collectors.toList());
     }
 
     // 6. SEARCH SKUS (by brandName, sku name, and medicine name)
     @Transactional
     @PreAuthorize("isAuthenticated()")
     public List<SkuResponseDto> searchSkus(String search, Long facilityId) {
+        if (facilityId == null) {
+            throw new RuntimeException("Facility ID is strictly required.");
+        }
+        if (!facilityRepository.existsById(facilityId)) {
+            throw new RuntimeException("Facility not found with id: " + facilityId);
+        }
+
         batchService.processExpiredBatches();
         String query = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
         return skuRepository.searchSkus(query, facilityId)
@@ -190,6 +250,13 @@ public class SkuService {
     @Transactional
     @PreAuthorize("isAuthenticated()")
     public List<SkuResponseDto> getReorderNeededSkus(Long facilityId, String search) {
+        if (facilityId == null) {
+            throw new RuntimeException("Facility ID is strictly required.");
+        }
+        if (!facilityRepository.existsById(facilityId)) {
+            throw new RuntimeException("Facility not found with id: " + facilityId);
+        }
+
         batchService.processExpiredBatches();
         String query = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
         return skuRepository.findReorderNeededSkus(facilityId, query)
@@ -226,5 +293,44 @@ public class SkuService {
         dto.setMessage(message);
 
         return dto;
+    }
+
+    private StockAdjustmentLogResponseDto mapAdjustmentLogToDto(StockAdjustmentLog log) {
+        StockAdjustmentLogResponseDto dto = new StockAdjustmentLogResponseDto();
+        dto.setId(log.getId());
+        if (log.getSku() != null) {
+            dto.setSkuId(log.getSku().getId());
+            dto.setSkuName(log.getSku().getName());
+            dto.setBrandName(log.getSku().getBrandName());
+        }
+        if (log.getFacility() != null) {
+            dto.setFacilityId(log.getFacility().getId());
+            dto.setFacilityName(log.getFacility().getName());
+        }
+        if (log.getUser() != null) {
+            dto.setUserId(log.getUser().getId());
+            dto.setUserName(log.getUser().getName());
+        }
+        dto.setAdjustmentType(log.getAdjustmentType());
+        dto.setPreviousUnits(log.getPreviousUnits());
+        dto.setAdjustedAmount(log.getAdjustedAmount());
+        dto.setDeltaUnits(log.getDeltaUnits());
+        dto.setNewUnits(log.getNewUnits());
+        dto.setReason(log.getReason());
+        dto.setNotes(log.getNotes());
+        dto.setCreatedAt(log.getCreatedAt());
+        return dto;
+    }
+
+    private User getCurrentUser() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.isAuthenticated()) {
+                String username = authentication.getName();
+                return userRepository.findByUsername(username).orElse(null);
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 }

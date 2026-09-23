@@ -14,7 +14,7 @@ public interface SkuRepository extends JpaRepository<Sku, Long> {
     List<Sku> findByLibMedicineId(Long medicineId);
 
     @Query("SELECT s FROM Sku s LEFT JOIN s.libMedicine m WHERE " +
-           "(:facilityId IS NULL OR s.facility.id = :facilityId) AND " +
+           "s.facility.id = :facilityId AND " +
            "(:search IS NULL OR :search = '' OR " +
            "LOWER(s.brandName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
            "LOWER(s.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
@@ -22,7 +22,7 @@ public interface SkuRepository extends JpaRepository<Sku, Long> {
     List<Sku> searchSkus(@Param("search") String search, @Param("facilityId") Long facilityId);
 
     @Query("SELECT s FROM Sku s LEFT JOIN s.libMedicine m WHERE " +
-           "(:facilityId IS NULL OR s.facility.id = :facilityId) AND " +
+           "s.facility.id = :facilityId AND " +
            "(s.units <= s.reorderLevel) AND " +
            "NOT EXISTS (" +
            "    SELECT 1 FROM OrderedItem oi " +

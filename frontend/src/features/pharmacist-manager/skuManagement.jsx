@@ -324,6 +324,11 @@ function SkuManagement() {
           facility?.id ||
           facilities.find((f) => f.name === currentFacilityName)?.id;
 
+        if (!targetFacilityId) {
+          setSkuList([]);
+          return;
+        }
+
         let data;
         if (query && query.trim()) {
           data = await skuService.searchSku(query.trim(), targetFacilityId);

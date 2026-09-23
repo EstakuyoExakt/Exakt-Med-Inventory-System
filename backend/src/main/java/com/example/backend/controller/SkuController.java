@@ -3,6 +3,7 @@ package com.example.backend.controller;
 import com.example.backend.dto.sku.SkuRequestDto;
 import com.example.backend.dto.sku.SkuResponseDto;
 import com.example.backend.dto.sku.SkuStockAdjustmentDto;
+import com.example.backend.dto.sku.StockAdjustmentLogResponseDto;
 import com.example.backend.service.SkuService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -32,22 +33,22 @@ public class SkuController {
     @GetMapping("/search")
     public ResponseEntity<List<SkuResponseDto>> searchSkus(
             @RequestParam(required = false) String search,
-            @RequestParam(required = false) Long facilityId) {
+            @RequestParam Long facilityId) {
         return ResponseEntity.ok(skuService.searchSkus(search, facilityId));
     }
 
     // 2b. GET SKUS THAT NEED REORDERING (Excluding active Pending/Approved orders)
     @GetMapping("/reorder-needed")
     public ResponseEntity<List<SkuResponseDto>> getReorderNeededSkus(
-            @RequestParam(required = false) Long facilityId,
+            @RequestParam Long facilityId,
             @RequestParam(required = false) String search) {
         return ResponseEntity.ok(skuService.getReorderNeededSkus(facilityId, search));
     }
 
-    // 3. GET ALL SKUS (Optionally filtered by facilityId and/or search term)
+    // 3. GET ALL SKUS (Strictly required facilityId, optionally filtered by search term)
     @GetMapping
     public ResponseEntity<List<SkuResponseDto>> getAllSkus(
-            @RequestParam(required = false) Long facilityId,
+            @RequestParam Long facilityId,
             @RequestParam(required = false) String search) {
         if (search != null && !search.trim().isEmpty()) {
             return ResponseEntity.ok(skuService.searchSkus(search, facilityId));
@@ -82,5 +83,17 @@ public class SkuController {
             @PathVariable Long id,
             @Valid @RequestBody SkuStockAdjustmentDto request) {
         return ResponseEntity.ok(skuService.adjustStock(id, request));
+    }
+
+    // 8. GET ADJUSTMENT LOGS FOR A SKU
+    @GetMapping("/{id:[0-9]+}/adjustments")
+    public ResponseEntity<List<StockAdjustmentLogResponseDto>> getAdjustmentLogsBySku(@PathVariable Long id) {
+        return ResponseEntity.ok(skuService.getAdjustmentLogsBySku(id));
+    }
+
+    // 9. GET ADJUSTMENT LOGS FOR A FACILITY
+    @GetMapping("/adjustments")
+    public ResponseEntity<List<StockAdjustmentLogResponseDto>> getAdjustmentLogsByFacility(@RequestParam Long facilityId) {
+        return ResponseEntity.ok(skuService.getAdjustmentLogsByFacility(facilityId));
     }
 }

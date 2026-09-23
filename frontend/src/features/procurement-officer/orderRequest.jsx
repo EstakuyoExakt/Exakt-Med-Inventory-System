@@ -150,6 +150,11 @@ function OrderRequest() {
           facility?.id ||
           facilities.find((f) => f.name === currentFacilityName)?.id;
 
+        if (!targetFacilityId) {
+          setSkuList([]);
+          return;
+        }
+
         const data = await skuService.getReorderNeededSkus(
           targetFacilityId,
           query ? query.trim() : "",

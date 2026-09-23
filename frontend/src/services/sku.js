@@ -18,7 +18,10 @@ const skuService = {
     return response.data;
   },
 
-  getAllSkus: async (facilityId = null, config = {}) => {
+  getAllSkus: async (facilityId, config = {}) => {
+    if (!facilityId) {
+      throw new Error("Facility ID is strictly required to fetch SKUs.");
+    }
     const response = await axios.get(skuApi.getAllSkus(facilityId), {
       ...config,
       headers: getAuthHeaders(config),
@@ -26,7 +29,10 @@ const skuService = {
     return response.data;
   },
 
-  searchSku: async (search = "", facilityId = null, config = {}) => {
+  searchSku: async (search = "", facilityId, config = {}) => {
+    if (!facilityId) {
+      throw new Error("Facility ID is strictly required to search SKUs.");
+    }
     const response = await axios.get(skuApi.searchSku(search, facilityId), {
       ...config,
       headers: getAuthHeaders(config),
@@ -34,7 +40,10 @@ const skuService = {
     return response.data;
   },
 
-  searchSkus: async (search = "", facilityId = null, config = {}) => {
+  searchSkus: async (search = "", facilityId, config = {}) => {
+    if (!facilityId) {
+      throw new Error("Facility ID is strictly required to search SKUs.");
+    }
     const response = await axios.get(skuApi.searchSkus(search, facilityId), {
       ...config,
       headers: getAuthHeaders(config),
@@ -74,7 +83,10 @@ const skuService = {
     return response.data;
   },
 
-  getReorderNeededSkus: async (facilityId = null, search = "", config = {}) => {
+  getReorderNeededSkus: async (facilityId, search = "", config = {}) => {
+    if (!facilityId) {
+      throw new Error("Facility ID is strictly required to fetch reorder-needed SKUs.");
+    }
     const response = await axios.get(
       skuApi.getReorderNeededSkus(facilityId, search),
       {
@@ -82,6 +94,25 @@ const skuService = {
         headers: getAuthHeaders(config),
       },
     );
+    return response.data;
+  },
+
+  getAdjustmentLogsBySku: async (id, config = {}) => {
+    const response = await axios.get(skuApi.getAdjustmentLogsBySku(id), {
+      ...config,
+      headers: getAuthHeaders(config),
+    });
+    return response.data;
+  },
+
+  getAdjustmentLogsByFacility: async (facilityId, config = {}) => {
+    if (!facilityId) {
+      throw new Error("Facility ID is strictly required to fetch adjustment logs.");
+    }
+    const response = await axios.get(skuApi.getAdjustmentLogsByFacility(facilityId), {
+      ...config,
+      headers: getAuthHeaders(config),
+    });
     return response.data;
   },
 };
