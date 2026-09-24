@@ -132,7 +132,9 @@ function RequestedOrders() {
   const currentFacilityOrders = useMemo(() => {
     if (!targetFacilityId) return [];
     return orders.filter(
-      (o) => o.facilityId === targetFacilityId || o.targetFacility === currentFacilityName,
+      (o) =>
+        o.facilityId === targetFacilityId ||
+        o.targetFacility === currentFacilityName,
     );
   }, [orders, targetFacilityId, currentFacilityName]);
 
@@ -149,7 +151,7 @@ function RequestedOrders() {
       (o) => o.status === "Pending" || o.status === "Pending Approval",
     ).length;
     const approved = currentFacilityOrders.filter(
-      (o) => o.status === "Approved",
+      (o) => o.status === "Approved" || o.status === "Received",
     ).length;
     const rejected = currentFacilityOrders.filter(
       (o) => o.status === "Rejected" || o.status === "Denied",
