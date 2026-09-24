@@ -83,7 +83,13 @@ function App() {
           </Route>
 
           {/* Pharmacist Manager Protected Routes */}
-          <Route element={<ProtectedRoute allowedRoles={[ROLES.PHARMACIST]} />}>
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={[ROLES.PHARMACIST, ROLES.SUPER_ADMIN]}
+              />
+            }
+          >
             <Route
               path="/pharmacist/dashboard"
               element={<PharmacistDashboard />}
@@ -105,7 +111,11 @@ function App() {
 
           {/* Procurement Officer Protected Routes */}
           <Route
-            element={<ProtectedRoute allowedRoles={[ROLES.PROCUREMENT]} />}
+            element={
+              <ProtectedRoute
+                allowedRoles={[ROLES.PROCUREMENT, ROLES.SUPER_ADMIN]}
+              />
+            }
           >
             <Route
               path="/procurement/dashboard"
