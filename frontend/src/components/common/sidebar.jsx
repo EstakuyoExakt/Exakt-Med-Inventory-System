@@ -54,7 +54,8 @@ function Sidebar() {
       return saved;
     }
     if (window.location.pathname.startsWith("/pharmacist")) return "pharmacist";
-    if (window.location.pathname.startsWith("/procurement")) return "procurement";
+    if (window.location.pathname.startsWith("/procurement"))
+      return "procurement";
     return "admin";
   });
 
@@ -72,7 +73,8 @@ function Sidebar() {
   };
 
   // Compute displayed navigation items
-  const currentViewMode = VIEW_MODES.find((m) => m.id === activeRoleView) || VIEW_MODES[0];
+  const currentViewMode =
+    VIEW_MODES.find((m) => m.id === activeRoleView) || VIEW_MODES[0];
 
   const displayedNavItems = useMemo(() => {
     if (!isSuperAdmin) {
@@ -121,7 +123,7 @@ function Sidebar() {
 
         {/* Super Admin: Sidebar View Switcher Controls */}
         {isSuperAdmin && (
-          <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 via-slate-50 to-blue-50/40 p-2.5 shadow-2xs">
+          <div className="rounded-xl border border-indigo-100 bg-linear-to-br from-indigo-50/70 via-slate-50 to-blue-50/40 p-2.5 shadow-2xs">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5">
                 <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   ShoppingCart,
@@ -17,27 +17,75 @@ import {
   Send,
   Pill,
   ClipboardCheck,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
 
-// Common Components
+// Common Components & Hooks
 import Card from "../../components/common/card";
-
-// Mock Data Imports
-import {
-  procurementMetrics,
-  priorityRestockSkus,
-  recentOrderRequests,
-} from "../../data/procurementDashboard";
+import useAuth from "../../hooks/useAuth";
+import dashboardService from "../../services/dashboard";
 
 function ProcurementDashboard() {
-  const [metrics] = useState(procurementMetrics);
+  const { facility } = useAuth();
+
+  const [metrics, setMetrics] = useState({
+    totalReorder: 0,
+    totalMinimumSkus: 0,
+    totalBatches: 0,
+    totalPendingOrders: 0,
+    activeSuppliers: 0,
+    totalUnitsOrderedMonth: 0,
+  });
+  const [priorityRestockSkus, setPriorityRestockSkus] = useState([]);
+  const [recentOrderRequests, setRecentOrderRequests] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchDashboardData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await dashboardService.getProcurementDashboard(facility?.id);
+      if (data) {
+        setMetrics(
+          data.metrics || {
+            totalReorder: 0,
+            totalMinimumSkus: 0,
+            totalBatches: 0,
+            totalPendingOrders: 0,
+            activeSuppliers: 0,
+            totalUnitsOrderedMonth: 0,
+          }
+        );
+        setPriorityRestockSkus(data.priorityRestockSkus || []);
+        setRecentOrderRequests(data.recentOrderRequests || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch procurement dashboard data:", err);
+      setError(
+        err?.response?.data?.message || err?.message || "Failed to load dashboard data"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [facility?.id]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const getOrderStatusBadge = (status) => {
     switch (status) {
       case "Approved":
         return "bg-emerald-50 text-emerald-700 border-emerald-200";
       case "Pending Approval":
+      case "Pending":
         return "bg-amber-50 text-amber-700 border-amber-200";
+      case "Denied":
+        return "bg-red-50 text-red-700 border-red-200";
+      case "Received":
+        return "bg-blue-50 text-blue-700 border-blue-200";
       default:
         return "bg-gray-50 text-gray-700 border-gray-200";
     }
@@ -48,15 +96,37 @@ function ProcurementDashboard() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            Procurement Officer Dashboard
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+              Procurement Officer Dashboard
+            </h1>
+            {facility?.name && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                <Building2 className="w-3.5 h-3.5" />
+                {facility.name}
+              </span>
+            )}
+          </div>
           <p className="text-sm text-gray-500 mt-1">
             Real-time replenishment monitoring, inventory threshold warnings,
             and purchase order requisition management
           </p>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={fetchDashboardData}
+            disabled={isLoading}
+            className="btn-secondary text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
+            title="Refresh Real-time Data"
+          >
+            <RefreshCw
+              className={`w-3.5 h-3.5 text-gray-600 ${
+                isLoading ? "animate-spin" : ""
+              }`}
+            />
+            <span>Refresh</span>
+          </button>
           <Link
             to="/procurement/requested-orders"
             className="btn-secondary text-xs shadow-sm flex items-center gap-1.5"
@@ -73,6 +143,23 @@ function ProcurementDashboard() {
           </Link>
         </div>
       </div>
+
+      {/* Error Banner if any */}
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={fetchDashboardData}
+            className="font-bold underline hover:text-red-900 cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Main KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -160,69 +247,79 @@ function ProcurementDashboard() {
             </div>
 
             <div className="divide-y divide-gray-100">
-              {priorityRestockSkus.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-4 hover:bg-gray-50/60 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`flex h-9 w-9 items-center justify-center rounded-lg font-semibold text-xs border shrink-0 mt-0.5 ${
-                        item.urgency === "CRITICAL"
-                          ? "bg-red-50 text-red-600 border-red-200"
-                          : "bg-amber-50 text-amber-600 border-amber-200"
-                      }`}
-                    >
-                      <Pill className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-gray-900 text-sm">
-                          {item.brandName}
-                        </span>
-                        <span className="font-mono text-[11px] text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded font-medium">
-                          {item.sku}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {item.genericName} • {item.dosage}
-                      </p>
-                      <p className="text-[11px] text-gray-400 mt-0.5">
-                        Supplier: {item.suggestedSupplier}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-                    <div className="text-right">
-                      <div className="text-xs font-bold text-gray-900">
-                        {item.currentStock}{" "}
-                        <span className="text-gray-400 font-normal">
-                          / Reorder: {item.reorderLevel}
-                        </span>
-                      </div>
-                      <span
-                        className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded border mt-0.5 ${
+              {priorityRestockSkus.length > 0 ? (
+                priorityRestockSkus.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-4 hover:bg-gray-50/60 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`flex h-9 w-9 items-center justify-center rounded-lg font-semibold text-xs border shrink-0 mt-0.5 ${
                           item.urgency === "CRITICAL"
-                            ? "bg-red-50 text-red-700 border-red-200"
-                            : "bg-amber-50 text-amber-700 border-amber-200"
+                            ? "bg-red-50 text-red-600 border-red-200"
+                            : "bg-amber-50 text-amber-600 border-amber-200"
                         }`}
                       >
-                        {item.urgency === "CRITICAL"
-                          ? "Below Min Threshold"
-                          : "Reorder Triggered"}
-                      </span>
+                        <Pill className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-gray-900 text-sm">
+                            {item.brandName}
+                          </span>
+                          <span className="font-mono text-[11px] text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded font-medium">
+                            {item.sku}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {item.genericName} • {item.dosage}
+                        </p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          Supplier: {item.suggestedSupplier}
+                        </p>
+                      </div>
                     </div>
 
-                    <Link
-                      to="/procurement/order-request"
-                      className="btn-primary text-xs py-1.5 px-2.5 shadow-xs"
-                    >
-                      Order
-                    </Link>
+                    <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                      <div className="text-right">
+                        <div className="text-xs font-bold text-gray-900">
+                          {item.currentStock}{" "}
+                          <span className="text-gray-400 font-normal">
+                            / Reorder: {item.reorderLevel}
+                          </span>
+                        </div>
+                        <span
+                          className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded border mt-0.5 ${
+                            item.urgency === "CRITICAL"
+                              ? "bg-red-50 text-red-700 border-red-200"
+                              : "bg-amber-50 text-amber-700 border-amber-200"
+                          }`}
+                        >
+                          {item.urgency === "CRITICAL"
+                            ? "Below Min Threshold"
+                            : "Reorder Triggered"}
+                        </span>
+                      </div>
+
+                      <Link
+                        to="/procurement/order-request"
+                        className="btn-primary text-xs py-1.5 px-2.5 shadow-xs"
+                      >
+                        Order
+                      </Link>
+                    </div>
                   </div>
+                ))
+              ) : (
+                <div className="p-8 text-center text-xs text-gray-500">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                  <p className="font-bold text-gray-700">Healthy Stock Levels</p>
+                  <p className="text-gray-400 mt-0.5">
+                    No SKUs currently below reorder or minimum safety threshold.
+                  </p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
@@ -257,39 +354,49 @@ function ProcurementDashboard() {
             </div>
 
             <div className="divide-y divide-gray-100">
-              {recentOrderRequests.map((order) => (
-                <div
-                  key={order.orderId}
-                  className="p-4 hover:bg-gray-50/60 transition-colors space-y-1.5"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono font-bold text-blue-700 text-xs">
-                      {order.orderId}
-                    </span>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getOrderStatusBadge(
-                        order.status,
-                      )}`}
-                    >
-                      {order.status}
-                    </span>
-                  </div>
+              {recentOrderRequests.length > 0 ? (
+                recentOrderRequests.map((order) => (
+                  <div
+                    key={order.orderId}
+                    className="p-4 hover:bg-gray-50/60 transition-colors space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-blue-700 text-xs">
+                        {order.orderId}
+                      </span>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getOrderStatusBadge(
+                          order.status,
+                        )}`}
+                      >
+                        {order.status}
+                      </span>
+                    </div>
 
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-gray-900">
-                      {order.brandName}
-                    </span>
-                    <span className="font-bold text-gray-800">
-                      {order.quantity.toLocaleString()} units
-                    </span>
-                  </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-gray-900">
+                        {order.brandName}
+                      </span>
+                      <span className="font-bold text-gray-800">
+                        {order.quantity.toLocaleString()} units
+                      </span>
+                    </div>
 
-                  <div className="flex items-center justify-between text-[11px] text-gray-400">
-                    <span>{order.supplier}</span>
-                    <span>{order.requestDate}</span>
+                    <div className="flex items-center justify-between text-[11px] text-gray-400">
+                      <span>{order.supplier}</span>
+                      <span>{order.requestDate}</span>
+                    </div>
                   </div>
+                ))
+              ) : (
+                <div className="p-8 text-center text-xs text-gray-500">
+                  <ShoppingCart className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="font-bold text-gray-700">No Recent Purchase Requisitions</p>
+                  <p className="text-gray-400 mt-0.5">
+                    Submitted purchase orders will appear here in real time.
+                  </p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
 

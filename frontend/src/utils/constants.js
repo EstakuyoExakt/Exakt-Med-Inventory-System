@@ -30,12 +30,35 @@ export const DEFAULT_FACILITY_FORM = {
 // Supplier Management
 // ==========================================
 export const PAYMENT_TERMS_OPTIONS = [
+  // Immediate & Advance Terms
+  "Due Upon Receipt",
+  "Cash on Delivery (COD)",
+  "COD",
+  "Advance Payment",
+  "Cash Before Delivery (CBD)",
+
+  // Standard Net Credit Terms
+  "Net 7",
+  "Net 10",
   "Net 15",
   "Net 30",
   "Net 45",
   "Net 60",
-  "COD",
-  "Advance Payment",
+  "Net 90",
+  "Net 120",
+
+  // Early Payment Discount Terms
+  "1/10 Net 30",
+  "2/10 Net 30",
+  "2/10 Net 60",
+
+  // Commercial, Institutional & Check Terms
+  "End of Month (EOM)",
+  "15th of Following Month",
+  "30-Day Post-Dated Check (PDC)",
+  "60-Day Post-Dated Check (PDC)",
+  "Consignment",
+  "Letter of Credit (LC)",
 ];
 
 export const DEFAULT_SUPPLIER_FORM = {

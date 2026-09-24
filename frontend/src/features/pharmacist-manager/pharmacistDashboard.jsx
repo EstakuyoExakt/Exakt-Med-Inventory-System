@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   Boxes,
@@ -15,6 +15,8 @@ import {
   Sliders,
   ShieldCheck,
   Building2,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -30,16 +32,10 @@ import {
   CartesianGrid,
 } from "recharts";
 
-// Common Components
+// Common Components & Hooks
 import Card from "../../components/common/card";
-
-// Mock Data
-import {
-  dashboardMetrics,
-  skuStockDistribution,
-  skuHealthBarData,
-  urgentAlerts,
-} from "../../data/pharmacistDashboard";
+import useAuth from "../../hooks/useAuth";
+import dashboardService from "../../services/dashboard";
 
 // Custom Tooltip for Ring/Pie Chart
 const CustomPieTooltip = ({ active, payload }) => {
@@ -91,22 +87,94 @@ const CustomBarTooltip = ({ active, payload, label }) => {
 };
 
 function PharmacistDashboard() {
-  const [metrics] = useState(dashboardMetrics);
+  const { facility } = useAuth();
+
+  const [metrics, setMetrics] = useState({
+    totalSkus: 0,
+    totalStockQuantity: 0,
+    totalLowStock: 0,
+    totalOverStock: 0,
+    totalExpiry: 0,
+    totalNearExpiry: 0,
+    totalBatches: 0,
+    totalQuarantined: 0,
+  });
+  const [skuStockDistribution, setSkuStockDistribution] = useState([]);
+  const [skuHealthBarData, setSkuHealthBarData] = useState([]);
+  const [urgentAlerts, setUrgentAlerts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchDashboardData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await dashboardService.getPharmacistDashboard(facility?.id);
+      if (data) {
+        setMetrics(
+          data.metrics || {
+            totalSkus: 0,
+            totalStockQuantity: 0,
+            totalLowStock: 0,
+            totalOverStock: 0,
+            totalExpiry: 0,
+            totalNearExpiry: 0,
+            totalBatches: 0,
+            totalQuarantined: 0,
+          }
+        );
+        setSkuStockDistribution(data.skuStockDistribution || []);
+        setSkuHealthBarData(data.skuHealthBarData || []);
+        setUrgentAlerts(data.urgentAlerts || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch pharmacist dashboard data:", err);
+      setError(err?.response?.data?.message || err?.message || "Failed to load dashboard data");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [facility?.id]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   return (
     <div className="w-full max-w-full space-y-6">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            Pharmacist Manager Overview
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+              Pharmacist Manager Overview
+            </h1>
+            {facility?.name && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <Building2 className="w-3.5 h-3.5" />
+                {facility.name}
+              </span>
+            )}
+          </div>
           <p className="text-sm text-gray-500 mt-1">
             Real-time stock health diagnostics, threshold warnings, batch
             expirations, and safety quarantine status
           </p>
         </div>
         <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={fetchDashboardData}
+            disabled={isLoading}
+            className="btn-secondary text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
+            title="Refresh Real-time Data"
+          >
+            <RefreshCw
+              className={`w-3.5 h-3.5 text-gray-600 ${
+                isLoading ? "animate-spin" : ""
+              }`}
+            />
+            <span>Refresh</span>
+          </button>
           <Link
             to="/pharmacist/sku-management"
             className="btn-secondary text-xs shadow-sm flex items-center gap-1.5"
@@ -123,6 +191,23 @@ function PharmacistDashboard() {
           </Link>
         </div>
       </div>
+
+      {/* Error Banner if any */}
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={fetchDashboardData}
+            className="font-bold underline hover:text-red-900 cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* 8 Metric KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -309,24 +394,31 @@ function PharmacistDashboard() {
 
             {/* Ring Chart Container */}
             <div className="h-68 w-full mt-3">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <RechartsTooltip content={<CustomPieTooltip />} />
-                  <Pie
-                    data={skuStockDistribution}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={65}
-                    outerRadius={95}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {skuStockDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+              {skuStockDistribution.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <RechartsTooltip content={<CustomPieTooltip />} />
+                    <Pie
+                      data={skuStockDistribution}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={65}
+                      outerRadius={95}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {skuStockDistribution.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full w-full flex flex-col items-center justify-center text-gray-400 text-xs">
+                  <Boxes className="w-8 h-8 text-gray-300 mb-2" />
+                  <p>No inventory records registered for this facility yet.</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -378,54 +470,63 @@ function PharmacistDashboard() {
 
             {/* Bar Chart Container */}
             <div className="h-72 w-full mt-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={skuHealthBarData}
-                  margin={{ top: 10, right: 10, left: -15, bottom: 25 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="#E5E7EB"
-                  />
-                  <XAxis
-                    dataKey="category"
-                    tick={{ fontSize: 11, fill: "#6B7280" }}
-                    angle={-25}
-                    textAnchor="end"
-                    interval={0}
-                  />
-                  <YAxis
-                    allowDecimals={false}
-                    tick={{ fontSize: 11, fill: "#6B7280" }}
-                  />
-                  <RechartsTooltip content={<CustomBarTooltip />} />
-                  <Bar
-                    dataKey="lowStock"
-                    name="Low Stock"
-                    fill="#F59E0B"
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="overStock"
-                    name="Over Stock"
-                    fill="#8B5CF6"
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="outOfStock"
-                    name="Out of Stock"
-                    fill="#EF4444"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              {skuHealthBarData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={skuHealthBarData}
+                    margin={{ top: 10, right: 10, left: -15, bottom: 25 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="#E5E7EB"
+                    />
+                    <XAxis
+                      dataKey="category"
+                      tick={{ fontSize: 11, fill: "#6B7280" }}
+                      angle={-25}
+                      textAnchor="end"
+                      interval={0}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tick={{ fontSize: 11, fill: "#6B7280" }}
+                    />
+                    <RechartsTooltip content={<CustomBarTooltip />} />
+                    <Bar
+                      dataKey="lowStock"
+                      name="Low Stock"
+                      fill="#F59E0B"
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="overStock"
+                      name="Over Stock"
+                      fill="#8B5CF6"
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="outOfStock"
+                      name="Out of Stock"
+                      fill="#EF4444"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full w-full flex flex-col items-center justify-center text-gray-400 text-xs">
+                  <Layers className="w-8 h-8 text-gray-300 mb-2" />
+                  <p>No category stock health data available.</p>
+                </div>
+              )}
             </div>
           </div>
 
           <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-between text-xs text-gray-500 mt-2">
             <span>
-              <span className="font-bold text-gray-700">3 categories</span>{" "}
+              <span className="font-bold text-gray-700">
+                {skuHealthBarData.filter((c) => c.lowStock > 0 || c.outOfStock > 0).length} categories
+              </span>{" "}
               require threshold review or reorder requisition.
             </span>
             <Link
@@ -455,41 +556,63 @@ function PharmacistDashboard() {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mt-4">
-          {urgentAlerts.map((alert) => (
-            <div
-              key={alert.id}
-              className={`p-4 rounded-xl border flex flex-col justify-between transition-all ${
-                alert.severity === "critical"
-                  ? "bg-red-50/40 border-red-200 text-red-900"
-                  : "bg-amber-50/40 border-amber-200 text-amber-900"
-              }`}
-            >
-              <div>
-                <div className="flex items-center gap-2 mb-1.5">
-                  {alert.severity === "critical" ? (
-                    <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-                  ) : (
-                    <Clock className="w-4 h-4 text-amber-600 shrink-0" />
-                  )}
-                  <h4 className="font-bold text-xs">{alert.title}</h4>
+        {urgentAlerts.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mt-4">
+            {urgentAlerts.map((alert) => (
+              <div
+                key={alert.id}
+                className={`p-4 rounded-xl border flex flex-col justify-between transition-all ${
+                  alert.severity === "critical"
+                    ? "bg-red-50/40 border-red-200 text-red-900"
+                    : "bg-amber-50/40 border-amber-200 text-amber-900"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    {alert.severity === "critical" ? (
+                      <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                    ) : (
+                      <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                    )}
+                    <h4 className="font-bold text-xs">{alert.title}</h4>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    {alert.description}
+                  </p>
                 </div>
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  {alert.description}
+                <div className="flex items-center justify-between pt-3 mt-3 border-t border-gray-200/60 text-[11px] text-gray-400">
+                  <span>{alert.time}</span>
+                  <Link
+                    to="/pharmacist/batch-management"
+                    className="font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                  >
+                    Review Batch <ArrowRight className="w-3 h-3" />
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-6 rounded-xl bg-emerald-50/50 border border-emerald-100 flex items-center justify-between text-xs text-emerald-800 mt-4">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <div>
+                <p className="font-bold text-sm text-emerald-900">
+                  All Systems Operational
+                </p>
+                <p className="text-emerald-700 mt-0.5">
+                  No expired batches, quarantined items, or critical stock threshold violations found in this facility.
                 </p>
               </div>
-              <div className="flex items-center justify-between pt-3 mt-3 border-t border-gray-200/60 text-[11px] text-gray-400">
-                <span>{alert.time}</span>
-                <Link
-                  to="/pharmacist/batch-management"
-                  className="font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                >
-                  Review Batch <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
             </div>
-          ))}
-        </div>
+            <Link
+              to="/pharmacist/batch-management"
+              className="font-semibold text-emerald-800 hover:text-emerald-950 flex items-center gap-1 text-xs shrink-0"
+            >
+              View Batches <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        )}
       </Card>
     </div>
   );
