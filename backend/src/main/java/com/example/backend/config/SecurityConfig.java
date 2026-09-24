@@ -48,7 +48,14 @@ public class SecurityConfig {
 
                 // URL Access Rules
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/h2-console/**").permitAll() // Public routes
+                        .requestMatchers(
+                                "/api/auth/**",
+                                "/h2-console/**",
+                                "/v3/api-docs/**",
+                                "/v3/api-docs.yaml",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
+                        ).permitAll() // Public routes
                         .anyRequest().authenticated()                                   // Everything else is private
                 )
 
