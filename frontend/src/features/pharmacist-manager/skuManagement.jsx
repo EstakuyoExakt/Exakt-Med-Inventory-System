@@ -692,7 +692,9 @@ function SkuManagement() {
 
     const targetSku =
       selectedSku ||
-      currentFacilitySkus.find((s) => String(s.id) === String(restockFormData.skuId));
+      currentFacilitySkus.find(
+        (s) => String(s.id) === String(restockFormData.skuId),
+      );
     if (targetSku?.hasPendingRestock) {
       setFormErrors({
         requestedUnits: `A restock request is already active for this SKU (${targetSku.pendingRestockUnits} units, Status: ${targetSku.pendingRestockStatus || "Requested"}). A new request can only be submitted once the current order is Received.`,
@@ -703,9 +705,7 @@ function SkuManagement() {
     try {
       setIsRestockSubmitting(true);
       const targetFacilityIdToUse =
-        facility?.id ||
-        selectedSku?.facilityId ||
-        targetFacilityId;
+        facility?.id || selectedSku?.facilityId || targetFacilityId;
 
       if (!targetFacilityIdToUse) {
         setFormErrors({
@@ -803,9 +803,7 @@ function SkuManagement() {
     }
 
     const targetFacilityIdToSave =
-      facility?.id ||
-      selectedSku?.facilityId ||
-      targetFacilityId;
+      facility?.id || selectedSku?.facilityId || targetFacilityId;
 
     if (!targetFacilityIdToSave) {
       setFormErrors({
@@ -843,9 +841,7 @@ function SkuManagement() {
         setIsSuccessModalOpen(true);
         return;
       } else if (modalMode === "edit" && selectedSku) {
-        const editFacilityId =
-          selectedSku.facilityId ||
-          targetFacilityIdToSave;
+        const editFacilityId = selectedSku.facilityId || targetFacilityIdToSave;
 
         const editMedicineId = formData.medicineId || selectedSku.medicineId;
         if (!editMedicineId) {
@@ -999,7 +995,7 @@ function SkuManagement() {
             title="Request Stock Replenishment"
           >
             <PackagePlus className="w-4 h-4 text-blue-600" />
-            <span>Request Restock</span>
+            <span>Request Extra Stock</span>
           </button>
           <button
             type="button"
@@ -1191,24 +1187,26 @@ function SkuManagement() {
                               <span className="font-mono text-[11px] text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-bold">
                                 {item.sku}
                               </span>
-                              {item.hasPendingRestock && (
-                                <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
-                                  title={`Active restock request: ${item.pendingRestockUnits} units (${item.pendingRestockStatus || "Requested"}). Can only request again once Received.`}
-                                >
-                                  <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
-                                  <span>Restock: {item.pendingRestockUnits} units</span>
-                                  {item.pendingRestockStatus && (
-                                    <span className="text-[9px] uppercase font-bold px-1 py-0.2 bg-amber-200/60 rounded text-amber-900">
-                                      {item.pendingRestockStatus}
-                                    </span>
-                                  )}
-                                </span>
-                              )}
                             </div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-gray-500 pb-1">
                               {item.genericName} • {item.dosage}
                             </div>
+                            {item.hasPendingRestock && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
+                                title={`Active restock request: ${item.pendingRestockUnits} units (${item.pendingRestockStatus || "Requested"}). Can only request again once Received.`}
+                              >
+                                <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
+                                <span>
+                                  Restock: {item.pendingRestockUnits} units
+                                </span>
+                                {item.pendingRestockStatus && (
+                                  <span className="text-[9px] uppercase font-bold px-1 py-0.2 bg-amber-200/60 rounded text-amber-900">
+                                    {item.pendingRestockStatus}
+                                  </span>
+                                )}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -1982,10 +1980,15 @@ function SkuManagement() {
                   <Clock className="w-4 h-4 text-amber-600 shrink-0 animate-pulse" />
                   <div>
                     <span className="font-bold block text-amber-900">
-                      Active Restock Request: {selectedSku.pendingRestockUnits} units
+                      Active Restock Request: {selectedSku.pendingRestockUnits}{" "}
+                      units
                     </span>
                     <span className="text-[11px] text-amber-800">
-                      Status: <strong className="uppercase">{selectedSku.pendingRestockStatus || "Requested"}</strong> • Can request again once Received
+                      Status:{" "}
+                      <strong className="uppercase">
+                        {selectedSku.pendingRestockStatus || "Requested"}
+                      </strong>{" "}
+                      • Can request again once Received
                     </span>
                   </div>
                 </div>
@@ -2272,9 +2275,14 @@ function SkuManagement() {
                 </span>
                 <p className="text-[11px] text-amber-800 mt-0.5">
                   This SKU already has an active restock request for{" "}
-                  <strong>{selectedSku.pendingRestockUnits} units</strong> (Status:{" "}
-                  <strong className="uppercase">{selectedSku.pendingRestockStatus || "Requested"}</strong>).
-                  Per inventory control rules, a new restock request can only be submitted once the current order has been <strong>Received</strong>.
+                  <strong>{selectedSku.pendingRestockUnits} units</strong>{" "}
+                  (Status:{" "}
+                  <strong className="uppercase">
+                    {selectedSku.pendingRestockStatus || "Requested"}
+                  </strong>
+                  ). Per inventory control rules, a new restock request can only
+                  be submitted once the current order has been{" "}
+                  <strong>Received</strong>.
                 </p>
               </div>
             </div>

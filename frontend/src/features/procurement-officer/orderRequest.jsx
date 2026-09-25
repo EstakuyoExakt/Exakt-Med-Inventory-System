@@ -343,6 +343,8 @@ function OrderRequest() {
 
   // Additional SKU Selector inside Modal
   const [skuToAdd, setSkuToAdd] = useState("");
+  // Additional Restock Request Selector inside Modal
+  const [restockRequestIdToAdd, setRestockRequestIdToAdd] = useState("");
 
   // 1. Total Minimum SKUs for Current Facility (currentStock <= minimumLevel)
   const totalMinimumSkus = useMemo(() => {
@@ -437,6 +439,7 @@ function OrderRequest() {
       sku.reorderLevel * 2,
     );
     return {
+      rowId: `catalog_${sku.id || sku.sku}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       id: sku.id,
       sku: sku.sku,
       brandName: sku.brandName,
@@ -450,23 +453,16 @@ function OrderRequest() {
       reorderLevel: sku.reorderLevel,
       quantity: suggestedQty > 0 ? suggestedQty : 100,
       price: "",
+      isCatalogOrder: true,
     };
   };
 
-  // Open Multi-Item Requisition Modal with selected items
+  // Open Multi-Item Requisition Modal with selected items (or empty list by default)
   const handleOpenMultiOrderModal = (initialSkusToOrder = []) => {
     let itemsToInclude = [];
 
-    if (initialSkusToOrder.length > 0) {
+    if (Array.isArray(initialSkusToOrder) && initialSkusToOrder.length > 0) {
       itemsToInclude = initialSkusToOrder.map(buildLineItem);
-    } else if (selectedSkuIds.length > 0) {
-      const selectedObjList = currentFacilitySkus.filter((s) =>
-        selectedSkuIds.includes(s.id),
-      );
-      itemsToInclude = selectedObjList.map(buildLineItem);
-    } else if (reorderSkus.length > 0) {
-      // Default with the first reorder SKU if none selected
-      itemsToInclude = [buildLineItem(reorderSkus[0])];
     }
 
     const hasCritical = itemsToInclude.some(
@@ -474,8 +470,11 @@ function OrderRequest() {
     );
 
     setOrderForm({
-      supplierId:
-        activeSuppliers[0]?.id ? String(activeSuppliers[0].id) : (supplierList[0]?.id ? String(supplierList[0].id) : ""),
+      supplierId: activeSuppliers[0]?.id
+        ? String(activeSuppliers[0].id)
+        : supplierList[0]?.id
+          ? String(supplierList[0].id)
+          : "",
       targetFacility: currentFacilityName,
       priority: hasCritical ? "Urgent" : "Normal",
       totalCost: "",
@@ -484,6 +483,7 @@ function OrderRequest() {
     });
     setFormErrors({});
     setSkuToAdd("");
+    setRestockRequestIdToAdd("");
     setModalMode("order");
   };
 
@@ -522,38 +522,41 @@ function OrderRequest() {
       const matchedSku =
         currentFacilitySkus.find(
           (s) => s.id === req.skuId || s.sku === req.skuName,
-        ) ||
-        skuList.find((s) => s.id === req.skuId || s.sku === req.skuName);
+        ) || skuList.find((s) => s.id === req.skuId || s.sku === req.skuName);
 
       return {
+        rowId: `req_${req.id}`,
         id: req.skuId || matchedSku?.id,
         sku: req.skuName || matchedSku?.sku || "",
         brandName: req.brandName || matchedSku?.brandName || "",
         genericName: req.genericName || matchedSku?.genericName || "",
         dosage: matchedSku?.dosage || "",
         dosageForm: req.dosageForm || matchedSku?.dosageForm || "",
-        packagingUnit:
-          req.packagingUnit || matchedSku?.packagingUnit || "",
+        packagingUnit: req.packagingUnit || matchedSku?.packagingUnit || "",
         currentStock: matchedSku?.currentStock ?? 0,
         minimumLevel: matchedSku?.minimumLevel ?? 0,
         maximumLevel: matchedSku?.maximumLevel ?? 0,
         reorderLevel: matchedSku?.reorderLevel ?? 0,
         quantity: Number(req.requestedUnits) || 1,
         price: "",
+        restockRequestId: req.id,
+        restockRequestIds: [req.id],
+        isRestockRequest: true,
       };
     });
 
-    const reasons = targetRequests
-      .map((r) => r.reason?.trim())
-      .filter(Boolean);
+    const reasons = targetRequests.map((r) => r.reason?.trim()).filter(Boolean);
     const combinedNotes =
       reasons.length > 0
         ? `Pharmacist Restock Requests: ${reasons.join("; ")}`
         : "Requested by Pharmacy Department";
 
     setOrderForm({
-      supplierId:
-        activeSuppliers[0]?.id ? String(activeSuppliers[0].id) : (supplierList[0]?.id ? String(supplierList[0].id) : ""),
+      supplierId: activeSuppliers[0]?.id
+        ? String(activeSuppliers[0].id)
+        : supplierList[0]?.id
+          ? String(supplierList[0].id)
+          : "",
       targetFacility: currentFacilityName,
       priority: "Normal",
       totalCost: "",
@@ -563,6 +566,7 @@ function OrderRequest() {
     });
     setFormErrors({});
     setSkuToAdd("");
+    setRestockRequestIdToAdd("");
     setModalMode("order");
   };
 
@@ -571,22 +575,29 @@ function OrderRequest() {
     setSelectedSkuForView(null);
     setSelectedRestockForView(null);
     setFormErrors({});
+    setSkuToAdd("");
+    setRestockRequestIdToAdd("");
     setOrderForm((prev) => ({
       ...prev,
       restockRequestIds: [],
     }));
   };
 
-  // Add Item to Order Form within the Modal
+  // Add Item to Order Form within the Modal from SKU Catalog
   const handleAddItemToForm = (skuCode) => {
     if (!skuCode) return;
     const targetSku = currentFacilitySkus.find((s) => s.sku === skuCode);
     if (!targetSku) return;
 
-    if (orderForm.items.some((i) => i.sku === targetSku.sku)) {
+    if (
+      orderForm.items.some(
+        (i) => i.sku === targetSku.sku && !i.isRestockRequest,
+      )
+    ) {
       setFormErrors((prev) => ({
         ...prev,
-        itemAdd: "This medicine is already added to the order request.",
+        itemAdd:
+          "A standard inventory row for this medicine is already in the order.",
       }));
       return;
     }
@@ -599,32 +610,107 @@ function OrderRequest() {
     setSkuToAdd("");
   };
 
-  // Remove Item from Order Form within the Modal
-  const handleRemoveItemFromForm = (skuCode) => {
+  // Add Item from a Pharmacist Restock Request within the Modal
+  const handleAddRestockRequestToForm = (requestId) => {
+    if (!requestId) return;
+    const req = restockRequests.find((r) => String(r.id) === String(requestId));
+    if (!req) return;
+
+    const currentRestockIds = orderForm.restockRequestIds || [];
+    if (currentRestockIds.includes(req.id)) {
+      setFormErrors((prev) => ({
+        ...prev,
+        itemAdd:
+          "This pharmacist restock request is already linked to this order.",
+      }));
+      return;
+    }
+
+    const matchedSku =
+      currentFacilitySkus.find(
+        (s) => s.id === req.skuId || s.sku === req.skuName,
+      ) || skuList.find((s) => s.id === req.skuId || s.sku === req.skuName);
+
+    const skuCode = req.skuName || matchedSku?.sku || "";
+    const qtyToAdd = Number(req.requestedUnits) || 1;
+
+    // Create a distinct line item row for this restock request (DO NOT COMBINE with standard threshold row)
+    const newItem = {
+      rowId: `req_${req.id}`,
+      id: req.skuId || matchedSku?.id,
+      sku: skuCode,
+      brandName: req.brandName || matchedSku?.brandName || "Medicine",
+      genericName: req.genericName || matchedSku?.genericName || "",
+      dosage: matchedSku?.dosage || "",
+      dosageForm: req.dosageForm || matchedSku?.dosageForm || "",
+      packagingUnit: req.packagingUnit || matchedSku?.packagingUnit || "",
+      currentStock: matchedSku?.currentStock ?? 0,
+      minimumLevel: matchedSku?.minimumLevel ?? 0,
+      maximumLevel: matchedSku?.maximumLevel ?? 0,
+      reorderLevel: matchedSku?.reorderLevel ?? 0,
+      quantity: qtyToAdd,
+      price: "",
+      restockRequestId: req.id,
+      restockRequestIds: [req.id],
+      isRestockRequest: true,
+    };
+
+    let updatedNotes = orderForm.notes || "";
+    if (req.reason?.trim()) {
+      if (updatedNotes) {
+        if (!updatedNotes.includes(req.reason.trim())) {
+          updatedNotes = `${updatedNotes} | Req #${req.id}: ${req.reason.trim()}`;
+        }
+      } else {
+        updatedNotes = `Pharmacist Request #${req.id}: ${req.reason.trim()}`;
+      }
+    }
+
     setOrderForm((prev) => ({
       ...prev,
-      items: prev.items.filter((i) => i.sku !== skuCode),
+      items: [...prev.items, newItem],
+      restockRequestIds: [...currentRestockIds, req.id],
+      notes: updatedNotes,
+    }));
+
+    setFormErrors((prev) => ({ ...prev, itemAdd: "", items: "" }));
+    setRestockRequestIdToAdd("");
+  };
+
+  // Remove Item from Order Form within the Modal (using rowKey)
+  const handleRemoveItemFromForm = (rowKey) => {
+    const itemToRemove = orderForm.items.find(
+      (i) => (i.rowId || i.sku) === rowKey,
+    );
+    const reqIdsToRemove = new Set(itemToRemove?.restockRequestIds || []);
+
+    setOrderForm((prev) => ({
+      ...prev,
+      items: prev.items.filter((i) => (i.rowId || i.sku) !== rowKey),
+      restockRequestIds: (prev.restockRequestIds || []).filter(
+        (id) => !reqIdsToRemove.has(id),
+      ),
     }));
   };
 
-  // Update item quantity in Order Form
-  const handleUpdateItemQuantity = (skuCode, qty) => {
+  // Update item quantity in Order Form (using rowKey)
+  const handleUpdateItemQuantity = (rowKey, qty) => {
     setOrderForm((prev) => ({
       ...prev,
       items: prev.items.map((i) =>
-        i.sku === skuCode
+        (i.rowId || i.sku) === rowKey
           ? { ...i, quantity: Math.max(1, Number(qty) || 1) }
           : i,
       ),
     }));
   };
 
-  // Update item price in Order Form
-  const handleUpdateItemPrice = (skuCode, price) => {
+  // Update item price in Order Form (using rowKey)
+  const handleUpdateItemPrice = (rowKey, price) => {
     setOrderForm((prev) => ({
       ...prev,
       items: prev.items.map((i) =>
-        i.sku === skuCode ? { ...i, price } : i,
+        (i.rowId || i.sku) === rowKey ? { ...i, price } : i,
       ),
     }));
   };
@@ -639,17 +725,26 @@ function OrderRequest() {
 
   // Total Quoted Cost in the current Order Form (auto-calculated from sum of item prices)
   const computedTotalCost = useMemo(() => {
-    return orderForm.items.reduce(
-      (sum, i) => sum + (Number(i.price) || 0),
-      0,
-    );
+    return orderForm.items.reduce((sum, i) => sum + (Number(i.price) || 0), 0);
   }, [orderForm.items]);
 
-  // Available SKUs that need restocking in active facility and haven't been added yet
+  // Available pending pharmacist restock requests not yet added to this order
+  const availableRestockRequestsToAdd = useMemo(() => {
+    const includedReqIds = new Set(orderForm.restockRequestIds || []);
+    return restockRequests.filter(
+      (r) => !r.orderId && !includedReqIds.has(r.id),
+    );
+  }, [restockRequests, orderForm.restockRequestIds]);
+
+  // Available SKUs that need restocking in active facility and haven't had a standard order row added yet
   const availableSkusToAdd = useMemo(() => {
-    const addedSkus = new Set(orderForm.items.map((i) => i.sku));
+    const addedCatalogSkus = new Set(
+      orderForm.items
+        .filter((i) => !i.isRestockRequest)
+        .map((i) => i.sku),
+    );
     return currentFacilitySkus.filter(
-      (s) => s.currentStock <= s.reorderLevel && !addedSkus.has(s.sku),
+      (s) => s.currentStock <= s.reorderLevel && !addedCatalogSkus.has(s.sku),
     );
   }, [currentFacilitySkus, orderForm.items]);
 
@@ -690,15 +785,16 @@ function OrderRequest() {
       return;
     }
 
-    const supplierObj =
-      supplierList.find((s) => s.id === Number(orderForm.supplierId));
+    const supplierObj = supplierList.find(
+      (s) => s.id === Number(orderForm.supplierId),
+    );
 
-    const targetFacilityIdToSave =
-      facility?.id || targetFacilityId;
+    const targetFacilityIdToSave = facility?.id || targetFacilityId;
 
     if (!targetFacilityIdToSave) {
       setFormErrors({
-        supplierId: "Operating facility could not be determined. Please re-select your facility.",
+        supplierId:
+          "Operating facility could not be determined. Please re-select your facility.",
       });
       return;
     }
@@ -738,7 +834,8 @@ function OrderRequest() {
         orderNumber: resolvedPoNumber,
         supplierId: response.supplierId || Number(orderForm.supplierId),
         supplierName:
-          response.supplierName || (supplierObj ? supplierObj.name : "Supplier"),
+          response.supplierName ||
+          (supplierObj ? supplierObj.name : "Supplier"),
         targetFacility: orderForm.targetFacility,
         priority: response.priority || orderForm.priority,
         status: response.status || "Pending",
@@ -758,9 +855,7 @@ function OrderRequest() {
       setSkuList((prev) => prev.filter((s) => !orderedIds.has(s.id)));
       if (orderPayload.restockRequestIds) {
         const reqIdsSet = new Set(orderPayload.restockRequestIds);
-        setRestockRequests((prev) =>
-          prev.filter((r) => !reqIdsSet.has(r.id)),
-        );
+        setRestockRequests((prev) => prev.filter((r) => !reqIdsSet.has(r.id)));
         setSelectedRestockRequestIds((prev) =>
           prev.filter((id) => !reqIdsSet.has(id)),
         );
@@ -798,9 +893,7 @@ function OrderRequest() {
       setSkuList((prev) => prev.filter((s) => !orderedIds.has(s.id)));
       if (orderPayload.restockRequestIds) {
         const reqIdsSet = new Set(orderPayload.restockRequestIds);
-        setRestockRequests((prev) =>
-          prev.filter((r) => !reqIdsSet.has(r.id)),
-        );
+        setRestockRequests((prev) => prev.filter((r) => !reqIdsSet.has(r.id)));
         setSelectedRestockRequestIds((prev) =>
           prev.filter((id) => !reqIdsSet.has(id)),
         );
@@ -827,7 +920,7 @@ function OrderRequest() {
             </span>
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            Batch restock items into a consolidated purchase order requisition
+            Manage replenishment requests and create purchase order requisitions
             for{" "}
             <span className="font-semibold text-gray-700">
               {currentFacilityName}
@@ -836,40 +929,14 @@ function OrderRequest() {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          {activeTab === "requests" && (
-            <button
-              type="button"
-              onClick={() => handleProcessRestockRequests()}
-              disabled={selectedRestockRequestIds.length === 0}
-              className={`btn-primary shadow-xs flex items-center gap-2 text-xs py-2 px-3.5 ${
-                selectedRestockRequestIds.length === 0
-                  ? "opacity-50 cursor-not-allowed"
-                  : "cursor-pointer"
-              }`}
-            >
-              <ListPlus className="w-4 h-4" />
-              <span>
-                {selectedRestockRequestIds.length > 0
-                  ? `Create Consolidated PO for (${selectedRestockRequestIds.length}) Selected`
-                  : "Consolidate Restock Requests into PO"}
-              </span>
-            </button>
-          )}
-
-          {activeTab === "thresholds" && (
-            <button
-              type="button"
-              onClick={() => handleOpenMultiOrderModal()}
-              className="btn-primary shadow-xs flex items-center gap-2 text-xs py-2 px-3.5"
-            >
-              <ListPlus className="w-4 h-4" />
-              <span>
-                {selectedSkuIds.length > 0
-                  ? `Create PO for (${selectedSkuIds.length}) Selected`
-                  : "Create Multi-Item PO Request"}
-              </span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => handleOpenMultiOrderModal([])}
+            className="btn-primary shadow-xs flex items-center gap-2 text-xs py-2 px-3.5 cursor-pointer"
+          >
+            <ListPlus className="w-4 h-4" />
+            <span>Create Multi-Item PO Request</span>
+          </button>
         </div>
       </div>
 
@@ -887,7 +954,8 @@ function OrderRequest() {
               </h3>
               <div className="flex items-center gap-2 mt-1">
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 bg-red-100/70 px-2 py-0.5 rounded-full">
-                  <AlertCircle className="w-3 h-3" /> Critical shortage (&le; Min)
+                  <AlertCircle className="w-3 h-3" /> Critical shortage (&le;
+                  Min)
                 </span>
                 {totalMinimumSkus > 0 && activeTab === "thresholds" && (
                   <button
@@ -1037,7 +1105,9 @@ function OrderRequest() {
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white text-[11px] font-bold">
                     {selectedRestockRequestIds.length}
                   </span>
-                  <span>Restock requests selected for consolidated purchase order</span>
+                  <span>
+                    Restock requests selected for consolidated purchase order
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1053,7 +1123,10 @@ function OrderRequest() {
                     className="btn-primary py-1 px-3 text-xs shadow-xs flex items-center gap-1.5 cursor-pointer"
                   >
                     <ShoppingCart className="w-3.5 h-3.5" />
-                    <span>Create Consolidated PO ({selectedRestockRequestIds.length})</span>
+                    <span>
+                      Create Consolidated PO ({selectedRestockRequestIds.length}
+                      )
+                    </span>
                   </button>
                 </div>
               </div>
@@ -1208,7 +1281,9 @@ function OrderRequest() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleProcessRestockRequests([req])}
+                              onClick={() =>
+                                handleProcessRestockRequests([req])
+                              }
                               className="btn-primary py-1.5 px-3 text-xs shadow-xs inline-flex items-center gap-1.5 cursor-pointer font-medium"
                               title="Convert this request into a purchase order"
                             >
@@ -1288,262 +1363,267 @@ function OrderRequest() {
               </div>
             </div>
 
-        {/* Multi-Select Floating Action Bar if items checked */}
-        {selectedSkuIds.length > 0 && (
-          <div className="p-3 bg-blue-50/90 border-b border-blue-100 flex items-center justify-between text-xs text-blue-900">
-            <div className="flex items-center gap-2 font-semibold">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white text-[11px] font-bold">
-                {selectedSkuIds.length}
-              </span>
-              <span>Medicines selected for batch requisition</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setSelectedSkuIds([])}
-                className="btn-secondary py-1 px-2.5 text-xs text-gray-600 hover:text-gray-900"
-              >
-                Clear Selection
-              </button>
-              <button
-                type="button"
-                onClick={() => handleOpenMultiOrderModal()}
-                className="btn-primary py-1 px-3 text-xs shadow-xs flex items-center gap-1.5"
-              >
-                <PackagePlus className="w-3.5 h-3.5" />
-                <span>Create Combined PO ({selectedSkuIds.length})</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Table View */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-600">
-            <thead className="bg-gray-50 text-[11px] uppercase tracking-wider text-gray-500 font-semibold border-b border-gray-200">
-              <tr>
-                <th scope="col" className="px-4 py-3.5 w-10 text-center">
+            {/* Multi-Select Floating Action Bar if items checked */}
+            {selectedSkuIds.length > 0 && (
+              <div className="p-3 bg-blue-50/90 border-b border-blue-100 flex items-center justify-between text-xs text-blue-900">
+                <div className="flex items-center gap-2 font-semibold">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white text-[11px] font-bold">
+                    {selectedSkuIds.length}
+                  </span>
+                  <span>Medicines selected for batch requisition</span>
+                </div>
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={handleSelectAllVisible}
-                    className="text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
-                    title="Select all visible on page"
-                    aria-label="Select all visible on page"
+                    onClick={() => setSelectedSkuIds([])}
+                    className="btn-secondary py-1 px-2.5 text-xs text-gray-600 hover:text-gray-900"
                   >
-                    {paginatedReorderSkus.length > 0 &&
-                    paginatedReorderSkus.every((s) =>
-                      selectedSkuIds.includes(s.id),
-                    ) ? (
-                      <CheckSquare className="w-4 h-4 text-blue-600" />
-                    ) : (
-                      <Square className="w-4 h-4" />
-                    )}
+                    Clear Selection
                   </button>
-                </th>
-                <th scope="col" className="px-6 py-3.5">
-                  SKU & Medicine
-                </th>
-                <th scope="col" className="px-6 py-3.5">
-                  Form & Packaging
-                </th>
-                <th scope="col" className="px-6 py-3.5">
-                  Current vs Thresholds
-                </th>
-                <th scope="col" className="px-6 py-3.5">
-                  Status
-                </th>
-                <th scope="col" className="px-6 py-3.5 text-right">
-                  Action
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
-              {isLoadingSkus ? (
-                <tr>
-                  <td
-                    colSpan="6"
-                    className="px-6 py-12 text-center text-gray-400"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const selectedObjList = currentFacilitySkus.filter((s) =>
+                        selectedSkuIds.includes(s.id),
+                      );
+                      handleOpenMultiOrderModal(selectedObjList);
+                    }}
+                    className="btn-primary py-1 px-3 text-xs shadow-xs flex items-center gap-1.5 cursor-pointer"
                   >
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                      <p className="text-xs font-medium text-gray-500">
-                        Loading critical and reorder level SKUs...
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              ) : paginatedReorderSkus.length > 0 ? (
-                paginatedReorderSkus.map((item) => {
-                  const status = getStockStatus(item);
-                  const isSelected = selectedSkuIds.includes(item.id);
+                    <PackagePlus className="w-3.5 h-3.5" />
+                    <span>Create Combined PO ({selectedSkuIds.length})</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
-                  return (
-                    <tr
-                      key={item.id}
-                      className={`hover:bg-blue-50/30 transition-colors ${
-                        isSelected
-                          ? "bg-blue-50/20"
-                          : item.currentStock <= item.minimumLevel
-                            ? "bg-red-50/15"
-                            : ""
-                      }`}
-                    >
-                      {/* Checkbox */}
-                      <td className="px-4 py-4 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleSelectSku(item.id)}
-                          className="text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
-                          aria-label={`Select SKU ${item.sku}`}
-                        >
-                          {isSelected ? (
-                            <CheckSquare className="w-4 h-4 text-blue-600" />
-                          ) : (
-                            <Square className="w-4 h-4" />
-                          )}
-                        </button>
-                      </td>
-
-                      {/* SKU & Drug Info */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-start gap-3">
-                          <div
-                            className={`flex h-9 w-9 items-center justify-center rounded-lg font-semibold text-xs border shrink-0 mt-0.5 ${
-                              item.currentStock <= item.minimumLevel
-                                ? "bg-red-50 text-red-600 border-red-200"
-                                : "bg-amber-50 text-amber-600 border-amber-200"
-                            }`}
-                          >
-                            <Pill className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-gray-900 text-sm">
-                                {item.brandName}
-                              </span>
-                              <span className="font-mono text-[11px] text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-bold">
-                                {item.sku}
-                              </span>
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {item.genericName} • {item.dosage}
-                            </div>
-                            <div className="text-[11px] text-gray-400 mt-0.5">
-                              {item.type}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Dosage Form & Packaging */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-xs font-semibold text-gray-800">
-                          {item.dosageForm}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-0.5">
-                          {item.packagingUnit}
-                        </div>
-                      </td>
-
-                      {/* Current Stock vs Thresholds */}
-                      <td className="px-6 py-4 whitespace-nowrap text-xs">
-                        <div className="flex items-center gap-2">
-                          <div className="bg-gray-100 px-2.5 py-1 rounded text-center">
-                            <span className="text-[10px] block uppercase font-medium text-gray-500">
-                              Current
-                            </span>
-                            <span className="font-bold text-gray-900 text-xs">
-                              {item.currentStock}
-                            </span>
-                          </div>
-                          <div className="bg-red-50 border border-red-100 text-red-700 px-2 py-1 rounded text-center">
-                            <span className="text-[10px] block uppercase font-medium text-red-500">
-                              Min
-                            </span>
-                            <span className="font-bold">
-                              {item.minimumLevel}
-                            </span>
-                          </div>
-                          <div className="bg-amber-50 border border-amber-100 text-amber-700 px-2 py-1 rounded text-center">
-                            <span className="text-[10px] block uppercase font-medium text-amber-500">
-                              Reorder
-                            </span>
-                            <span className="font-bold">
-                              {item.reorderLevel}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${status.color}`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${status.dotColor}`}
-                          />
-                          {status.label}
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-xs">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenViewModal(item)}
-                            className="btn-secondary p-1.5 text-gray-600 hover:text-blue-600"
-                            title="View SKU Diagnostics"
-                            aria-label="View SKU Details"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenSingleOrderModal(item)}
-                            className="btn-primary py-1.5 px-3 text-xs shadow-sm flex items-center gap-1.5 font-medium"
-                          >
-                            <PackagePlus className="w-3.5 h-3.5" />
-                            <span>Add to PO</span>
-                          </button>
+            {/* Table View */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm text-gray-600">
+                <thead className="bg-gray-50 text-[11px] uppercase tracking-wider text-gray-500 font-semibold border-b border-gray-200">
+                  <tr>
+                    <th scope="col" className="px-4 py-3.5 w-10 text-center">
+                      <button
+                        type="button"
+                        onClick={handleSelectAllVisible}
+                        className="text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
+                        title="Select all visible on page"
+                        aria-label="Select all visible on page"
+                      >
+                        {paginatedReorderSkus.length > 0 &&
+                        paginatedReorderSkus.every((s) =>
+                          selectedSkuIds.includes(s.id),
+                        ) ? (
+                          <CheckSquare className="w-4 h-4 text-blue-600" />
+                        ) : (
+                          <Square className="w-4 h-4" />
+                        )}
+                      </button>
+                    </th>
+                    <th scope="col" className="px-6 py-3.5">
+                      SKU & Medicine
+                    </th>
+                    <th scope="col" className="px-6 py-3.5">
+                      Form & Packaging
+                    </th>
+                    <th scope="col" className="px-6 py-3.5">
+                      Current vs Thresholds
+                    </th>
+                    <th scope="col" className="px-6 py-3.5">
+                      Status
+                    </th>
+                    <th scope="col" className="px-6 py-3.5 text-right">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {isLoadingSkus ? (
+                    <tr>
+                      <td
+                        colSpan="6"
+                        className="px-6 py-12 text-center text-gray-400"
+                      >
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                          <p className="text-xs font-medium text-gray-500">
+                            Loading critical and reorder level SKUs...
+                          </p>
                         </div>
                       </td>
                     </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td
-                    colSpan="6"
-                    className="px-6 py-12 text-center text-gray-400"
-                  >
-                    <CheckCircle2 className="w-9 h-9 mx-auto mb-2 text-emerald-500" />
-                    <p className="text-base font-semibold text-gray-800">
-                      All inventory stock levels are healthy!
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      No SKUs currently require purchase reordering.
-                    </p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                  ) : paginatedReorderSkus.length > 0 ? (
+                    paginatedReorderSkus.map((item) => {
+                      const status = getStockStatus(item);
+                      const isSelected = selectedSkuIds.includes(item.id);
 
-        {/* Pagination Section */}
-        {reorderSkus.length > 0 && (
-          <div className="p-4 border-t border-gray-100 bg-gray-50/40">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalItems={reorderSkus.length}
-              itemsPerPage={itemsPerPage}
-              onPageChange={setCurrentPage}
-            />
-          </div>
-        )}
+                      return (
+                        <tr
+                          key={item.id}
+                          className={`hover:bg-blue-50/30 transition-colors ${
+                            isSelected
+                              ? "bg-blue-50/20"
+                              : item.currentStock <= item.minimumLevel
+                                ? "bg-red-50/15"
+                                : ""
+                          }`}
+                        >
+                          {/* Checkbox */}
+                          <td className="px-4 py-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleSelectSku(item.id)}
+                              className="text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
+                              aria-label={`Select SKU ${item.sku}`}
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="w-4 h-4 text-blue-600" />
+                              ) : (
+                                <Square className="w-4 h-4" />
+                              )}
+                            </button>
+                          </td>
+
+                          {/* SKU & Drug Info */}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-start gap-3">
+                              <div
+                                className={`flex h-9 w-9 items-center justify-center rounded-lg font-semibold text-xs border shrink-0 mt-0.5 ${
+                                  item.currentStock <= item.minimumLevel
+                                    ? "bg-red-50 text-red-600 border-red-200"
+                                    : "bg-amber-50 text-amber-600 border-amber-200"
+                                }`}
+                              >
+                                <Pill className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-gray-900 text-sm">
+                                    {item.brandName}
+                                  </span>
+                                  <span className="font-mono text-[11px] text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-bold">
+                                    {item.sku}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {item.genericName} • {item.dosage}
+                                </div>
+                                <div className="text-[11px] text-gray-400 mt-0.5">
+                                  {item.type}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Dosage Form & Packaging */}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-xs font-semibold text-gray-800">
+                              {item.dosageForm}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-0.5">
+                              {item.packagingUnit}
+                            </div>
+                          </td>
+
+                          {/* Current Stock vs Thresholds */}
+                          <td className="px-6 py-4 whitespace-nowrap text-xs">
+                            <div className="flex items-center gap-2">
+                              <div className="bg-gray-100 px-2.5 py-1 rounded text-center">
+                                <span className="text-[10px] block uppercase font-medium text-gray-500">
+                                  Current
+                                </span>
+                                <span className="font-bold text-gray-900 text-xs">
+                                  {item.currentStock}
+                                </span>
+                              </div>
+                              <div className="bg-red-50 border border-red-100 text-red-700 px-2 py-1 rounded text-center">
+                                <span className="text-[10px] block uppercase font-medium text-red-500">
+                                  Min
+                                </span>
+                                <span className="font-bold">
+                                  {item.minimumLevel}
+                                </span>
+                              </div>
+                              <div className="bg-amber-50 border border-amber-100 text-amber-700 px-2 py-1 rounded text-center">
+                                <span className="text-[10px] block uppercase font-medium text-amber-500">
+                                  Reorder
+                                </span>
+                                <span className="font-bold">
+                                  {item.reorderLevel}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Status */}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${status.color}`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${status.dotColor}`}
+                              />
+                              {status.label}
+                            </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-xs">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenViewModal(item)}
+                                className="btn-secondary p-1.5 text-gray-600 hover:text-blue-600"
+                                title="View SKU Diagnostics"
+                                aria-label="View SKU Details"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenSingleOrderModal(item)}
+                                className="btn-primary py-1.5 px-3 text-xs shadow-sm flex items-center gap-1.5 font-medium"
+                              >
+                                <PackagePlus className="w-3.5 h-3.5" />
+                                <span>Add to PO</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan="6"
+                        className="px-6 py-12 text-center text-gray-400"
+                      >
+                        <CheckCircle2 className="w-9 h-9 mx-auto mb-2 text-emerald-500" />
+                        <p className="text-base font-semibold text-gray-800">
+                          All inventory stock levels are healthy!
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          No SKUs currently require purchase reordering.
+                        </p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Section */}
+            {reorderSkus.length > 0 && (
+              <div className="p-4 border-t border-gray-100 bg-gray-50/40">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={reorderSkus.length}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            )}
           </div>
         )}
       </Card>
@@ -1654,39 +1734,72 @@ function OrderRequest() {
 
           {/* Section: Included Medicines List */}
           <div className="space-y-2">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center">
-                <span className="text-xs font-bold uppercase tracking-wider text-gray-800">
-                  Ordered Medicines ({orderForm.items.length})
-                </span>
-                <span className="text-xs text-blue-700 font-mono font-bold bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full text-center">
+            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-800 whitespace-nowrap">
+                Ordered Medicines ({orderForm.items.length})
+              </span>
+              <div className="flex justify-center">
+                <span className="text-xs text-blue-700 font-mono font-bold bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full text-center whitespace-nowrap">
                   Total Units {totalFormUnits.toLocaleString()}
                 </span>
               </div>
 
-              {/* Add More Medicine Dropdown */}
-              <div className="flex items-center gap-1.5">
-                <select
-                  value={skuToAdd}
-                  onChange={(e) => setSkuToAdd(e.target.value)}
-                  className="input py-1 px-2 text-xs w-56"
-                >
-                  <option value="">+ Add another medicine...</option>
-                  {availableSkusToAdd.map((s) => (
-                    <option key={s.id} value={s.sku}>
-                      {s.brandName} ({s.sku}) — Stock: {s.currentStock}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => handleAddItemToForm(skuToAdd)}
-                  disabled={!skuToAdd}
-                  className="btn-secondary py-1 px-2.5 text-xs flex items-center gap-1"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add</span>
-                </button>
+              {/* Action Dropdowns: Pharmacist Restock Requests + Inventory Medicine */}
+              <div className="flex items-center justify-end gap-2 flex-wrap">
+                {/* 1. Pharmacist Restock Request Dropdown */}
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={restockRequestIdToAdd}
+                    onChange={(e) => setRestockRequestIdToAdd(e.target.value)}
+                    className="input py-1 px-2 text-xs w-60 border-amber-300 bg-amber-50/50 text-gray-800"
+                    title="Select a pharmacist restock request to add to this purchase order"
+                  >
+                    <option value="">+ Fulfill Restock Request</option>
+                    {availableRestockRequestsToAdd.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        Req #{r.id}: {r.brandName || r.skuName} (
+                        {r.requestedUnits} units)
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleAddRestockRequestToForm(restockRequestIdToAdd)
+                    }
+                    disabled={!restockRequestIdToAdd}
+                    className="btn-secondary py-1 px-2.5 text-xs flex items-center gap-1 text-amber-900 bg-amber-100 hover:bg-amber-200 border-amber-300 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    title="Add requested item and link pharmacist restock request"
+                  >
+                    <ClipboardList className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Add</span>
+                  </button>
+                </div>
+
+                {/* 2. Add Regular Medicine Dropdown */}
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={skuToAdd}
+                    onChange={(e) => setSkuToAdd(e.target.value)}
+                    className="input py-1 px-2 text-xs w-60"
+                  >
+                    <option value="">+ Add medicine from catalog</option>
+                    {availableSkusToAdd.map((s) => (
+                      <option key={s.id} value={s.sku}>
+                        {s.brandName} ({s.sku}) — Stock: {s.currentStock}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => handleAddItemToForm(skuToAdd)}
+                    disabled={!skuToAdd}
+                    className="btn-secondary py-1 px-2.5 text-xs flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1711,95 +1824,111 @@ function OrderRequest() {
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {orderForm.items.length > 0 ? (
-                    orderForm.items.map((item, idx) => (
-                      <tr key={item.sku} className="hover:bg-gray-50/80">
-                        <td className="px-3.5 py-2.5">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-gray-900">
-                              {item.brandName}
-                            </span>
-                            <span className="font-mono text-[10px] text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded font-semibold">
-                              {item.sku}
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-gray-500">
-                            {item.genericName} • {item.dosage} (
-                            {item.packagingUnit})
-                          </div>
-                        </td>
+                    orderForm.items.map((item, idx) => {
+                      const rowKey = item.rowId || `${item.sku}-${idx}`;
+                      return (
+                        <tr key={rowKey} className="hover:bg-gray-50/80">
+                          <td className="px-3.5 py-2.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-gray-900">
+                                {item.brandName}
+                              </span>
+                              <span className="font-mono text-[10px] text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded font-semibold">
+                                {item.sku}
+                              </span>
+                              {item.restockRequestIds &&
+                              item.restockRequestIds.length > 0 ? (
+                                <span
+                                  className="inline-flex items-center gap-1 font-mono text-[10px] text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.2 rounded font-semibold"
+                                  title={`Linked to Pharmacist Restock Request #${item.restockRequestIds.join(", #")}`}
+                                >
+                                  <ClipboardList className="w-3 h-3 text-amber-700" />
+                                  <span>
+                                    Req #{item.restockRequestIds.join(", #")}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="font-mono text-[10px] text-gray-600 bg-gray-100 border border-gray-200 px-1.5 py-0.2 rounded font-medium">
+                                  Threshold Alert
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-gray-500">
+                              {item.genericName} • {item.dosage} (
+                              {item.packagingUnit})
+                            </div>
+                          </td>
 
-                        <td className="px-3.5 py-2.5 whitespace-nowrap">
-                          <div className="flex items-center gap-1.5 text-[11px]">
-                            <span
-                              className={`font-bold ${
-                                item.currentStock <= item.minimumLevel
-                                  ? "text-red-600"
-                                  : "text-amber-600"
-                              }`}
+                          <td className="px-3.5 py-2.5 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5 text-[11px]">
+                              <span
+                                className={`font-bold ${
+                                  item.currentStock <= item.minimumLevel
+                                    ? "text-red-600"
+                                    : "text-amber-600"
+                                }`}
+                              >
+                                {item.currentStock}
+                              </span>
+                              <span className="text-gray-400">/</span>
+                              <span className="text-gray-600">
+                                {item.maximumLevel}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="px-3.5 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) =>
+                                  handleUpdateItemQuantity(
+                                    rowKey,
+                                    e.target.value,
+                                  )
+                                }
+                                className="input py-1 px-2 text-xs w-20 font-bold text-gray-900"
+                              />
+                              <span className="text-[10px] text-gray-500">
+                                units
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="px-3.5 py-2.5">
+                            <div className="relative flex items-center">
+                              <span className="absolute left-2.5 text-gray-400 text-xs font-bold">
+                                ₱
+                              </span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={item.price ?? ""}
+                                onChange={(e) =>
+                                  handleUpdateItemPrice(rowKey, e.target.value)
+                                }
+                                className="input py-1 pl-6 pr-2 text-xs w-28 font-mono font-bold text-gray-900"
+                              />
+                            </div>
+                          </td>
+
+                          <td className="px-3.5 py-2.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItemFromForm(rowKey)}
+                              className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors cursor-pointer"
+                              title="Remove line item from this PO"
                             >
-                              {item.currentStock}
-                            </span>
-                            <span className="text-gray-400">/</span>
-                            <span className="text-gray-600">
-                              {item.maximumLevel}
-                            </span>
-                          </div>
-                        </td>
-
-                        <td className="px-3.5 py-2.5">
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="number"
-                              min="1"
-                              value={item.quantity}
-                              onChange={(e) =>
-                                handleUpdateItemQuantity(
-                                  item.sku,
-                                  e.target.value,
-                                )
-                              }
-                              className="input py-1 px-2 text-xs w-20 font-bold text-gray-900"
-                            />
-                            <span className="text-[10px] text-gray-500">
-                              units
-                            </span>
-                          </div>
-                        </td>
-
-                        <td className="px-3.5 py-2.5">
-                          <div className="relative flex items-center">
-                            <span className="absolute left-2.5 text-gray-400 text-xs font-bold">
-                              ₱
-                            </span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              placeholder="0.00"
-                              value={item.price ?? ""}
-                              onChange={(e) =>
-                                handleUpdateItemPrice(
-                                  item.sku,
-                                  e.target.value,
-                                )
-                              }
-                              className="input py-1 pl-6 pr-2 text-xs w-28 font-mono font-bold text-gray-900"
-                            />
-                          </div>
-                        </td>
-
-                        <td className="px-3.5 py-2.5 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItemFromForm(item.sku)}
-                            className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors cursor-pointer"
-                            title="Remove line item from this PO"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   ) : (
                     <tr>
                       <td
@@ -2101,242 +2230,244 @@ function OrderRequest() {
         title="Pharmacist Restock Request Details"
         size="lg"
       >
-        {selectedRestockForView && (() => {
-          const matchedSku =
-            currentFacilitySkus.find(
-              (s) =>
-                s.id === selectedRestockForView.skuId ||
-                s.sku === selectedRestockForView.skuName,
-            ) ||
-            skuList.find(
-              (s) =>
-                s.id === selectedRestockForView.skuId ||
-                s.sku === selectedRestockForView.skuName,
-            );
+        {selectedRestockForView &&
+          (() => {
+            const matchedSku =
+              currentFacilitySkus.find(
+                (s) =>
+                  s.id === selectedRestockForView.skuId ||
+                  s.sku === selectedRestockForView.skuName,
+              ) ||
+              skuList.find(
+                (s) =>
+                  s.id === selectedRestockForView.skuId ||
+                  s.sku === selectedRestockForView.skuName,
+              );
 
-          const isStockCritical =
-            matchedSku && matchedSku.currentStock <= matchedSku.minimumLevel;
-          const isStockReorder =
-            matchedSku && matchedSku.currentStock <= matchedSku.reorderLevel;
+            const isStockCritical =
+              matchedSku && matchedSku.currentStock <= matchedSku.minimumLevel;
+            const isStockReorder =
+              matchedSku && matchedSku.currentStock <= matchedSku.reorderLevel;
 
-          return (
-            <div className="space-y-4 text-xs">
-              {/* Top Banner / Header Status */}
-              <div className="flex items-center justify-between p-3.5 rounded-xl bg-blue-50/80 border border-blue-200">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white font-bold shrink-0">
-                    <ClipboardList className="w-5 h-5" />
+            return (
+              <div className="space-y-4 text-xs">
+                {/* Top Banner / Header Status */}
+                <div className="flex items-center justify-between p-3.5 rounded-xl bg-blue-50/80 border border-blue-200">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white font-bold shrink-0">
+                      <ClipboardList className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-gray-900 text-sm">
+                          Request #{selectedRestockForView.id}
+                        </span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                          Pending Fulfillment
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-gray-500">
+                        Pharmacist Replenishment Submission
+                      </span>
+                    </div>
                   </div>
+
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase font-bold text-gray-400 block">
+                      Target Facility
+                    </span>
+                    <span className="font-semibold text-gray-800 flex items-center justify-end gap-1">
+                      <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                      {selectedRestockForView.facilityName ||
+                        currentFacilityName}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Requester & Submission Metadata */}
+                <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-gray-50 border border-gray-100">
                   <div>
+                    <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">
+                      Requested By
+                    </span>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-gray-900 text-sm">
-                        Request #{selectedRestockForView.id}
-                      </span>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                        Pending Fulfillment
-                      </span>
+                      <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">
+                        <User className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900 leading-tight">
+                          {selectedRestockForView.userName || "Pharmacy Staff"}
+                        </p>
+                        <p className="text-[11px] text-gray-500">Pharmacist</p>
+                      </div>
                     </div>
-                    <span className="text-[11px] text-gray-500">
-                      Pharmacist Replenishment Submission
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">
+                      Submission Timestamp
                     </span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center font-bold text-xs shrink-0">
+                        <Calendar className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900 leading-tight">
+                          {selectedRestockForView.createdAt
+                            ? new Date(
+                                selectedRestockForView.createdAt,
+                              ).toLocaleDateString(undefined, {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                              })
+                            : "N/A"}
+                        </p>
+                        <p className="text-[11px] text-gray-500">
+                          {selectedRestockForView.createdAt
+                            ? new Date(
+                                selectedRestockForView.createdAt,
+                              ).toLocaleTimeString(undefined, {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : ""}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="text-right">
-                  <span className="text-[10px] uppercase font-bold text-gray-400 block">
-                    Target Facility
+                {/* Target Medication Information */}
+                <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-xs space-y-3">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">
+                    Requested Medication & SKU
                   </span>
-                  <span className="font-semibold text-gray-800 flex items-center justify-end gap-1">
-                    <Building2 className="w-3.5 h-3.5 text-blue-600" />
-                    {selectedRestockForView.facilityName || currentFacilityName}
-                  </span>
-                </div>
-              </div>
 
-              {/* Requester & Submission Metadata */}
-              <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-gray-50 border border-gray-100">
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">
-                    Requested By
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">
-                      <User className="w-3.5 h-3.5" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+                      <Pill className="w-5 h-5" />
                     </div>
-                    <div>
-                      <p className="font-bold text-gray-900 leading-tight">
-                        {selectedRestockForView.userName || "Pharmacy Staff"}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-bold text-sm text-gray-900">
+                          {selectedRestockForView.brandName ||
+                            selectedRestockForView.skuName}
+                        </h4>
+                        <span className="font-mono text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-bold">
+                          {selectedRestockForView.skuName}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-0.5 font-medium">
+                        {selectedRestockForView.genericName ||
+                          matchedSku?.genericName ||
+                          "Generic formula unrecorded"}
                       </p>
-                      <p className="text-[11px] text-gray-500">Pharmacist</p>
+                      <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500">
+                        <span>
+                          {selectedRestockForView.dosageForm ||
+                            matchedSku?.dosageForm ||
+                            "Dosage form N/A"}
+                        </span>
+                        <span>•</span>
+                        <span>
+                          {selectedRestockForView.packagingUnit ||
+                            matchedSku?.packagingUnit ||
+                            "Unit"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Stock vs Requirement Metrics */}
+                  <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-gray-100 text-center">
+                    <div className="p-2.5 rounded-lg bg-blue-50/60 border border-blue-100">
+                      <span className="text-[10px] uppercase font-bold text-blue-700 block">
+                        Requested Units
+                      </span>
+                      <span className="font-extrabold text-blue-900 text-base">
+                        {selectedRestockForView.requestedUnits}
+                      </span>
+                      <span className="text-[10px] text-blue-600 block">
+                        units
+                      </span>
+                    </div>
+
+                    <div
+                      className={`p-2.5 rounded-lg border ${
+                        isStockCritical
+                          ? "bg-red-50 border-red-100 text-red-900"
+                          : isStockReorder
+                            ? "bg-amber-50 border-amber-100 text-amber-900"
+                            : "bg-gray-50 border-gray-100 text-gray-900"
+                      }`}
+                    >
+                      <span className="text-[10px] uppercase font-bold text-gray-500 block">
+                        Current Stock
+                      </span>
+                      <span className="font-bold text-base">
+                        {matchedSku ? matchedSku.currentStock : "—"}
+                      </span>
+                      <span className="text-[10px] text-gray-500 block">
+                        {isStockCritical
+                          ? "Critical stock"
+                          : isStockReorder
+                            ? "Under reorder"
+                            : "Current level"}
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 rounded-lg bg-gray-50 border border-gray-100">
+                      <span className="text-[10px] uppercase font-bold text-gray-500 block">
+                        Reorder Threshold
+                      </span>
+                      <span className="font-bold text-base text-gray-800">
+                        {matchedSku ? matchedSku.reorderLevel : "—"}
+                      </span>
+                      <span className="text-[10px] text-gray-500 block">
+                        Min: {matchedSku ? matchedSku.minimumLevel : "—"}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">
-                    Submission Timestamp
+                {/* Full Clinical Justification / Remarks */}
+                <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-200/80 space-y-1.5">
+                  <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider block">
+                    Clinical Justification & Remarks
                   </span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center font-bold text-xs shrink-0">
-                      <Calendar className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-gray-900 leading-tight">
-                        {selectedRestockForView.createdAt
-                          ? new Date(
-                              selectedRestockForView.createdAt,
-                            ).toLocaleDateString(undefined, {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                            })
-                          : "N/A"}
-                      </p>
-                      <p className="text-[11px] text-gray-500">
-                        {selectedRestockForView.createdAt
-                          ? new Date(
-                              selectedRestockForView.createdAt,
-                            ).toLocaleTimeString(undefined, {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
-                          : ""}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Target Medication Information */}
-              <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-xs space-y-3">
-                <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">
-                  Requested Medication & SKU
-                </span>
-
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
-                    <Pill className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-bold text-sm text-gray-900">
-                        {selectedRestockForView.brandName ||
-                          selectedRestockForView.skuName}
-                      </h4>
-                      <span className="font-mono text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-bold">
-                        {selectedRestockForView.skuName}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-600 mt-0.5 font-medium">
-                      {selectedRestockForView.genericName ||
-                        matchedSku?.genericName ||
-                        "Generic formula unrecorded"}
-                    </p>
-                    <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500">
-                      <span>
-                        {selectedRestockForView.dosageForm ||
-                          matchedSku?.dosageForm ||
-                          "Dosage form N/A"}
-                      </span>
-                      <span>•</span>
-                      <span>
-                        {selectedRestockForView.packagingUnit ||
-                          matchedSku?.packagingUnit ||
-                          "Unit"}
-                      </span>
-                    </div>
-                  </div>
+                  <p className="text-xs text-gray-800 bg-white p-3 rounded-lg border border-gray-200/60 italic leading-relaxed whitespace-pre-wrap">
+                    {selectedRestockForView.reason
+                      ? `"${selectedRestockForView.reason}"`
+                      : "No specific clinical notes or justification provided."}
+                  </p>
                 </div>
 
-                {/* Stock vs Requirement Metrics */}
-                <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-gray-100 text-center">
-                  <div className="p-2.5 rounded-lg bg-blue-50/60 border border-blue-100">
-                    <span className="text-[10px] uppercase font-bold text-blue-700 block">
-                      Requested Units
-                    </span>
-                    <span className="font-extrabold text-blue-900 text-base">
-                      {selectedRestockForView.requestedUnits}
-                    </span>
-                    <span className="text-[10px] text-blue-600 block">
-                      units
-                    </span>
-                  </div>
-
-                  <div
-                    className={`p-2.5 rounded-lg border ${
-                      isStockCritical
-                        ? "bg-red-50 border-red-100 text-red-900"
-                        : isStockReorder
-                        ? "bg-amber-50 border-amber-100 text-amber-900"
-                        : "bg-gray-50 border-gray-100 text-gray-900"
-                    }`}
+                {/* Action Buttons in Modal Footer */}
+                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    className="btn-secondary text-xs"
                   >
-                    <span className="text-[10px] uppercase font-bold text-gray-500 block">
-                      Current Stock
-                    </span>
-                    <span className="font-bold text-base">
-                      {matchedSku ? matchedSku.currentStock : "—"}
-                    </span>
-                    <span className="text-[10px] text-gray-500 block">
-                      {isStockCritical
-                        ? "Critical stock"
-                        : isStockReorder
-                        ? "Under reorder"
-                        : "Current level"}
-                    </span>
-                  </div>
-
-                  <div className="p-2.5 rounded-lg bg-gray-50 border border-gray-100">
-                    <span className="text-[10px] uppercase font-bold text-gray-500 block">
-                      Reorder Threshold
-                    </span>
-                    <span className="font-bold text-base text-gray-800">
-                      {matchedSku ? matchedSku.reorderLevel : "—"}
-                    </span>
-                    <span className="text-[10px] text-gray-500 block">
-                      Min: {matchedSku ? matchedSku.minimumLevel : "—"}
-                    </span>
-                  </div>
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const reqToProcess = selectedRestockForView;
+                      handleCloseModal();
+                      handleProcessRestockRequests([reqToProcess]);
+                    }}
+                    className="btn-primary text-xs flex items-center gap-1.5"
+                  >
+                    <ShoppingCart className="w-3.5 h-3.5" />
+                    <span>Process into PO</span>
+                  </button>
                 </div>
               </div>
-
-              {/* Full Clinical Justification / Remarks */}
-              <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-200/80 space-y-1.5">
-                <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider block">
-                  Clinical Justification & Remarks
-                </span>
-                <p className="text-xs text-gray-800 bg-white p-3 rounded-lg border border-gray-200/60 italic leading-relaxed whitespace-pre-wrap">
-                  {selectedRestockForView.reason
-                    ? `"${selectedRestockForView.reason}"`
-                    : "No specific clinical notes or justification provided."}
-                </p>
-              </div>
-
-              {/* Action Buttons in Modal Footer */}
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  className="btn-secondary text-xs"
-                >
-                  Close
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const reqToProcess = selectedRestockForView;
-                    handleCloseModal();
-                    handleProcessRestockRequests([reqToProcess]);
-                  }}
-                  className="btn-primary text-xs flex items-center gap-1.5"
-                >
-                  <ShoppingCart className="w-3.5 h-3.5" />
-                  <span>Process into PO</span>
-                </button>
-              </div>
-            </div>
-          );
-        })()}
+            );
+          })()}
       </Modal>
     </div>
   );
