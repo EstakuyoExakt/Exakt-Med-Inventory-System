@@ -16,11 +16,10 @@ public class SkuStockAdjustmentDto {
 
     public enum Type {
         ADD,
-        SUBTRACT,
-        SET
+        SUBTRACT
     }
 
-    @NotNull(message = "Adjustment type is required (ADD, SUBTRACT, SET)")
+    @NotNull(message = "Adjustment type is required (ADD, SUBTRACT)")
     private Type type;
 
     @NotNull(message = "Adjustment amount is required")

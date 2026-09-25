@@ -242,12 +242,6 @@ public class SkuService {
                 newUnits = currentUnits - request.getAmount();
                 unitsToDeduct = request.getAmount();
             }
-            case SET -> {
-                newUnits = request.getAmount();
-                if (newUnits < currentUnits) {
-                    unitsToDeduct = currentUnits - newUnits;
-                }
-            }
             default -> throw new IllegalArgumentException("Unknown adjustment type: " + request.getType());
         }
 
@@ -282,12 +276,10 @@ public class SkuService {
         String action = switch (request.getType()) {
             case ADD -> "STOCK_ADDITION";
             case SUBTRACT -> "STOCK_DEDUCTION";
-            case SET -> "STOCK_RECONCILIATION";
         };
         String actionLabel = switch (request.getType()) {
             case ADD -> "Stock Addition (+" + request.getAmount() + " units)";
             case SUBTRACT -> "Stock Deduction (-" + request.getAmount() + " units)";
-            case SET -> "Stock Count Reconciliation (" + newUnits + " units)";
         };
         String batchInfo = targetBatch != null
                 ? String.format(" [Target Batch: %s, Expiry: %s, New Batch Units: %d]",

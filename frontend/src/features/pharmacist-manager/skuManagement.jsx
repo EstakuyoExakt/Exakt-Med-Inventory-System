@@ -1865,7 +1865,7 @@ function SkuManagement() {
               <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
                 Adjustment Action <span className="text-red-500">*</span>
               </label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
                   onClick={() =>
@@ -1897,19 +1897,6 @@ function SkuManagement() {
                   }`}
                 >
                   + Add Stock
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setAdjustFormData((prev) => ({ ...prev, type: "SET" }))
-                  }
-                  className={`py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer ${
-                    adjustFormData.type === "SET"
-                      ? "bg-blue-50 border-blue-500 text-blue-700 ring-2 ring-blue-500/20"
-                      : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  = Set Exact Qty
                 </button>
               </div>
             </div>
@@ -2059,10 +2046,7 @@ function SkuManagement() {
                 htmlFor="sku-adjust-amount"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
               >
-                {adjustFormData.type === "SET"
-                  ? "New Exact Total Quantity"
-                  : "Adjustment Amount (Units)"}{" "}
-                <span className="text-red-500">*</span>
+                Adjustment Amount (Units) <span className="text-red-500">*</span>
               </label>
               <input
                 id="sku-adjust-amount"
