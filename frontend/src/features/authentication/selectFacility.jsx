@@ -41,7 +41,6 @@ import RoleGuard from "../../components/guard/roleGuard";
 import facilityService from "../../services/facility";
 import assignFacilityService from "../../services/assignFacility";
 import userService from "../../services/user";
-import { users as initialUsers } from "../../data/user";
 import { ROLES } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
 import useRole from "../../hooks/useRole";
@@ -78,8 +77,9 @@ function SelectFacility() {
   const [isDeletingFacility, setIsDeletingFacility] = useState(false);
   const [deleteFacilityError, setDeleteFacilityError] = useState("");
 
-  // User list state for managing staff assignments
-  const [userList, setUserList] = useState(initialUsers);
+  // User list state for managing staff assignments (loaded live from backend)
+  const [userList, setUserList] = useState([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
   // Modal state for adding a facility
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -134,8 +134,6 @@ function SelectFacility() {
     }
   }, [isSuperAdmin, activeProject, navigate]);
 
-  const isSuperAdminOrAdmin = isAdmin;
-
   // Fetch facilities from backend API:
   // - Super Admin: fetch all facilities for the selected active project
   // - Admin & staff: fetch assigned facilities directly from backend
@@ -187,28 +185,43 @@ function SelectFacility() {
         err.message ||
         "Failed to load assigned facilities.";
       setFetchFacilitiesError(
-        typeof errMsg === "string" ? errMsg : "Failed to load assigned facilities.",
+        typeof errMsg === "string"
+          ? errMsg
+          : "Failed to load assigned facilities.",
       );
     } finally {
       setIsLoadingFacilities(false);
     }
   }, [isSuperAdmin, activeProject?.id]);
 
-  // Fetch users list for account creation & facility assignment (SuperAdmin only)
+  // Fetch users list for facility staff delegation (SuperAdmin only)
   const fetchUsers = useCallback(async () => {
     if (!isSuperAdmin) return;
     try {
+      setIsLoadingUsers(true);
       const backendUsers = await userService.getAllUsers();
       if (Array.isArray(backendUsers)) {
         setUserList(
-          backendUsers.map((u) => ({
-            ...u,
-            status: u.status ? "Active" : "Inactive",
-          })),
+          backendUsers.map((u) => {
+            const facIds = Array.isArray(u.assignedFacilityIds)
+              ? u.assignedFacilityIds
+              : Array.isArray(u.assignedFacilities)
+                ? u.assignedFacilities
+                : [];
+
+            return {
+              ...u,
+              assignedFacilities: facIds,
+              assignedFacilityIds: facIds,
+              status: u.status ? "Active" : "Inactive",
+            };
+          }),
         );
       }
     } catch (err) {
       console.error("Failed to load users:", err);
+    } finally {
+      setIsLoadingUsers(false);
     }
   }, [isSuperAdmin]);
 
@@ -217,20 +230,12 @@ function SelectFacility() {
       if (activeProject?.id) {
         fetchFacilities();
       }
+      fetchUsers();
     } else {
       // Admins and staff go directly to select-facility without choosing a project
       fetchFacilities();
     }
-
-    if (isSuperAdmin) {
-      fetchUsers();
-    }
-  }, [
-    activeProject?.id,
-    isSuperAdmin,
-    fetchFacilities,
-    fetchUsers,
-  ]);
+  }, [activeProject?.id, isSuperAdmin, fetchFacilities, fetchUsers]);
 
   // Facilities assigned to the user (Super Admins: all for active project; Admins/staff: backend provides assigned only)
   const userAssignedFacilities = useMemo(() => {
@@ -337,7 +342,10 @@ function SelectFacility() {
         setAddSuccessMsg("");
       }, 700);
     } catch (err) {
-      handleAddFacilityApiError(err, "Failed to create facility. Please try again.");
+      handleAddFacilityApiError(
+        err,
+        "Failed to create facility. Please try again.",
+      );
     } finally {
       setIsCreatingFacility(false);
     }
@@ -431,7 +439,10 @@ function SelectFacility() {
         setEditSuccessMsg("");
       }, 700);
     } catch (err) {
-      handleEditFacilityApiError(err, "Failed to update facility. Please try again.");
+      handleEditFacilityApiError(
+        err,
+        "Failed to update facility. Please try again.",
+      );
     } finally {
       setIsUpdatingFacility(false);
     }
@@ -506,9 +517,32 @@ function SelectFacility() {
     );
   };
 
-  // --- Assign Users Modal Handlers ---
+  // Helper: Get accurate number of facilities assigned to a user
+  const getUserFacilityCount = useCallback(
+    (u) => {
+      if (
+        Array.isArray(u?.assignedFacilityIds) &&
+        u.assignedFacilityIds.length > 0
+      ) {
+        return u.assignedFacilityIds.length;
+      }
+      if (
+        Array.isArray(u?.assignedFacilities) &&
+        u.assignedFacilities.length > 0
+      ) {
+        return u.assignedFacilities.length;
+      }
+      return facilityList.filter(
+        (f) =>
+          Array.isArray(f.assignedUserIds) && f.assignedUserIds.includes(u?.id),
+      ).length;
+    },
+    [facilityList],
+  );
+
+  // --- Assign Users Modal Handlers (SuperAdmin only) ---
   const handleOpenAssignUsersModal = async (facility) => {
-    if (!isSuperAdminOrAdmin) return;
+    if (!isSuperAdmin) return;
     const targetFacility =
       facility ||
       userAssignedFacilities[0] ||
@@ -522,21 +556,43 @@ function SelectFacility() {
     setAssignErrorMsg("");
     setIsAssignUserModalOpen(true);
 
+    // Fetch latest user list from backend if not yet populated
+    if (userList.length === 0) {
+      fetchUsers();
+    }
+
     // Immediate selection from cached assignedUserIds if available
     if (Array.isArray(targetFacility.assignedUserIds)) {
       setSelectedUserIds(targetFacility.assignedUserIds);
     }
 
-    // Fetch on-demand assigned users specifically for this facility
+    // Fetch on-demand assigned users specifically for this facility from backend
     try {
-      const assignedUsers = await assignFacilityService.getUsersByFacilityId(fid);
+      const assignedUsers =
+        await assignFacilityService.getUsersByFacilityId(fid);
       const userIds = Array.isArray(assignedUsers)
         ? assignedUsers.map((u) => u.id)
         : [];
       setSelectedUserIds(userIds);
       setFacilityList((prev) =>
-        prev.map((f) => (f.id === fid ? { ...f, assignedUserIds: userIds } : f)),
+        prev.map((f) =>
+          f.id === fid ? { ...f, assignedUserIds: userIds } : f,
+        ),
       );
+
+      // Merge any missing live user objects into userList
+      if (Array.isArray(assignedUsers) && assignedUsers.length > 0) {
+        setUserList((prev) => {
+          const existingIds = new Set(prev.map((u) => u.id));
+          const newUsers = assignedUsers
+            .filter((u) => !existingIds.has(u.id))
+            .map((u) => ({
+              ...u,
+              status: u.status ? "Active" : "Inactive",
+            }));
+          return newUsers.length > 0 ? [...prev, ...newUsers] : prev;
+        });
+      }
     } catch (err) {
       console.error("Failed to load facility assigned users:", err);
     }
@@ -553,14 +609,31 @@ function SelectFacility() {
     }
 
     try {
-      const assignedUsers = await assignFacilityService.getUsersByFacilityId(fid);
+      const assignedUsers =
+        await assignFacilityService.getUsersByFacilityId(fid);
       const userIds = Array.isArray(assignedUsers)
         ? assignedUsers.map((u) => u.id)
         : [];
       setSelectedUserIds(userIds);
       setFacilityList((prev) =>
-        prev.map((f) => (f.id === fid ? { ...f, assignedUserIds: userIds } : f)),
+        prev.map((f) =>
+          f.id === fid ? { ...f, assignedUserIds: userIds } : f,
+        ),
       );
+
+      // Merge any missing live user objects into userList
+      if (Array.isArray(assignedUsers) && assignedUsers.length > 0) {
+        setUserList((prev) => {
+          const existingIds = new Set(prev.map((u) => u.id));
+          const newUsers = assignedUsers
+            .filter((u) => !existingIds.has(u.id))
+            .map((u) => ({
+              ...u,
+              status: u.status ? "Active" : "Inactive",
+            }));
+          return newUsers.length > 0 ? [...prev, ...newUsers] : prev;
+        });
+      }
     } catch (err) {
       console.error("Failed to load facility assigned users:", err);
     }
@@ -576,7 +649,7 @@ function SelectFacility() {
 
   const handleSaveAssignments = async (e) => {
     e.preventDefault();
-    if (!isSuperAdminOrAdmin || !selectedFacilityIdForAssignment) return;
+    if (!isSuperAdmin || !selectedFacilityIdForAssignment) return;
 
     const targetFid = Number(selectedFacilityIdForAssignment);
     const targetFac = facilityList.find((f) => f.id === targetFid);
@@ -813,7 +886,7 @@ function SelectFacility() {
                   assignedLabel="Assigned Users"
                   assignedItems={getAssignedUsers(facility.id)}
                   assignedIconType="user"
-                  assignRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]}
+                  assignRoles={[ROLES.SUPER_ADMIN]}
                   onAssign={() => handleOpenAssignUsersModal(facility)}
                   emptyAssignedText="No users assigned yet"
                   footerVariant="full"
@@ -1484,10 +1557,13 @@ function SelectFacility() {
             })}
             maxHeight="max-h-56"
             helperText="Checked staff will have access to select and manage inventory in this facility upon logging in."
+            emptyMessage={
+              isLoadingUsers
+                ? "Loading staff users from server..."
+                : "No matching staff users found."
+            }
             renderItem={(u, isChecked, toggleFn) => {
-              const facCount = Array.isArray(u.assignedFacilities)
-                ? u.assignedFacilities.length
-                : 0;
+              const facCount = getUserFacilityCount(u);
 
               return (
                 <label

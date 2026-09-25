@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -23,4 +24,20 @@ public class UserResponseDto {
     private Long facilityId;
     private LocalDateTime createdAt;
     private String message;
+    private List<Long> assignedFacilityIds;
+
+    public UserResponseDto(Long id, String name, String username, String email, String phone,
+                           User.Role role, Boolean status, Long facilityId,
+                           LocalDateTime createdAt, String message) {
+        this.id = id;
+        this.name = name;
+        this.username = username;
+        this.email = email;
+        this.phone = phone;
+        this.role = role;
+        this.status = status;
+        this.facilityId = facilityId;
+        this.createdAt = createdAt;
+        this.message = message;
+    }
 }

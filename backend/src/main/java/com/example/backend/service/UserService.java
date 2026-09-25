@@ -222,13 +222,23 @@ public class UserService {
     private UserResponseDto mapToResponseDto(User user, String message) {
         List<UserFacilityLink> links = userFacilityLinkRepository.findByUserId(user.getId());
         Long facilityId = links.isEmpty() ? null : links.get(0).getFacility().getId();
+        List<Long> assignedFacilityIds = links.stream()
+                .map(link -> link.getFacility().getId())
+                .collect(Collectors.toList());
 
-        return mapToResponseDto(user, facilityId, message);
+        UserResponseDto dto = mapToResponseDto(user, facilityId, message);
+        dto.setAssignedFacilityIds(assignedFacilityIds);
+        return dto;
     }
 
     // Helper: Map User entity with known facilityId to UserResponseDto
     private UserResponseDto mapToResponseDto(User user, Long facilityId, String message) {
-        return new UserResponseDto(
+        List<Long> assignedFacilityIds = userFacilityLinkRepository.findByUserId(user.getId())
+                .stream()
+                .map(link -> link.getFacility().getId())
+                .collect(Collectors.toList());
+
+        UserResponseDto dto = new UserResponseDto(
                 user.getId(),
                 user.getName(),
                 user.getUsername(),
@@ -240,5 +250,7 @@ public class UserService {
                 user.getCreatedAt(),
                 message
         );
+        dto.setAssignedFacilityIds(assignedFacilityIds);
+        return dto;
     }
 }

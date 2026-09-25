@@ -106,7 +106,7 @@ public class DashboardService {
                     .name(entry.getKey())
                     .value(entry.getValue())
                     .color(PALETTE[colorIdx % PALETTE.length])
-                    .build());
+                    .build());  
             colorIdx++;
         }
         stockDistribution.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
