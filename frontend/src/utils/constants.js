@@ -11,6 +11,7 @@ export const DEFAULT_USER_FORM = {
   role: ROLES.PHARMACIST,
   status: "Active",
   password: "",
+  confirmPassword: "",
 };
 
 // ==========================================

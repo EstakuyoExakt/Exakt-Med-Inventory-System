@@ -8,6 +8,7 @@ import {
   Mail,
   Phone,
   Eye,
+  EyeOff,
   Pencil,
   Trash2,
   AlertTriangle,
@@ -63,6 +64,8 @@ function UserManagement() {
   const [modalMode, setModalMode] = useState(null); // 'add' | 'view' | 'edit' | 'delete' | null
   const [selectedUser, setSelectedUser] = useState(null);
   const [formData, setFormData] = useState(DEFAULT_USER_FORM);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const {
     errors: formErrors,
     setErrors: setFormErrors,
@@ -217,10 +220,13 @@ function UserManagement() {
       phone: "",
       role: isSuperAdmin ? ROLES.ADMIN : ROLES.PHARMACIST,
       status: "Active",
-      password: "exaktpassword",
+      password: "",
+      confirmPassword: "",
     });
     clearErrors();
     setSelectedUser(null);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     setModalMode("add");
   };
 
@@ -240,8 +246,11 @@ function UserManagement() {
       role: user.role || ROLES.PHARMACIST,
       status: user.status || "Active",
       password: "",
+      confirmPassword: "",
     });
     clearErrors();
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     setModalMode("edit");
   };
 
@@ -257,6 +266,8 @@ function UserManagement() {
     setSelectedUser(null);
     clearErrors();
     setDeleteError("");
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
   // Form Field Change Handler
@@ -937,7 +948,7 @@ function UserManagement() {
             </div>
 
             {/* Status */}
-            <div>
+            <div className="col-span-2">
               <label
                 htmlFor="user-status"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
@@ -957,14 +968,14 @@ function UserManagement() {
             </div>
 
             {/* Password */}
-            <div>
+            <div className="col-span-2">
               <label
                 htmlFor="user-password"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
               >
                 {modalMode === "add" ? (
                   <>
-                    Default Password <span className="text-red-500">*</span>
+                    Password <span className="text-red-500">*</span>
                   </>
                 ) : (
                   "Reset Password"
@@ -973,22 +984,35 @@ function UserManagement() {
               <div className="relative">
                 <input
                   id="user-password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   name="password"
                   value={formData.password}
                   onChange={handleInputChange}
                   placeholder={
                     modalMode === "add"
-                      ? "Temporary password"
+                      ? "Enter account password"
                       : "Leave blank to keep current password"
                   }
-                  className={`input pl-10 ${
+                  className={`input pl-10 pr-10 ${
                     formErrors.password
                       ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
                       : ""
                   }`}
                 />
                 <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  tabIndex={-1}
+                  title={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
               </div>
               {formErrors.password ? (
                 <p className="text-xs text-red-500 mt-1">
@@ -997,11 +1021,67 @@ function UserManagement() {
               ) : (
                 <p className="text-[11px] text-gray-400 mt-1">
                   {modalMode === "add"
-                    ? "Standard temporary password for first login."
+                    ? "Minimum 6 characters."
                     : "Leave blank to keep existing password."}
                 </p>
               )}
             </div>
+
+            {/* Confirm Password */}
+            {(modalMode === "add" ||
+              (modalMode === "edit" && formData.password)) && (
+              <div className="col-span-2">
+                <label
+                  htmlFor="user-confirm-password"
+                  className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
+                >
+                  Confirm Password{" "}
+                  {modalMode === "add" && (
+                    <span className="text-red-500">*</span>
+                  )}
+                </label>
+                <div className="relative">
+                  <input
+                    id="user-confirm-password"
+                    type={showConfirmPassword ? "text" : "password"}
+                    name="confirmPassword"
+                    value={formData.confirmPassword || ""}
+                    onChange={handleInputChange}
+                    placeholder="Re-enter password to confirm"
+                    className={`input pl-10 pr-10 ${
+                      formErrors.confirmPassword
+                        ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                        : ""
+                    }`}
+                  />
+                  <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                    tabIndex={-1}
+                    title={
+                      showConfirmPassword ? "Hide password" : "Show password"
+                    }
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+                {formErrors.confirmPassword ? (
+                  <p className="text-xs text-red-500 mt-1">
+                    {formErrors.confirmPassword}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Must match the password entered above.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Modal Action Buttons */}

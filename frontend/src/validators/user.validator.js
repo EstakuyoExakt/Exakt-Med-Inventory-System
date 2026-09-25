@@ -51,6 +51,30 @@ export const validateUserForm = (
     errors.password =
       isRequired(formData.password, "Password is required for new users.") ||
       minLength(formData.password, 6, "Password must be at least 6 characters.");
+
+    if (!errors.password) {
+      if (!formData.confirmPassword) {
+        errors.confirmPassword = "Confirm password is required.";
+      } else if (formData.password !== formData.confirmPassword) {
+        errors.confirmPassword = "Passwords do not match.";
+      }
+    } else if (formData.confirmPassword && formData.password !== formData.confirmPassword) {
+      errors.confirmPassword = "Passwords do not match.";
+    }
+  } else {
+    // Edit mode: password is optional for reset
+    if (formData.password && formData.password.trim() !== "") {
+      errors.password = minLength(
+        formData.password,
+        6,
+        "Password must be at least 6 characters.",
+      );
+      if (!formData.confirmPassword) {
+        errors.confirmPassword = "Please confirm the new password.";
+      } else if (formData.password !== formData.confirmPassword) {
+        errors.confirmPassword = "Passwords do not match.";
+      }
+    }
   }
 
   return runValidation(errors);
