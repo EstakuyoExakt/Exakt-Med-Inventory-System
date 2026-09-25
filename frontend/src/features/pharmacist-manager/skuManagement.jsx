@@ -14,6 +14,8 @@ import {
   Building2,
   PackagePlus,
   Clock,
+  Calendar,
+  Loader2,
 } from "lucide-react";
 
 // Common Components
@@ -27,6 +29,7 @@ import ComboBox from "./components/comboBox";
 import libMedicineService from "../../services/libMedicine";
 import skuService from "../../services/sku";
 import restockRequestService from "../../services/restockRequest";
+import batchService from "../../services/batch";
 
 // Constants Imports
 import {
@@ -35,7 +38,7 @@ import {
   ADJUSTMENT_REASONS,
   DEFAULT_STOCK_ADJUSTMENT,
 } from "../../utils/constants";
-import { getStockStatus } from "../../utils/helpers";
+import { getStockStatus, getExpiryStatus } from "../../utils/helpers";
 import useAuth from "../../hooks/useAuth";
 import useError from "../../hooks/useError";
 import { validateSkuForm } from "../../validators/sku.validator";
@@ -439,6 +442,17 @@ function SkuManagement() {
   const [adjustFormData, setAdjustFormData] = useState(
     DEFAULT_STOCK_ADJUSTMENT,
   );
+  const [skuBatches, setSkuBatches] = useState([]);
+  const [isLoadingBatches, setIsLoadingBatches] = useState(false);
+
+  // Selected batch for stock adjustment (ADD mode)
+  const selectedBatch = useMemo(() => {
+    if (!adjustFormData.batchId || !skuBatches.length) return null;
+    return (
+      skuBatches.find((b) => String(b.id) === String(adjustFormData.batchId)) ||
+      null
+    );
+  }, [adjustFormData.batchId, skuBatches]);
 
   // Filter SKUs that reference the current active facility
   const currentFacilitySkus = useMemo(() => {
@@ -643,9 +657,61 @@ function SkuManagement() {
   const handleOpenAdjustModal = (skuItem) => {
     setSelectedSku(skuItem);
     setAdjustFormData(DEFAULT_STOCK_ADJUSTMENT);
+    setSkuBatches([]);
     clearErrors();
     setModalMode("adjust");
   };
+
+  // Fetch available batches for the selected SKU when opening Stock Adjustment Modal
+  useEffect(() => {
+    if (modalMode !== "adjust" || !selectedSku) {
+      setSkuBatches([]);
+      return;
+    }
+
+    const activeFacilityId =
+      facility?.id || selectedSku?.facilityId || targetFacilityId;
+    if (!activeFacilityId) return;
+
+    let isMounted = true;
+    setIsLoadingBatches(true);
+
+    batchService
+      .getBatchesByFacility(activeFacilityId)
+      .then((data) => {
+        if (!isMounted) return;
+        const list = Array.isArray(data) ? data : [];
+        const filtered = list.filter(
+          (b) =>
+            (b.skuId === selectedSku.id ||
+              b.skuName === selectedSku.sku ||
+              b.sku === selectedSku.sku) &&
+            b.status !== "Expired",
+        );
+        // Sort FEFO (earliest expiring batches first)
+        filtered.sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+        setSkuBatches(filtered);
+
+        // If only 1 batch exists, auto-select it for user convenience
+        if (filtered.length === 1) {
+          setAdjustFormData((prev) => ({
+            ...prev,
+            batchId: String(filtered[0].id),
+          }));
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load batches for SKU stock adjustment:", err);
+        if (isMounted) setSkuBatches([]);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingBatches(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [modalMode, selectedSku, facility?.id, targetFacilityId]);
 
   const handleOpenRestockModal = (skuItem = null) => {
     if (skuItem && skuItem.id) {
@@ -671,6 +737,8 @@ function SkuManagement() {
     setModalMode(null);
     setSelectedSku(null);
     setRestockFormData(DEFAULT_RESTOCK_FORM_DATA);
+    setAdjustFormData(DEFAULT_STOCK_ADJUSTMENT);
+    setSkuBatches([]);
     clearErrors();
   };
 
@@ -934,6 +1002,14 @@ function SkuManagement() {
       errors.amount = `Cannot deduct more than available current stock (${selectedSku.currentStock}).`;
     }
 
+    if (
+      adjustFormData.type === "ADD" &&
+      skuBatches.length > 0 &&
+      !adjustFormData.batchId
+    ) {
+      errors.batchId = "Please select a target batch to receive the added stock.";
+    }
+
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
@@ -947,6 +1023,10 @@ function SkuManagement() {
         amount: amt,
         reason: adjustFormData.reason,
         notes: adjustFormData.notes ? adjustFormData.notes.trim() : null,
+        batchId:
+          adjustFormData.type === "ADD" && adjustFormData.batchId
+            ? Number(adjustFormData.batchId)
+            : null,
       });
 
       await fetchSkus(searchQuery);
@@ -1789,19 +1869,6 @@ function SkuManagement() {
                 <button
                   type="button"
                   onClick={() =>
-                    setAdjustFormData((prev) => ({ ...prev, type: "ADD" }))
-                  }
-                  className={`py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer ${
-                    adjustFormData.type === "ADD"
-                      ? "bg-emerald-50 border-emerald-500 text-emerald-700 ring-2 ring-emerald-500/20"
-                      : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  + Add Stock
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
                     setAdjustFormData((prev) => ({ ...prev, type: "SUBTRACT" }))
                   }
                   className={`py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer ${
@@ -1811,6 +1878,25 @@ function SkuManagement() {
                   }`}
                 >
                   - Deduct Stock
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAdjustFormData((prev) => ({
+                      ...prev,
+                      type: "ADD",
+                      batchId:
+                        prev.batchId ||
+                        (skuBatches.length === 1 ? String(skuBatches[0].id) : ""),
+                    }))
+                  }
+                  className={`py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer ${
+                    adjustFormData.type === "ADD"
+                      ? "bg-emerald-50 border-emerald-500 text-emerald-700 ring-2 ring-emerald-500/20"
+                      : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  + Add Stock
                 </button>
                 <button
                   type="button"
@@ -1827,6 +1913,145 @@ function SkuManagement() {
                 </button>
               </div>
             </div>
+
+            {/* Target Batch Selector & Expiry Date Display (Only when Add Stock is active) */}
+            {adjustFormData.type === "ADD" && (
+              <div className="space-y-2.5 p-3.5 rounded-xl bg-blue-50/50 border border-blue-200/80">
+                <div className="flex items-center justify-between">
+                  <label
+                    htmlFor="sku-adjust-batch"
+                    className="block text-xs font-semibold text-gray-800 uppercase tracking-wider"
+                  >
+                    Target Batch to Add Stock{" "}
+                    {skuBatches.length > 0 && (
+                      <span className="text-red-500">*</span>
+                    )}
+                  </label>
+                  {isLoadingBatches && (
+                    <span className="flex items-center gap-1 text-[11px] text-blue-600">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Loading batches...
+                    </span>
+                  )}
+                </div>
+
+                {isLoadingBatches ? (
+                  <div className="py-3 text-center text-xs text-gray-500 flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                    <span>Loading available batches...</span>
+                  </div>
+                ) : skuBatches.length > 0 ? (
+                  <div className="space-y-2.5">
+                    <select
+                      id="sku-adjust-batch"
+                      value={adjustFormData.batchId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAdjustFormData((prev) => ({ ...prev, batchId: val }));
+                        clearError("batchId");
+                      }}
+                      className="input bg-white text-xs font-medium"
+                    >
+                      <option value="">-- Select Target Batch --</option>
+                      {skuBatches.map((b) => {
+                        const exp = getExpiryStatus(b.expiryDate);
+                        return (
+                          <option key={b.id} value={b.id}>
+                            Batch #{b.batchNum} • Exp: {b.expiryDate} ({exp.label}) • Current: {b.units} units
+                          </option>
+                        );
+                      })}
+                    </select>
+
+                    {formErrors.batchId && (
+                      <p className="text-xs text-red-500 font-medium">
+                        {formErrors.batchId}
+                      </p>
+                    )}
+
+                    {/* Prominent Selected Batch & Expiry Date Card */}
+                    {selectedBatch && (() => {
+                      const exp = getExpiryStatus(selectedBatch.expiryDate);
+                      const currentBatchUnits = Number(selectedBatch.units || 0);
+                      const additionalUnits = Number(adjustFormData.amount || 0);
+                      const projectedTotal =
+                        currentBatchUnits +
+                        (isNaN(additionalUnits) || additionalUnits < 0
+                          ? 0
+                          : additionalUnits);
+
+                      return (
+                        <div className="p-3 rounded-lg bg-white border border-blue-200 shadow-xs space-y-2.5">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 border border-blue-100">
+                                <Package className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <span className="text-xs font-bold text-gray-900 block">
+                                  Batch #{selectedBatch.batchNum}
+                                </span>
+                                <span className="text-[11px] text-gray-500">
+                                  Status:{" "}
+                                  <span className="font-semibold text-gray-700">
+                                    {selectedBatch.status || "Available"}
+                                  </span>
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Expiry Countdown Pill */}
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${exp.color}`}
+                            >
+                              <span
+                                className={`w-2 h-2 rounded-full ${exp.dot}`}
+                              />
+                              {exp.label}
+                            </span>
+                          </div>
+
+                          {/* Expiry Date Highlight Banner */}
+                          <div className="flex items-center justify-between p-2.5 rounded-lg bg-amber-50/80 border border-amber-200 text-xs">
+                            <div className="flex items-center gap-1.5 text-amber-900 font-semibold">
+                              <Calendar className="w-4 h-4 text-amber-600 shrink-0" />
+                              <span>Batch Expiration Date:</span>
+                            </div>
+                            <span className="font-mono font-bold text-amber-950 text-xs bg-amber-100/70 px-2 py-0.5 rounded border border-amber-300/60">
+                              {selectedBatch.expiryDate}
+                            </span>
+                          </div>
+
+                          {/* Units Projection Comparison */}
+                          <div className="flex items-center justify-between text-[11px] text-gray-600 pt-1.5 border-t border-gray-100">
+                            <span>
+                              Current Batch Stock:{" "}
+                              <strong className="text-gray-900 font-semibold">
+                                {currentBatchUnits.toLocaleString()} units
+                              </strong>
+                            </span>
+                            <span className="text-emerald-700 font-bold">
+                              Projected: {projectedTotal.toLocaleString()} units
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">No Active Batches Found</p>
+                      <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
+                        This SKU currently has no registered active batches. Added
+                        stock will update the general SKU stock level directly.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Quantity Input */}
             <div>

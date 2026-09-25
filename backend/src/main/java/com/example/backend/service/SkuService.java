@@ -5,6 +5,7 @@ import com.example.backend.dto.sku.SkuResponseDto;
 import com.example.backend.dto.sku.SkuStockAdjustmentDto;
 import com.example.backend.dto.sku.StockAdjustmentLogResponseDto;
 import com.example.backend.entity.AuditLog;
+import com.example.backend.entity.Batch;
 import com.example.backend.entity.Facility;
 import com.example.backend.entity.LibMedicine;
 import com.example.backend.entity.Sku;
@@ -225,9 +226,15 @@ public class SkuService {
         long currentUnits = sku.getUnits() != null ? sku.getUnits() : 0L;
         long newUnits;
         long unitsToDeduct = 0L;
+        Batch targetBatch = null;
 
         switch (request.getType()) {
-            case ADD -> newUnits = currentUnits + request.getAmount();
+            case ADD -> {
+                newUnits = currentUnits + request.getAmount();
+                if (request.getBatchId() != null) {
+                    targetBatch = batchService.addUnitsToBatch(request.getBatchId(), sku.getId(), request.getAmount());
+                }
+            }
             case SUBTRACT -> {
                 if (request.getAmount() > currentUnits) {
                     throw new RuntimeException("Cannot deduct more than current stock (" + currentUnits + " units).");
@@ -263,7 +270,10 @@ public class SkuService {
         log.setDeltaUnits(newUnits - currentUnits);
         log.setNewUnits(newUnits);
         log.setReason(request.getReason());
-        log.setNotes(request.getNotes() != null ? request.getNotes().trim() : null);
+        String logNotes = (request.getNotes() != null && !request.getNotes().isBlank())
+                ? request.getNotes().trim() + (targetBatch != null ? " (Batch: " + targetBatch.getBatchNum() + ")" : "")
+                : (targetBatch != null ? "Added to Batch " + targetBatch.getBatchNum() : null);
+        log.setNotes(logNotes);
         stockAdjustmentLogRepository.save(log);
 
         // Record central Audit Log entry
@@ -279,15 +289,20 @@ public class SkuService {
             case SUBTRACT -> "Stock Deduction (-" + request.getAmount() + " units)";
             case SET -> "Stock Count Reconciliation (" + newUnits + " units)";
         };
+        String batchInfo = targetBatch != null
+                ? String.format(" [Target Batch: %s, Expiry: %s, New Batch Units: %d]",
+                    targetBatch.getBatchNum(), targetBatch.getExpiryDate(), targetBatch.getUnits())
+                : "";
         String description = String.format(
-                "Stock adjusted for SKU '%s' (%s). Previous: %d units, Change: %+d units, New Stock: %d units. Reason: %s.%s",
+                "Stock adjusted for SKU '%s' (%s). Previous: %d units, Change: %+d units, New Stock: %d units. Reason: %s.%s%s",
                 savedSku.getName(),
                 savedSku.getBrandName() != null ? savedSku.getBrandName() : "",
                 currentUnits,
                 delta,
                 newUnits,
                 request.getReason(),
-                (request.getNotes() != null && !request.getNotes().isBlank()) ? " Notes: " + request.getNotes().trim() : ""
+                (request.getNotes() != null && !request.getNotes().isBlank()) ? " Notes: " + request.getNotes().trim() : "",
+                batchInfo
         );
 
         auditLogService.logAction(

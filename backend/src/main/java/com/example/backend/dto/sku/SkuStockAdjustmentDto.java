@@ -31,4 +31,6 @@ public class SkuStockAdjustmentDto {
     private String reason;
 
     private String notes;
+
+    private Long batchId;
 }

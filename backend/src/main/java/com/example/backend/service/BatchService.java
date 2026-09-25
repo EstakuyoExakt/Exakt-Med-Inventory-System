@@ -308,8 +308,28 @@ public class BatchService {
                 batch.setUnits(currentBatchUnits - remaining);
                 remaining = 0L;
             }
-            batchRepository.save(batch);
         }
+    }
+
+    // 9. ADD UNITS TO SPECIFIC BATCH
+    @Transactional
+    public Batch addUnitsToBatch(Long batchId, Long skuId, long unitsToAdd) {
+        if (batchId == null || unitsToAdd <= 0) {
+            return null;
+        }
+        Batch batch = batchRepository.findById(batchId)
+                .orElseThrow(() -> new RuntimeException("Target batch not found with id: " + batchId));
+
+        if (skuId != null && batch.getOrderedItem() != null && batch.getOrderedItem().getSku() != null) {
+            if (!batch.getOrderedItem().getSku().getId().equals(skuId)) {
+                throw new RuntimeException("Selected batch does not belong to this SKU.");
+            }
+        }
+
+        long currentBatchUnits = batch.getUnits() != null ? batch.getUnits() : 0L;
+        batch.setUnits(currentBatchUnits + unitsToAdd);
+
+        return batchRepository.save(batch);
     }
 
     // HELPER: ADJUST ACTIVE SKU UNITS
