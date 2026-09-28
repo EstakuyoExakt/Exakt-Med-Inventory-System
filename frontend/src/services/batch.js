@@ -64,6 +64,21 @@ const batchService = {
     });
     return response.data;
   },
+
+  processExpiredBatches: async (facilityId, skuId = null, config = {}) => {
+    if (!facilityId) {
+      throw new Error("Facility ID is required to process expired batches.");
+    }
+    const response = await axios.post(
+      batchApi.processExpiredBatches(facilityId, skuId),
+      null,
+      {
+        ...config,
+        headers: getAuthHeaders(config),
+      },
+    );
+    return response.data;
+  },
 };
 
 export default batchService;

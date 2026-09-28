@@ -165,8 +165,7 @@ public class BatchService {
             throw new RuntimeException("Facility ID is required.");
         }
 
-        // Auto-expire any batches whose expiry date has passed and deduct SKU units
-        processExpiredBatches();
+        // Retrieve batches for the facility without automatic deduction
 
         List<Batch> batches;
         if (status != null) {
@@ -243,15 +242,23 @@ public class BatchService {
 
     // 6. PROCESS EXPIRED BATCHES (Deducts SKU units & sets status to Expired)
     @Transactional
-    public int processExpiredBatches() {
+    public int processExpiredBatches(Long facilityId) {
+        return processExpiredBatches(facilityId, null);
+    }
+
+    @Transactional
+    public int processExpiredBatches(Long facilityId, Long skuId) {
+        if (facilityId == null) {
+            throw new IllegalArgumentException("Facility ID is required to process expired batches.");
+        }
         LocalDate today = LocalDate.now();
-        List<Batch> expiredBatches = batchRepository.findByStatusAndExpiryDateLessThanEqual(
-                Batch.Status.Available, today);
+        List<Batch> expiredBatches = batchRepository.findExpiredBatches(
+                facilityId, skuId, Batch.Status.Available, today);
 
         for (Batch batch : expiredBatches) {
             batch.setStatus(Batch.Status.Expired);
             adjustSkuUnits(batch, -batch.getUnits());
-            String autoNote = "Auto-expired on " + today;
+            String autoNote = "Expired on " + today;
             if (batch.getNotes() == null || batch.getNotes().isBlank()) {
                 batch.setNotes(autoNote);
             } else {
@@ -268,17 +275,11 @@ public class BatchService {
                     AuditLog.Severity.CRITICAL,
                     batch.getBatchNum(),
                     batch.getId(),
-                    "Batch '" + batch.getBatchNum() + "' passed expiration date (" + batch.getExpiryDate() + "). Automatically deducted " + batch.getUnits() + " units from active SKU inventory.",
+                    "Batch '" + batch.getBatchNum() + "' passed expiration date (" + batch.getExpiryDate() + "). Deducted " + batch.getUnits() + " units from active SKU inventory.",
                     "Admin,Pharmacist"
             );
         }
         return expiredBatches.size();
-    }
-
-    // 7. SCHEDULED DAILY MIDNIGHT EXPIRATION RUN
-    @Scheduled(cron = "0 0 0 * * ?")
-    public void autoExpireBatchesScheduled() {
-        processExpiredBatches();
     }
 
     // 8. DEDUCT BATCHES ACCORDING TO FEFO (FIRST EXPIRE FIRST OUT)

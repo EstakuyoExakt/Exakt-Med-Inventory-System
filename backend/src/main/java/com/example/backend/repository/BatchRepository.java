@@ -26,6 +26,18 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
 
     List<Batch> findByStatusAndExpiryDateLessThanEqual(Batch.Status status, java.time.LocalDate date);
 
+    List<Batch> findByFacilityIdAndStatusAndExpiryDateLessThanEqual(Long facilityId, Batch.Status status, java.time.LocalDate date);
+
+    @Query("SELECT b FROM Batch b WHERE " +
+           "b.facility.id = :facilityId AND " +
+           "(:skuId IS NULL OR b.orderedItem.sku.id = :skuId) AND " +
+           "b.status = :status AND b.expiryDate <= :date")
+    List<Batch> findExpiredBatches(
+            @Param("facilityId") Long facilityId,
+            @Param("skuId") Long skuId,
+            @Param("status") Batch.Status status,
+            @Param("date") java.time.LocalDate date);
+
     @Query("SELECT b FROM Batch b WHERE b.orderedItem.sku.id = :skuId " +
            "AND b.facility.id = :facilityId " +
            "AND b.status = :status " +

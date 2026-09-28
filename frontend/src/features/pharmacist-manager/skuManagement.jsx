@@ -454,6 +454,130 @@ function SkuManagement() {
     );
   }, [adjustFormData.batchId, skuBatches]);
 
+  // Facility Batches for Expired Batches Tracking & Deduction
+  const [facilityBatches, setFacilityBatches] = useState([]);
+  const [isProcessingExpired, setIsProcessingExpired] = useState(false);
+  const [expiredResultModal, setExpiredResultModal] = useState(null);
+  const [isConfirmExpiredModalOpen, setIsConfirmExpiredModalOpen] =
+    useState(false);
+  const [targetSkuForExpiredDeduction, setTargetSkuForExpiredDeduction] =
+    useState(null);
+
+  // Expired batches that are still in active status and have not been deducted yet
+  const expiredBatches = useMemo(() => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    return facilityBatches.filter((b) => {
+      if (b.status === "Expired") return false;
+      if (!b.expiryDate) return false;
+      return b.expiryDate <= todayStr;
+    });
+  }, [facilityBatches]);
+
+  const expiredBatchesCount = expiredBatches.length;
+  const expiredUnitsCount = useMemo(() => {
+    return expiredBatches.reduce((acc, b) => acc + Number(b.units || 0), 0);
+  }, [expiredBatches]);
+
+  // Map of expired batches grouped by SKU ID
+  const expiredBatchesBySkuId = useMemo(() => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    const map = {};
+    for (const b of facilityBatches) {
+      if (b.status === "Expired") continue;
+      if (!b.expiryDate) continue;
+      if (b.expiryDate <= todayStr) {
+        const key = b.skuId;
+        if (key) {
+          if (!map[key]) map[key] = [];
+          map[key].push(b);
+        }
+      }
+    }
+    return map;
+  }, [facilityBatches]);
+
+  const targetSkuExpiredBatches = useMemo(() => {
+    if (targetSkuForExpiredDeduction) {
+      return expiredBatchesBySkuId[targetSkuForExpiredDeduction.id] || [];
+    }
+    return expiredBatches;
+  }, [targetSkuForExpiredDeduction, expiredBatchesBySkuId, expiredBatches]);
+
+  const targetSkuExpiredUnits = useMemo(() => {
+    return targetSkuExpiredBatches.reduce(
+      (acc, b) => acc + Number(b.units || 0),
+      0,
+    );
+  }, [targetSkuExpiredBatches]);
+
+  const handleOpenExpiredModalForSku = (skuItem) => {
+    setTargetSkuForExpiredDeduction(skuItem);
+    setIsConfirmExpiredModalOpen(true);
+  };
+
+  const loadFacilityBatches = useCallback(async () => {
+    if (!targetFacilityId) {
+      setFacilityBatches([]);
+      return;
+    }
+    try {
+      const data = await batchService.getBatchesByFacility(targetFacilityId);
+      setFacilityBatches(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load facility batches for expiry check:", err);
+      setFacilityBatches([]);
+    }
+  }, [targetFacilityId]);
+
+  useEffect(() => {
+    loadFacilityBatches();
+  }, [loadFacilityBatches]);
+
+  // Handler to manually process/deduct expired batches (for a specific SKU or entire facility)
+  const handleProcessExpiredBatches = async () => {
+    if (!targetFacilityId) {
+      setSkuError("Facility is required to process expired batches.");
+      return;
+    }
+    setIsProcessingExpired(true);
+    const skuToDeduct = targetSkuForExpiredDeduction;
+    setIsConfirmExpiredModalOpen(false);
+    try {
+      const result = await batchService.processExpiredBatches(
+        targetFacilityId,
+        skuToDeduct?.id || null,
+      );
+      const count =
+        typeof result?.count === "number"
+          ? result.count
+          : skuToDeduct
+            ? expiredBatchesBySkuId[skuToDeduct.id]?.length || 0
+            : expiredBatchesCount;
+      const msg =
+        result?.message ||
+        `Successfully processed and deducted ${count} expired batch(es)${
+          skuToDeduct ? ` for ${skuToDeduct.brandName}` : ""
+        }.`;
+      setExpiredResultModal({
+        count,
+        message: msg,
+      });
+
+      // Synchronously refresh both SKUs and Batches
+      await Promise.all([fetchSkus(searchQuery), loadFacilityBatches()]);
+    } catch (err) {
+      console.error("Failed to process expired batches:", err);
+      setSkuError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to process expired batches.",
+      );
+    } finally {
+      setIsProcessingExpired(false);
+      setTargetSkuForExpiredDeduction(null);
+    }
+  };
+
   // Filter SKUs that reference the current active facility
   const currentFacilitySkus = useMemo(() => {
     if (!targetFacilityId) return [];
@@ -689,7 +813,9 @@ function SkuManagement() {
             b.status !== "Expired",
         );
         // Sort FEFO (earliest expiring batches first)
-        filtered.sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+        filtered.sort(
+          (a, b) => new Date(a.expiryDate) - new Date(b.expiryDate),
+        );
         setSkuBatches(filtered);
 
         // If only 1 batch exists, auto-select it for user convenience
@@ -1007,7 +1133,8 @@ function SkuManagement() {
       skuBatches.length > 0 &&
       !adjustFormData.batchId
     ) {
-      errors.batchId = "Please select a target batch to receive the added stock.";
+      errors.batchId =
+        "Please select a target batch to receive the added stock.";
     }
 
     if (Object.keys(errors).length > 0) {
@@ -1247,6 +1374,13 @@ function SkuManagement() {
                     Math.round((item.currentStock / item.maximumLevel) * 100),
                     100,
                   );
+                  const skuExpiredBatches =
+                    expiredBatchesBySkuId[item.id] || [];
+                  const skuExpiredCount = skuExpiredBatches.length;
+                  const skuExpiredUnits = skuExpiredBatches.reduce(
+                    (acc, b) => acc + Number(b.units || 0),
+                    0,
+                  );
 
                   return (
                     <tr
@@ -1271,22 +1405,42 @@ function SkuManagement() {
                             <div className="text-xs text-gray-500 pb-1">
                               {item.genericName} • {item.dosage}
                             </div>
-                            {item.hasPendingRestock && (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
-                                title={`Active restock request: ${item.pendingRestockUnits} units (${item.pendingRestockStatus || "Requested"}). Can only request again once Received.`}
-                              >
-                                <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
-                                <span>
-                                  Restock: {item.pendingRestockUnits} units
-                                </span>
-                                {item.pendingRestockStatus && (
-                                  <span className="text-[9px] uppercase font-bold px-1 py-0.2 bg-amber-200/60 rounded text-amber-900">
-                                    {item.pendingRestockStatus}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {item.hasPendingRestock && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
+                                  title={`Active restock request: ${item.pendingRestockUnits} units (${item.pendingRestockStatus || "Requested"}). Can only request again once Received.`}
+                                >
+                                  <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
+                                  <span>
+                                    Restock: {item.pendingRestockUnits} units
                                   </span>
-                                )}
-                              </span>
-                            )}
+                                  {item.pendingRestockStatus && (
+                                    <span className="text-[9px] uppercase font-bold px-1 py-0.2 bg-amber-200/60 rounded text-amber-900">
+                                      {item.pendingRestockStatus}
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                              {/* Deduct Expired Batches Button inside row */}
+                              {skuExpiredCount > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleOpenExpiredModalForSku(item)
+                                  }
+                                  disabled={isProcessingExpired}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100 hover:border-amber-400 transition-colors shadow-xs cursor-pointer"
+                                  title={`${skuExpiredCount} batch(es) past expiry (${skuExpiredUnits.toLocaleString()} units). Click to deduct.`}
+                                >
+                                  <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                                  <span>
+                                    Has Expired Batches ({skuExpiredCount}) •
+                                    Deduct
+                                  </span>
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -1401,6 +1555,20 @@ function SkuManagement() {
                           >
                             <Sliders className="w-3.5 h-3.5" />
                           </button>
+
+                          {/* 2b. Deduct Expired Batches (Row Action) */}
+                          {skuExpiredCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenExpiredModalForSku(item)}
+                              disabled={isProcessingExpired}
+                              className="p-1.5 rounded border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:border-amber-400 transition-colors shadow-xs cursor-pointer"
+                              title={`Deduct ${skuExpiredCount} expired batch(es) (${skuExpiredUnits.toLocaleString()} units)`}
+                              aria-label="Deduct Expired Batches"
+                            >
+                              <Clock className="w-3.5 h-3.5 text-amber-600" />
+                            </button>
+                          )}
 
                           {/* 3. Request Restock */}
                           <button
@@ -1887,7 +2055,9 @@ function SkuManagement() {
                       type: "ADD",
                       batchId:
                         prev.batchId ||
-                        (skuBatches.length === 1 ? String(skuBatches[0].id) : ""),
+                        (skuBatches.length === 1
+                          ? String(skuBatches[0].id)
+                          : ""),
                     }))
                   }
                   className={`py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer ${
@@ -1934,7 +2104,10 @@ function SkuManagement() {
                       value={adjustFormData.batchId}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setAdjustFormData((prev) => ({ ...prev, batchId: val }));
+                        setAdjustFormData((prev) => ({
+                          ...prev,
+                          batchId: val,
+                        }));
                         clearError("batchId");
                       }}
                       className="input bg-white text-xs font-medium"
@@ -1944,7 +2117,8 @@ function SkuManagement() {
                         const exp = getExpiryStatus(b.expiryDate);
                         return (
                           <option key={b.id} value={b.id}>
-                            Batch #{b.batchNum} • Exp: {b.expiryDate} ({exp.label}) • Current: {b.units} units
+                            Batch #{b.batchNum} • Exp: {b.expiryDate} (
+                            {exp.label}) • Current: {b.units} units
                           </option>
                         );
                       })}
@@ -1957,73 +2131,79 @@ function SkuManagement() {
                     )}
 
                     {/* Prominent Selected Batch & Expiry Date Card */}
-                    {selectedBatch && (() => {
-                      const exp = getExpiryStatus(selectedBatch.expiryDate);
-                      const currentBatchUnits = Number(selectedBatch.units || 0);
-                      const additionalUnits = Number(adjustFormData.amount || 0);
-                      const projectedTotal =
-                        currentBatchUnits +
-                        (isNaN(additionalUnits) || additionalUnits < 0
-                          ? 0
-                          : additionalUnits);
+                    {selectedBatch &&
+                      (() => {
+                        const exp = getExpiryStatus(selectedBatch.expiryDate);
+                        const currentBatchUnits = Number(
+                          selectedBatch.units || 0,
+                        );
+                        const additionalUnits = Number(
+                          adjustFormData.amount || 0,
+                        );
+                        const projectedTotal =
+                          currentBatchUnits +
+                          (isNaN(additionalUnits) || additionalUnits < 0
+                            ? 0
+                            : additionalUnits);
 
-                      return (
-                        <div className="p-3 rounded-lg bg-white border border-blue-200 shadow-xs space-y-2.5">
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <div className="flex items-center gap-2">
-                              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 border border-blue-100">
-                                <Package className="w-4 h-4" />
-                              </div>
-                              <div>
-                                <span className="text-xs font-bold text-gray-900 block">
-                                  Batch #{selectedBatch.batchNum}
-                                </span>
-                                <span className="text-[11px] text-gray-500">
-                                  Status:{" "}
-                                  <span className="font-semibold text-gray-700">
-                                    {selectedBatch.status || "Available"}
+                        return (
+                          <div className="p-3 rounded-lg bg-white border border-blue-200 shadow-xs space-y-2.5">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-2">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 border border-blue-100">
+                                  <Package className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <span className="text-xs font-bold text-gray-900 block">
+                                    Batch #{selectedBatch.batchNum}
                                   </span>
-                                </span>
+                                  <span className="text-[11px] text-gray-500">
+                                    Status:{" "}
+                                    <span className="font-semibold text-gray-700">
+                                      {selectedBatch.status || "Available"}
+                                    </span>
+                                  </span>
+                                </div>
                               </div>
-                            </div>
 
-                            {/* Expiry Countdown Pill */}
-                            <span
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${exp.color}`}
-                            >
+                              {/* Expiry Countdown Pill */}
                               <span
-                                className={`w-2 h-2 rounded-full ${exp.dot}`}
-                              />
-                              {exp.label}
-                            </span>
-                          </div>
-
-                          {/* Expiry Date Highlight Banner */}
-                          <div className="flex items-center justify-between p-2.5 rounded-lg bg-amber-50/80 border border-amber-200 text-xs">
-                            <div className="flex items-center gap-1.5 text-amber-900 font-semibold">
-                              <Calendar className="w-4 h-4 text-amber-600 shrink-0" />
-                              <span>Batch Expiration Date:</span>
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${exp.color}`}
+                              >
+                                <span
+                                  className={`w-2 h-2 rounded-full ${exp.dot}`}
+                                />
+                                {exp.label}
+                              </span>
                             </div>
-                            <span className="font-mono font-bold text-amber-950 text-xs bg-amber-100/70 px-2 py-0.5 rounded border border-amber-300/60">
-                              {selectedBatch.expiryDate}
-                            </span>
-                          </div>
 
-                          {/* Units Projection Comparison */}
-                          <div className="flex items-center justify-between text-[11px] text-gray-600 pt-1.5 border-t border-gray-100">
-                            <span>
-                              Current Batch Stock:{" "}
-                              <strong className="text-gray-900 font-semibold">
-                                {currentBatchUnits.toLocaleString()} units
-                              </strong>
-                            </span>
-                            <span className="text-emerald-700 font-bold">
-                              Projected: {projectedTotal.toLocaleString()} units
-                            </span>
+                            {/* Expiry Date Highlight Banner */}
+                            <div className="flex items-center justify-between p-2.5 rounded-lg bg-amber-50/80 border border-amber-200 text-xs">
+                              <div className="flex items-center gap-1.5 text-amber-900 font-semibold">
+                                <Calendar className="w-4 h-4 text-amber-600 shrink-0" />
+                                <span>Batch Expiration Date:</span>
+                              </div>
+                              <span className="font-mono font-bold text-amber-950 text-xs bg-amber-100/70 px-2 py-0.5 rounded border border-amber-300/60">
+                                {selectedBatch.expiryDate}
+                              </span>
+                            </div>
+
+                            {/* Units Projection Comparison */}
+                            <div className="flex items-center justify-between text-[11px] text-gray-600 pt-1.5 border-t border-gray-100">
+                              <span>
+                                Current Batch Stock:{" "}
+                                <strong className="text-gray-900 font-semibold">
+                                  {currentBatchUnits.toLocaleString()} units
+                                </strong>
+                              </span>
+                              <span className="text-emerald-700 font-bold">
+                                Projected: {projectedTotal.toLocaleString()}{" "}
+                                units
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })()}
+                        );
+                      })()}
                   </div>
                 ) : (
                   <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
@@ -2031,8 +2211,9 @@ function SkuManagement() {
                     <div>
                       <p className="font-bold">No Active Batches Found</p>
                       <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
-                        This SKU currently has no registered active batches. Added
-                        stock will update the general SKU stock level directly.
+                        This SKU currently has no registered active batches.
+                        Added stock will update the general SKU stock level
+                        directly.
                       </p>
                     </div>
                   </div>
@@ -2046,7 +2227,8 @@ function SkuManagement() {
                 htmlFor="sku-adjust-amount"
                 className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
               >
-                Adjustment Amount (Units) <span className="text-red-500">*</span>
+                Adjustment Amount (Units){" "}
+                <span className="text-red-500">*</span>
               </label>
               <input
                 id="sku-adjust-amount"
@@ -2271,13 +2453,6 @@ function SkuManagement() {
 
             {/* Actions */}
             <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={handleCloseModal}
-                className="btn-secondary text-xs"
-              >
-                Close
-              </button>
               <button
                 type="button"
                 onClick={() => handleOpenAdjustModal(selectedSku)}
@@ -2668,6 +2843,145 @@ function SkuManagement() {
                   Facility:
                 </span>{" "}
                 {restockSuccessInfo.facilityName}
+              </p>
+            </div>
+          )
+        }
+        confirmText="Done"
+      />
+
+      {/* ======================================================== */}
+      {/* 9. CONFIRM DEDUCT EXPIRED BATCHES MODAL                  */}
+      {/* ======================================================== */}
+      <Modal
+        isOpen={isConfirmExpiredModalOpen}
+        onClose={() => setIsConfirmExpiredModalOpen(false)}
+        title="Deduct Expired Batches"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-sm text-amber-950">
+                Confirm Expiration Deduction
+              </p>
+              <p className="text-amber-800 text-xs mt-1">
+                {targetSkuForExpiredDeduction ? (
+                  <>
+                    This action will mark past-due batches for{" "}
+                    <span className="font-bold text-gray-900">
+                      {targetSkuForExpiredDeduction.brandName} (
+                      {targetSkuForExpiredDeduction.sku})
+                    </span>{" "}
+                    as <span className="font-bold text-red-600">Expired</span>{" "}
+                    and automatically deduct their units from active stock
+                    counts.
+                  </>
+                ) : (
+                  <>
+                    This action will mark all past-due batches at{" "}
+                    <span className="font-semibold">{currentFacilityName}</span>{" "}
+                    as <span className="font-bold text-red-600">Expired</span>{" "}
+                    and automatically deduct their remaining units from active
+                    SKU stock counts.
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-gray-200 overflow-hidden text-xs">
+            <div className="bg-gray-50 px-3.5 py-2 font-semibold text-gray-700 flex justify-between items-center border-b border-gray-200">
+              <span>
+                {targetSkuForExpiredDeduction
+                  ? `${targetSkuForExpiredDeduction.brandName} Expired Batches (${targetSkuExpiredBatches.length})`
+                  : `Expired Batches Pending Deduction (${targetSkuExpiredBatches.length})`}
+              </span>
+              <span className="text-red-600 font-bold">
+                Total: -{targetSkuExpiredUnits.toLocaleString()} units
+              </span>
+            </div>
+            <div className="max-h-48 overflow-y-auto divide-y divide-gray-100">
+              {targetSkuExpiredBatches.map((b) => (
+                <div
+                  key={b.id}
+                  className="p-3 flex items-center justify-between hover:bg-gray-50"
+                >
+                  <div>
+                    <span className="font-bold text-gray-900">
+                      Batch #{b.batchNum}
+                    </span>
+                    <p className="text-gray-500 text-[11px]">
+                      {b.brandName || b.skuName || "SKU"} • Exp:{" "}
+                      <span className="text-red-600 font-semibold">
+                        {b.expiryDate}
+                      </span>
+                    </p>
+                  </div>
+                  <span className="font-bold text-gray-900">
+                    {Number(b.units || 0).toLocaleString()} units
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={() => setIsConfirmExpiredModalOpen(false)}
+              className="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleProcessExpiredBatches}
+              disabled={isProcessingExpired}
+              className="btn-primary bg-red-600 hover:bg-red-700 text-white flex items-center gap-1.5"
+            >
+              {isProcessingExpired ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Deducting Stock...</span>
+                </>
+              ) : (
+                <>
+                  <Clock className="w-4 h-4" />
+                  <span>Confirm & Deduct Units</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* 10. EXPIRED BATCHES DEDUCTION SUCCESS MODAL              */}
+      {/* ======================================================== */}
+      <SuccessModal
+        isOpen={Boolean(expiredResultModal)}
+        onClose={() => setExpiredResultModal(null)}
+        title="Expired Batches Deducted!"
+        message={
+          expiredResultModal?.message ||
+          "Expired batches have been successfully processed."
+        }
+        details={
+          expiredResultModal && (
+            <div className="space-y-1 text-xs">
+              <p>
+                <span className="font-semibold text-emerald-950">
+                  Facility:
+                </span>{" "}
+                {currentFacilityName}
+              </p>
+              <p>
+                <span className="font-semibold text-emerald-950">
+                  Batches Processed:
+                </span>{" "}
+                {expiredResultModal.count} batch(es)
               </p>
             </div>
           )

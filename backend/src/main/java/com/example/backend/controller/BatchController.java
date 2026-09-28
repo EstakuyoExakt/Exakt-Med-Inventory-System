@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/batches")
@@ -76,9 +77,18 @@ public class BatchController {
 
     // 6. PROCESS EXPIRED BATCHES
     @PostMapping("/process-expired")
-    @Operation(summary = "Process Expired Batches", description = "Scans all batches past their expiry date, marks them EXPIRED, decrements active SKU stock, and logs audit events.")
-    public ResponseEntity<String> processExpiredBatches() {
-        int count = batchService.processExpiredBatches();
-        return ResponseEntity.ok("Processed " + count + " expired batches.");
+    @Operation(summary = "Process Expired Batches", description = "Scans batches past their expiry date for a required facility, marks them EXPIRED, decrements active SKU stock, and logs audit events.")
+    public ResponseEntity<Map<String, Object>> processExpiredBatches(
+            @Parameter(description = "Facility ID (required)", required = true)
+            @RequestParam Long facilityId,
+            @Parameter(description = "Optional SKU ID filter")
+            @RequestParam(required = false) Long skuId) {
+        int count = batchService.processExpiredBatches(facilityId, skuId);
+        return ResponseEntity.ok(Map.of(
+                "count", count,
+                "message", count > 0
+                        ? "Successfully processed and deducted " + count + " expired batch(es)."
+                        : "No expired batches found to process."
+        ));
     }
 }

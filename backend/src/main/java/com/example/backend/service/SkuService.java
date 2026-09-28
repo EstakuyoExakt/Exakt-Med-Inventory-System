@@ -117,9 +117,6 @@ public class SkuService {
             throw new RuntimeException("Facility not found with id: " + facilityId);
         }
 
-        // Automatically deduct units for any batches that reached/passed expiry date
-        batchService.processExpiredBatches();
-
         List<Sku> skus = skuRepository.findByFacilityId(facilityId);
         Map<Long, List<RestockRequest>> activeRestockMap = getActiveRestockMap(facilityId);
 
@@ -218,8 +215,6 @@ public class SkuService {
     @Transactional
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Pharmacist')")
     public SkuResponseDto adjustStock(Long id, SkuStockAdjustmentDto request) {
-        batchService.processExpiredBatches();
-
         Sku sku = skuRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("SKU not found with id: " + id));
 
@@ -350,7 +345,6 @@ public class SkuService {
             throw new RuntimeException("Facility not found with id: " + facilityId);
         }
 
-        batchService.processExpiredBatches();
         String query = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
         List<Sku> skus = skuRepository.searchSkus(query, facilityId);
         Map<Long, List<RestockRequest>> activeRestockMap = getActiveRestockMap(facilityId);
@@ -370,7 +364,6 @@ public class SkuService {
             throw new RuntimeException("Facility not found with id: " + facilityId);
         }
 
-        batchService.processExpiredBatches();
         String query = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
         List<Sku> skus = skuRepository.findReorderNeededSkus(facilityId, query);
         Map<Long, List<RestockRequest>> activeRestockMap = getActiveRestockMap(facilityId);
