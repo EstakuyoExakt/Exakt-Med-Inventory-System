@@ -30,6 +30,7 @@ import Card from "../../components/common/card";
 import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
+import Dropdown from "../../components/common/dropdown";
 
 // Data Imports & Auth Hook
 import { requestedOrders as initialOrders } from "../../data/orders";
@@ -652,13 +653,14 @@ function Accounting() {
 
           <div className="flex items-center gap-2.5 flex-wrap">
             {/* Supplier Filter */}
-            <select
+            <Dropdown
               value={selectedSupplier}
               onChange={(e) => {
                 setSelectedSupplier(e.target.value);
                 setCurrentPage(1);
               }}
-              className="input py-2 text-xs w-full sm:w-48"
+              size="sm"
+              className="w-full sm:w-48"
             >
               <option value="ALL">All Suppliers / Vendors</option>
               {facilitySuppliers.map((supplierName) => (
@@ -666,22 +668,24 @@ function Accounting() {
                   {supplierName}
                 </option>
               ))}
-            </select>
+            </Dropdown>
 
             {/* Status Filter */}
-            <select
+            <Dropdown
               value={selectedStatus}
               onChange={(e) => {
                 setSelectedStatus(e.target.value);
                 setCurrentPage(1);
               }}
-              className="input py-2 text-xs w-full sm:w-40"
-            >
-              <option value="ALL">All Financial Statuses</option>
-              <option value="Approved">Approved / Authorized</option>
-              <option value="Pending Approval">Pending Authorization</option>
-              <option value="Rejected">Denied / Cancelled</option>
-            </select>
+              size="sm"
+              className="w-full sm:w-40"
+              options={[
+                { value: "ALL", label: "All Financial Statuses" },
+                { value: "Approved", label: "Approved / Authorized" },
+                { value: "Pending Approval", label: "Pending Authorization" },
+                { value: "Rejected", label: "Denied / Cancelled" },
+              ]}
+            />
           </div>
         </div>
 

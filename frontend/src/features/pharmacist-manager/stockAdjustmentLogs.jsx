@@ -24,6 +24,7 @@ import Card from "../../components/common/card";
 import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
+import Dropdown from "../../components/common/dropdown";
 import skuService from "../../services/sku";
 import useAuth from "../../hooks/useAuth";
 import { facilities } from "../../data/facility";
@@ -448,43 +449,40 @@ function StockAdjustmentLogs({
 
           <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap sm:flex-nowrap">
             {/* Adjustment Type Filter */}
-            <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 shadow-xs w-full sm:w-auto">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-              <select
-                value={selectedType}
-                onChange={(e) => {
-                  setSelectedType(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="bg-transparent text-xs font-medium text-gray-700 outline-none w-full cursor-pointer"
-              >
-                <option value="ALL">All Types</option>
-                <option value="ADD">Addition (+)</option>
-                <option value="SUBTRACT">Deduction (-)</option>
-                <option value="SET">Reconciliation (~)</option>
-              </select>
-            </div>
+            <Dropdown
+              value={selectedType}
+              onChange={(e) => {
+                setSelectedType(e.target.value);
+                setCurrentPage(1);
+              }}
+              size="sm"
+              className="w-full sm:w-36"
+              options={[
+                { value: "ALL", label: "All Types" },
+                { value: "ADD", label: "Addition (+)" },
+                { value: "SUBTRACT", label: "Deduction (-)" },
+                { value: "SET", label: "Reconciliation (~)" },
+              ]}
+            />
 
             {/* Reason Filter */}
             {distinctReasons.length > 0 && (
-              <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 shadow-xs w-full sm:w-auto">
-                <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                <select
-                  value={selectedReason}
-                  onChange={(e) => {
-                    setSelectedReason(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="bg-transparent text-xs font-medium text-gray-700 outline-none w-full cursor-pointer max-w-44 truncate"
-                >
-                  <option value="ALL">All Reasons</option>
-                  {distinctReasons.map((reason) => (
-                    <option key={reason} value={reason}>
-                      {reason}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Dropdown
+                value={selectedReason}
+                onChange={(e) => {
+                  setSelectedReason(e.target.value);
+                  setCurrentPage(1);
+                }}
+                size="sm"
+                className="w-full sm:w-44"
+                options={[
+                  { value: "ALL", label: "All Reasons" },
+                  ...distinctReasons.map((reason) => ({
+                    value: reason,
+                    label: reason,
+                  })),
+                ]}
+              />
             )}
           </div>
         </div>

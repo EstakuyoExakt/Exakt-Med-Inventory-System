@@ -29,6 +29,7 @@ import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 import SuccessModal from "../../components/common/successModal";
+import Dropdown from "../../components/common/dropdown";
 
 // Constants & Helper Imports
 import { getStockStatus } from "../../utils/helpers";
@@ -1349,17 +1350,26 @@ function OrderRequest() {
 
               <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap sm:flex-nowrap">
                 {/* Urgency Filter */}
-                <select
+                <Dropdown
                   value={selectedUrgency}
                   onChange={handleUrgencyChange}
-                  className="input py-2 text-xs w-full sm:w-44"
-                >
-                  <option value="ALL">
-                    All Reorder Items ({reorderSkus.length})
-                  </option>
-                  <option value="MINIMUM">Critical (&le; Minimum Level)</option>
-                  <option value="REORDER_ONLY">Reorder Triggered Only</option>
-                </select>
+                  size="sm"
+                  className="w-full sm:w-44"
+                  options={[
+                    {
+                      value: "ALL",
+                      label: `All Reorder Items (${reorderSkus.length})`,
+                    },
+                    {
+                      value: "MINIMUM",
+                      label: "Critical (≤ Minimum Level)",
+                    },
+                    {
+                      value: "REORDER_ONLY",
+                      label: "Reorder Triggered Only",
+                    },
+                  ]}
+                />
               </div>
             </div>
 
@@ -1661,14 +1671,11 @@ function OrderRequest() {
           <div className="p-4 rounded-xl bg-gray-50 border border-gray-200/80 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             {/* Supplier Selection */}
             <div>
-              <label
-                htmlFor="order-supplier"
-                className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1"
-              >
-                Assigned Supplier <span className="text-red-500">*</span>
-              </label>
-              <select
+              <Dropdown
                 id="order-supplier"
+                name="supplierId"
+                label="Assigned Supplier"
+                required
                 value={orderForm.supplierId}
                 onChange={(e) =>
                   setOrderForm((prev) => ({
@@ -1676,30 +1683,25 @@ function OrderRequest() {
                     supplierId: Number(e.target.value),
                   }))
                 }
-                className="input py-2 text-xs"
-              >
-                {isLoadingSuppliers && activeSuppliers.length === 0 ? (
-                  <option value="">Loading suppliers...</option>
-                ) : (
-                  activeSuppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))
-                )}
-              </select>
+                size="sm"
+                options={
+                  isLoadingSuppliers && activeSuppliers.length === 0
+                    ? [{ value: "", label: "Loading suppliers..." }]
+                    : activeSuppliers.map((s) => ({
+                        value: s.id,
+                        label: s.name,
+                      }))
+                }
+              />
             </div>
 
             {/* Requisition Priority */}
             <div>
-              <label
-                htmlFor="order-priority"
-                className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1"
-              >
-                Requisition Priority <span className="text-red-500">*</span>
-              </label>
-              <select
+              <Dropdown
                 id="order-priority"
+                name="priority"
+                label="Requisition Priority"
+                required
                 value={orderForm.priority}
                 onChange={(e) =>
                   setOrderForm((prev) => ({
@@ -1707,11 +1709,12 @@ function OrderRequest() {
                     priority: e.target.value,
                   }))
                 }
-                className="input py-2 text-xs font-semibold"
-              >
-                <option value="Normal">Normal Standard Lead Time</option>
-                <option value="Urgent">Urgent Emergency Restock</option>
-              </select>
+                size="sm"
+                options={[
+                  { value: "Normal", label: "Normal Standard Lead Time" },
+                  { value: "Urgent", label: "Urgent Emergency Restock" },
+                ]}
+              />
             </div>
 
             {/* Destination Facility (Auto-detected based on active facility) */}
@@ -1748,27 +1751,25 @@ function OrderRequest() {
               <div className="flex items-center justify-end gap-2 flex-wrap">
                 {/* 1. Pharmacist Restock Request Dropdown */}
                 <div className="flex items-center gap-1.5">
-                  <select
+                  <Dropdown
                     value={restockRequestIdToAdd}
                     onChange={(e) => setRestockRequestIdToAdd(e.target.value)}
-                    className="input py-1 px-2 text-xs w-60 border-amber-300 bg-amber-50/50 text-gray-800"
-                    title="Select a pharmacist restock request to add to this purchase order"
-                  >
-                    <option value="">+ Fulfill Restock Request</option>
-                    {availableRestockRequestsToAdd.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        Req #{r.id}: {r.brandName || r.skuName} (
-                        {r.requestedUnits} units)
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="+ Fulfill Restock Request"
+                    size="sm"
+                    className="w-60"
+                    selectClassName="border-amber-300 bg-amber-50/50 text-gray-800"
+                    options={availableRestockRequestsToAdd.map((r) => ({
+                      value: r.id,
+                      label: `Req #${r.id}: ${r.brandName || r.skuName} (${r.requestedUnits} units)`,
+                    }))}
+                  />
                   <button
                     type="button"
                     onClick={() =>
                       handleAddRestockRequestToForm(restockRequestIdToAdd)
                     }
                     disabled={!restockRequestIdToAdd}
-                    className="btn-secondary py-1 px-2.5 text-xs flex items-center gap-1 text-amber-900 bg-amber-100 hover:bg-amber-200 border-amber-300 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    className="btn-secondary py-1.5 px-2.5 text-xs flex items-center gap-1 text-amber-900 bg-amber-100 hover:bg-amber-200 border-amber-300 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shrink-0"
                     title="Add requested item and link pharmacist restock request"
                   >
                     <ClipboardList className="w-3.5 h-3.5 text-amber-700" />
@@ -1778,23 +1779,22 @@ function OrderRequest() {
 
                 {/* 2. Add Regular Medicine Dropdown */}
                 <div className="flex items-center gap-1.5">
-                  <select
+                  <Dropdown
                     value={skuToAdd}
                     onChange={(e) => setSkuToAdd(e.target.value)}
-                    className="input py-1 px-2 text-xs w-60"
-                  >
-                    <option value="">+ Add medicine from catalog</option>
-                    {availableSkusToAdd.map((s) => (
-                      <option key={s.id} value={s.sku}>
-                        {s.brandName} ({s.sku}) — Stock: {s.currentStock}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="+ Add medicine from catalog"
+                    size="sm"
+                    className="w-60"
+                    options={availableSkusToAdd.map((s) => ({
+                      value: s.sku,
+                      label: `${s.brandName} (${s.sku}) — Stock: ${s.currentStock}`,
+                    }))}
+                  />
                   <button
                     type="button"
                     onClick={() => handleAddItemToForm(skuToAdd)}
                     disabled={!skuToAdd}
-                    className="btn-secondary py-1 px-2.5 text-xs flex items-center gap-1 cursor-pointer"
+                    className="btn-secondary py-1.5 px-2.5 text-xs flex items-center gap-1 cursor-pointer shrink-0"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Add</span>

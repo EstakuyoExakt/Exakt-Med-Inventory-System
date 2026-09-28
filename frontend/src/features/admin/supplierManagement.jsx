@@ -25,6 +25,7 @@ import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 import DeleteModal from "../../components/common/deleteModal";
+import Dropdown from "../../components/common/dropdown";
 
 import supplierService from "../../services/supplier";
 import useAuth from "../../hooks/useAuth";
@@ -426,15 +427,17 @@ function SupplierManagement() {
           </div>
 
           <div className="flex items-center gap-2.5 w-full md:w-auto">
-            <select
+            <Dropdown
               value={selectedStatus}
               onChange={handleStatusChange}
-              className="input py-2 text-xs w-full sm:w-44"
-            >
-              <option value="ALL">All Status</option>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
+              size="sm"
+              className="w-full sm:w-44"
+              options={[
+                { value: "ALL", label: "All Status" },
+                { value: "Active", label: "Active" },
+                { value: "Inactive", label: "Inactive" },
+              ]}
+            />
           </div>
         </div>
 
@@ -741,46 +744,30 @@ function SupplierManagement() {
             </div>
 
             {/* Payment Terms */}
-            <div>
-              <label
-                htmlFor="supplier-terms"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Payment Terms <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="supplier-terms"
-                name="paymentTerms"
-                value={formData.paymentTerms}
-                onChange={handleInputChange}
-                className="input"
-              >
-                {PAYMENT_TERMS_OPTIONS.map((term) => (
-                  <option key={term} value={term}>
-                    {term}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Dropdown
+              id="supplier-terms"
+              name="paymentTerms"
+              label="Payment Terms"
+              required
+              value={formData.paymentTerms}
+              onChange={handleInputChange}
+              options={PAYMENT_TERMS_OPTIONS}
+            />
 
             {/* Status */}
             <div className="col-span-2">
-              <label
-                htmlFor="supplier-status"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Partnership Status <span className="text-red-500">*</span>
-              </label>
-              <select
+              <Dropdown
                 id="supplier-status"
                 name="status"
+                label="Partnership Status"
+                required
                 value={formData.status}
                 onChange={handleInputChange}
-                className="input"
-              >
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
+                options={[
+                  { value: "Active", label: "Active" },
+                  { value: "Inactive", label: "Inactive" },
+                ]}
+              />
             </div>
 
             {/* Business Address */}

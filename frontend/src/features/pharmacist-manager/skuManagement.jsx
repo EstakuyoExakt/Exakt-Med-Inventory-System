@@ -25,6 +25,7 @@ import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 import DeleteModal from "../../components/common/deleteModal";
 import SuccessModal from "../../components/common/successModal";
+import Dropdown from "../../components/common/dropdown";
 import ComboBox from "./components/comboBox";
 import libMedicineService from "../../services/libMedicine";
 import skuService from "../../services/sku";
@@ -1346,17 +1347,19 @@ function SkuManagement() {
 
           <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap sm:flex-nowrap">
             {/* Stock Health Filter */}
-            <select
+            <Dropdown
               value={selectedStockFilter}
               onChange={handleStockFilterChange}
-              className="input py-2 text-xs w-full sm:w-44"
-            >
-              <option value="ALL">All Stock Levels</option>
-              <option value="OPTIMAL">Optimal Stock</option>
-              <option value="REORDER">Reorder Triggered</option>
-              <option value="CRITICAL">Critical (&le; Min)</option>
-              <option value="OUT_OF_STOCK">Out of Stock</option>
-            </select>
+              size="sm"
+              className="w-full sm:w-44"
+              options={[
+                { value: "ALL", label: "All Stock Levels" },
+                { value: "OPTIMAL", label: "Optimal Stock" },
+                { value: "REORDER", label: "Reorder Triggered" },
+                { value: "CRITICAL", label: "Critical (≤ Min)" },
+                { value: "OUT_OF_STOCK", label: "Out of Stock" },
+              ]}
+            />
           </div>
         </div>
 
@@ -2148,9 +2151,12 @@ function SkuManagement() {
                   </div>
                 ) : skuBatches.length > 0 ? (
                   <div className="space-y-2.5">
-                    <select
+                    <Dropdown
                       id="sku-adjust-batch"
                       value={adjustFormData.batchId}
+                      placeholder="-- Select Target Batch --"
+                      error={formErrors.batchId}
+                      size="sm"
                       onChange={(e) => {
                         const val = e.target.value;
                         setAdjustFormData((prev) => ({
@@ -2159,19 +2165,14 @@ function SkuManagement() {
                         }));
                         clearError("batchId");
                       }}
-                      className="input bg-white text-xs font-medium"
-                    >
-                      <option value="">-- Select Target Batch --</option>
-                      {skuBatches.map((b) => {
+                      options={skuBatches.map((b) => {
                         const exp = getExpiryStatus(b.expiryDate);
-                        return (
-                          <option key={b.id} value={b.id}>
-                            Batch #{b.batchNum} • Exp: {b.expiryDate} (
-                            {exp.label}) • Current: {b.units} units
-                          </option>
-                        );
+                        return {
+                          value: b.id,
+                          label: `Batch #${b.batchNum} • Exp: ${b.expiryDate} (${exp.label}) • Current: ${b.units} units`,
+                        };
                       })}
-                    </select>
+                    />
 
                     {formErrors.batchId && (
                       <p className="text-xs text-red-500 font-medium">
@@ -2299,14 +2300,11 @@ function SkuManagement() {
 
             {/* Adjustment Reason */}
             <div>
-              <label
-                htmlFor="sku-adjust-reason"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Reason for Adjustment <span className="text-red-500">*</span>
-              </label>
-              <select
+              <Dropdown
                 id="sku-adjust-reason"
+                name="reason"
+                label="Reason for Adjustment"
+                required
                 value={adjustFormData.reason}
                 onChange={(e) =>
                   setAdjustFormData((prev) => ({
@@ -2314,14 +2312,11 @@ function SkuManagement() {
                     reason: e.target.value,
                   }))
                 }
-                className="input"
-              >
-                {ADJUSTMENT_REASONS.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
+                options={ADJUSTMENT_REASONS.map((r) => ({
+                  value: r,
+                  label: r,
+                }))}
+              />
             </div>
 
             {/* Notes */}
@@ -2668,16 +2663,14 @@ function SkuManagement() {
 
           {/* SKU Selection */}
           <div>
-            <label
-              htmlFor="restock-skuId"
-              className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-            >
-              Select Target SKU <span className="text-red-500">*</span>
-            </label>
-            <select
+            <Dropdown
               id="restock-skuId"
               name="skuId"
+              label="Select Target SKU"
+              required
+              placeholder="-- Select SKU to Replenish --"
               value={restockFormData.skuId}
+              error={formErrors.skuId}
               onChange={(e) => {
                 const id = e.target.value;
                 const found = currentFacilitySkus.find(
@@ -2695,25 +2688,11 @@ function SkuManagement() {
                 }));
                 clearError("skuId");
               }}
-              className={`input w-full ${formErrors.skuId ? "border-red-500 focus:ring-red-500" : ""}`}
-              required
-            >
-              <option value="">-- Select SKU to Replenish --</option>
-              {currentFacilitySkus.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.hasPendingRestock
-                    ? `[ACTIVE RESTOCK: ${s.pendingRestockUnits} units (${s.pendingRestockStatus || "Requested"})] `
-                    : ""}
-                  {s.sku} — {s.brandName} ({s.genericName}) [Current:{" "}
-                  {s.currentStock}, Max: {s.maximumLevel}]
-                </option>
-              ))}
-            </select>
-            {formErrors.skuId && (
-              <p className="text-[11px] text-red-500 font-medium mt-1">
-                {formErrors.skuId}
-              </p>
-            )}
+              options={currentFacilitySkus.map((s) => ({
+                value: s.id,
+                label: `${s.hasPendingRestock ? `[ACTIVE RESTOCK: ${s.pendingRestockUnits} units (${s.pendingRestockStatus || "Requested"})] ` : ""}${s.sku} — ${s.brandName} (${s.genericName}) [Current: ${s.currentStock}, Max: ${s.maximumLevel}]`,
+              }))}
+            />
           </div>
 
           {/* Active Restock Warning Banner inside Restock Modal */}

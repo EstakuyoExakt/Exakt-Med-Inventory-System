@@ -27,6 +27,7 @@ import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 import DeleteModal from "../../components/common/deleteModal";
+import Dropdown from "../../components/common/dropdown";
 
 import { ROLES, ROLE_DETAILS } from "../../config/roles";
 import useAuth from "../../hooks/useAuth";
@@ -543,28 +544,32 @@ function UserManagement() {
 
           <div className="flex items-center gap-2.5 w-full md:w-auto">
             {/* Role Filter */}
-            <select
+            <Dropdown
               value={selectedRole}
               onChange={handleRoleChange}
-              className="input py-2 text-xs w-full sm:w-44"
-            >
-              <option value="ALL">All Roles</option>
-              <option value={ROLES.SUPER_ADMIN}>Super Admin</option>
-              <option value={ROLES.ADMIN}>Admin</option>
-              <option value={ROLES.PHARMACIST}>Pharmacist Manager</option>
-              <option value={ROLES.PROCUREMENT}>Procurement Officer</option>
-            </select>
+              size="sm"
+              className="w-full sm:w-44"
+              options={[
+                { value: "ALL", label: "All Roles" },
+                { value: ROLES.SUPER_ADMIN, label: "Super Admin" },
+                { value: ROLES.ADMIN, label: "Admin" },
+                { value: ROLES.PHARMACIST, label: "Pharmacist Manager" },
+                { value: ROLES.PROCUREMENT, label: "Procurement Officer" },
+              ]}
+            />
 
             {/* Status Filter */}
-            <select
+            <Dropdown
               value={selectedStatus}
               onChange={handleStatusChange}
-              className="input py-2 text-xs w-full sm:w-32"
-            >
-              <option value="ALL">All Status</option>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
+              size="sm"
+              className="w-full sm:w-32"
+              options={[
+                { value: "ALL", label: "All Status" },
+                { value: "Active", label: "Active" },
+                { value: "Inactive", label: "Inactive" },
+              ]}
+            />
           </div>
         </div>
 
@@ -909,62 +914,51 @@ function UserManagement() {
             </div>
 
             {/* Assigned Role */}
-            <div>
-              <label
-                htmlFor="user-role"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Role <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="user-role"
-                name="role"
-                value={formData.role}
-                onChange={handleInputChange}
-                className="input"
-              >
-                {isSuperAdmin ? (
-                  <>
-                    <option value={ROLES.SUPER_ADMIN}>Super Admin</option>
-                    <option value={ROLES.ADMIN}>Admin</option>
-                    <option value={ROLES.PHARMACIST}>Pharmacist Manager</option>
-                    <option value={ROLES.PROCUREMENT}>
-                      Procurement Officer
-                    </option>
-                  </>
-                ) : (
-                  <>
-                    {modalMode === "edit" &&
-                      selectedUser?.id === currentUser?.id && (
-                        <option value={ROLES.ADMIN}>Admin</option>
-                      )}
-                    <option value={ROLES.PHARMACIST}>Pharmacist Manager</option>
-                    <option value={ROLES.PROCUREMENT}>
-                      Procurement Officer
-                    </option>
-                  </>
-                )}
-              </select>
-            </div>
+            <Dropdown
+              id="user-role"
+              name="role"
+              label="Role"
+              required
+              value={formData.role}
+              onChange={handleInputChange}
+            >
+              {isSuperAdmin ? (
+                <>
+                  <option value={ROLES.SUPER_ADMIN}>Super Admin</option>
+                  <option value={ROLES.ADMIN}>Admin</option>
+                  <option value={ROLES.PHARMACIST}>Pharmacist Manager</option>
+                  <option value={ROLES.PROCUREMENT}>
+                    Procurement Officer
+                  </option>
+                </>
+              ) : (
+                <>
+                  {modalMode === "edit" &&
+                    selectedUser?.id === currentUser?.id && (
+                      <option value={ROLES.ADMIN}>Admin</option>
+                    )}
+                  <option value={ROLES.PHARMACIST}>Pharmacist Manager</option>
+                  <option value={ROLES.PROCUREMENT}>
+                    Procurement Officer
+                  </option>
+                </>
+              )}
+            </Dropdown>
 
             {/* Status */}
             <div className="col-span-2">
-              <label
-                htmlFor="user-status"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Account Status <span className="text-red-500">*</span>
-              </label>
-              <select
+              <Dropdown
                 id="user-status"
                 name="status"
+                label="Account Status"
+                required
                 value={formData.status}
                 onChange={handleInputChange}
-                className="input"
-              >
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
+                options={[
+                  { value: "Active", label: "Active" },
+                  { value: "Inactive", label: "Inactive" },
+                ]}
+              />
             </div>
 
             {/* Password */}

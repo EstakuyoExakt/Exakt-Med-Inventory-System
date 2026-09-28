@@ -28,6 +28,7 @@ import Card from "../../components/common/card";
 import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
+import Dropdown from "../../components/common/dropdown";
 import RoleGuard from "../../components/guard/roleGuard";
 import { ROLES } from "../../config/roles";
 
@@ -509,31 +510,43 @@ function RequestedOrders() {
 
           <div className="flex items-center gap-2.5 flex-wrap">
             {/* Status Filter */}
-            <select
+            <Dropdown
               value={statusFilter}
               onChange={handleStatusChange}
-              className="input py-2 text-xs w-full sm:w-44"
-            >
-              <option value="ALL">
-                All Statuses ({currentFacilityOrders.length})
-              </option>
-              <option value="Pending Approval">
-                Pending Approval ({metrics.pending})
-              </option>
-              <option value="Approved">Approved ({metrics.approved})</option>
-              <option value="Rejected">Rejected ({metrics.rejected})</option>
-            </select>
+              size="sm"
+              className="w-full sm:w-44"
+              options={[
+                {
+                  value: "ALL",
+                  label: `All Statuses (${currentFacilityOrders.length})`,
+                },
+                {
+                  value: "Pending Approval",
+                  label: `Pending Approval (${metrics.pending})`,
+                },
+                {
+                  value: "Approved",
+                  label: `Approved (${metrics.approved})`,
+                },
+                {
+                  value: "Rejected",
+                  label: `Rejected (${metrics.rejected})`,
+                },
+              ]}
+            />
 
             {/* Priority Filter */}
-            <select
+            <Dropdown
               value={priorityFilter}
               onChange={handlePriorityChange}
-              className="input py-2 text-xs w-full sm:w-36"
-            >
-              <option value="ALL">All Priorities</option>
-              <option value="Urgent">Urgent Only</option>
-              <option value="Normal">Normal Standard</option>
-            </select>
+              size="sm"
+              className="w-full sm:w-36"
+              options={[
+                { value: "ALL", label: "All Priorities" },
+                { value: "Urgent", label: "Urgent Only" },
+                { value: "Normal", label: "Normal Standard" },
+              ]}
+            />
           </div>
         </div>
 

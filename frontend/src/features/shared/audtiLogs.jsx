@@ -28,6 +28,7 @@ import Card from "../../components/common/card";
 import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
+import Dropdown from "../../components/common/dropdown";
 import useRole from "../../hooks/useRole";
 import useAuth from "../../hooks/useAuth";
 import { ROLES } from "../../config/roles";
@@ -475,30 +476,29 @@ function AuditLogs({
 
           <div className="flex items-center gap-2.5 flex-wrap">
             {/* Module Filter */}
-            <select
+            <Dropdown
               value={selectedModule}
               onChange={handleModuleChange}
-              className="input py-2 text-xs w-full sm:w-44"
-            >
-              {AUDIT_MODULES.map((mod) => (
-                <option key={mod} value={mod}>
-                  {mod}
-                </option>
-              ))}
-            </select>
+              size="sm"
+              className="w-full sm:w-44"
+              options={AUDIT_MODULES.map((mod) => ({
+                value: mod,
+                label: mod,
+              }))}
+            />
 
             {/* Severity Filter */}
-            <select
+            <Dropdown
               value={selectedSeverity}
               onChange={handleSeverityChange}
-              className="input py-2 text-xs w-full sm:w-40 capitalize"
-            >
-              {AUDIT_SEVERITIES.map((sev) => (
-                <option key={sev} value={sev} className="capitalize">
-                  {sev === "All Severities" ? "All Severities" : `${sev} Level`}
-                </option>
-              ))}
-            </select>
+              size="sm"
+              className="w-full sm:w-40"
+              options={AUDIT_SEVERITIES.map((sev) => ({
+                value: sev,
+                label:
+                  sev === "All Severities" ? "All Severities" : `${sev} Level`,
+              }))}
+            />
           </div>
         </div>
 

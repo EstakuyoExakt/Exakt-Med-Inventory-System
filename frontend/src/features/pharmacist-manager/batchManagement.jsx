@@ -23,6 +23,7 @@ import Card from "../../components/common/card";
 import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
+import Dropdown from "../../components/common/dropdown";
 import ComboBox from "./components/comboBox";
 import { getExpiryStatus } from "../../utils/helpers";
 import useAuth from "../../hooks/useAuth";
@@ -715,43 +716,48 @@ function BatchManagement() {
 
           <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap sm:flex-nowrap">
             {/* SKU Filter */}
-            <select
+            <Dropdown
               value={selectedSkuFilter}
               onChange={handleSkuFilterChange}
-              className="input py-2 text-xs w-full sm:w-48"
-            >
-              <option value="ALL">All SKUs</option>
-              {availableSkus.map((s) => (
-                <option key={s.sku} value={s.sku}>
-                  {s.sku} {s.brandName ? `(${s.brandName})` : ""}
-                </option>
-              ))}
-            </select>
+              size="sm"
+              className="w-full sm:w-48"
+              options={[
+                { value: "ALL", label: "All SKUs" },
+                ...availableSkus.map((s) => ({
+                  value: s.sku,
+                  label: `${s.sku} ${s.brandName ? `(${s.brandName})` : ""}`,
+                })),
+              ]}
+            />
 
             {/* Expiry Health Filter */}
-            <select
+            <Dropdown
               value={selectedExpiryFilter}
               onChange={handleExpiryFilterChange}
-              className="input py-2 text-xs w-full sm:w-36"
-            >
-              <option value="ALL">All Expirations</option>
-              <option value="NEAR_EXPIRY">Near Expiry (&le;90d)</option>
-              <option value="EXPIRED">Expired</option>
-              <option value="HEALTHY">Valid Stock</option>
-            </select>
+              size="sm"
+              className="w-full sm:w-36"
+              options={[
+                { value: "ALL", label: "All Expirations" },
+                { value: "NEAR_EXPIRY", label: "Near Expiry (≤90d)" },
+                { value: "EXPIRED", label: "Expired" },
+                { value: "HEALTHY", label: "Valid Stock" },
+              ]}
+            />
 
             {/* Quarantine/Availability Filter */}
-            <select
+            <Dropdown
               value={selectedStatusFilter}
               onChange={handleStatusFilterChange}
-              className="input py-2 text-xs w-full sm:w-36"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="ACTIVE">Active & Available</option>
-              <option value="QUARANTINED">Quarantined Only</option>
-              <option value="EXPIRED">Expired Only</option>
-              <option value="DEPLETED">Depleted (0 Qty)</option>
-            </select>
+              size="sm"
+              className="w-full sm:w-36"
+              options={[
+                { value: "ALL", label: "All Statuses" },
+                { value: "ACTIVE", label: "Active & Available" },
+                { value: "QUARANTINED", label: "Quarantined Only" },
+                { value: "EXPIRED", label: "Expired Only" },
+                { value: "DEPLETED", label: "Depleted (0 Qty)" },
+              ]}
+            />
           </div>
         </div>
 
