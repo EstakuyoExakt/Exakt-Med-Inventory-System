@@ -907,7 +907,7 @@ function OrderRequest() {
   return (
     <div className="w-full max-w-full space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-slide-up">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2.5">
@@ -942,7 +942,7 @@ function OrderRequest() {
       </div>
 
       {/* 3 KPI Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-slide-up-1">
         {/* 1. Total Minimum SKUs */}
         <Card className="p-5 border border-red-200/80 shadow-xs hover:border-red-300 transition-all bg-linear-to-br from-white to-red-50/20">
           <div className="flex items-center justify-between">
@@ -1028,7 +1028,7 @@ function OrderRequest() {
       </div>
 
       {/* Main Workspace Card with Navigation Tabs */}
-      <Card className="p-0 overflow-hidden border border-gray-200">
+      <Card className="p-0 overflow-hidden border border-gray-200 animate-slide-up-2">
         {/* Navigation Tabs Header */}
         <div className="flex border-b border-gray-200 bg-gray-50/75 px-4 pt-3 gap-2">
           <button
@@ -1186,14 +1186,15 @@ function OrderRequest() {
                       </td>
                     </tr>
                   ) : paginatedRestockRequests.length > 0 ? (
-                    paginatedRestockRequests.map((req) => (
+                    paginatedRestockRequests.map((req, index) => (
                       <tr
                         key={req.id}
-                        className={`hover:bg-blue-50/30 transition-colors ${
+                        className={`hover:bg-blue-50/30 transition-colors animate-slide-up ${
                           selectedRestockRequestIds.includes(req.id)
                             ? "bg-blue-50/20"
                             : ""
                         }`}
+                        style={{ animationDelay: `${index * 0.05}s` }}
                       >
                         {/* Checkbox */}
                         <td className="px-4 py-4 text-center">
@@ -1463,20 +1464,21 @@ function OrderRequest() {
                       </td>
                     </tr>
                   ) : paginatedReorderSkus.length > 0 ? (
-                    paginatedReorderSkus.map((item) => {
+                    paginatedReorderSkus.map((item, index) => {
                       const status = getStockStatus(item);
                       const isSelected = selectedSkuIds.includes(item.id);
 
                       return (
                         <tr
                           key={item.id}
-                          className={`hover:bg-blue-50/30 transition-colors ${
+                          className={`hover:bg-blue-50/30 transition-colors animate-slide-up ${
                             isSelected
                               ? "bg-blue-50/20"
                               : item.currentStock <= item.minimumLevel
                                 ? "bg-red-50/15"
                                 : ""
                           }`}
+                          style={{ animationDelay: `${index * 0.05}s` }}
                         >
                           {/* Checkbox */}
                           <td className="px-4 py-4 text-center">

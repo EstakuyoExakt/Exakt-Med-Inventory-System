@@ -303,7 +303,7 @@ function Accounting() {
   return (
     <div className="w-full max-w-full space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-slide-up">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2.5">
@@ -338,7 +338,7 @@ function Accounting() {
       </div>
 
       {/* 4 Summary Financial KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up-1">
         {/* 1. Total Approved Expenditure */}
         <Card className="p-5 border border-emerald-200/80 shadow-xs hover:border-emerald-300 transition-all bg-linear-to-br from-white to-emerald-50/20">
           <div className="flex items-center justify-between">
@@ -423,7 +423,7 @@ function Accounting() {
       </div>
 
       {/* Spend Analytics: 2-Column Analytics Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-slide-up-2">
         {/* Left Column: Spend by Medication Breakdown */}
         <Card className="lg:col-span-6 p-5 border border-gray-200 shadow-xs flex flex-col justify-between">
           <div>
@@ -636,7 +636,7 @@ function Accounting() {
       </div>
 
       {/* Main Table: Purchase Order Financial Ledger */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-xs overflow-hidden">
+      <div className="rounded-xl border border-gray-200 bg-white shadow-xs overflow-hidden animate-slide-up-3">
         {/* Search & Filter Toolbar */}
         <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-gray-50/30">
           <div className="w-full md:w-80">
@@ -716,7 +716,7 @@ function Accounting() {
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
               {paginatedOrders.length > 0 ? (
-                paginatedOrders.map((order) => {
+                paginatedOrders.map((order, index) => {
                   const cost = Number(
                     order.estimatedCost || order.totalCost || 0,
                   );
@@ -724,7 +724,8 @@ function Accounting() {
                   return (
                     <tr
                       key={order.id}
-                      className="hover:bg-blue-50/30 transition-colors"
+                      className="hover:bg-blue-50/30 transition-colors animate-slide-up"
+                      style={{ animationDelay: `${index * 0.05}s` }}
                     >
                       {/* PO Reference & Date */}
                       <td className="px-6 py-4 whitespace-nowrap">

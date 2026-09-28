@@ -269,7 +269,7 @@ function StockAdjustmentLogs({
   return (
     <div className="w-full max-w-full space-y-6">
       {/* Header & Navigation */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-slide-up">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
             {onBack && (
@@ -323,7 +323,7 @@ function StockAdjustmentLogs({
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up-1">
         {/* Total Logs */}
         <Card className="p-5">
           <div className="flex items-center justify-between">
@@ -429,7 +429,7 @@ function StockAdjustmentLogs({
       </div>
 
       {/* Main Table Card */}
-      <Card className="p-0 overflow-hidden border border-gray-200">
+      <Card className="p-0 overflow-hidden border border-gray-200 animate-slide-up-2">
         {/* Filters Bar */}
         <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row items-center justify-between gap-3 bg-gray-50/50">
           <div className="w-full md:w-80">
@@ -552,7 +552,7 @@ function StockAdjustmentLogs({
                   </td>
                 </tr>
               ) : (
-                paginatedLogs.map((log) => {
+                paginatedLogs.map((log, index) => {
                   const badge = getAdjustmentBadge(log.adjustmentType);
                   const BadgeIcon = badge.icon;
                   const delta = Number(log.deltaUnits) || 0;
@@ -560,7 +560,8 @@ function StockAdjustmentLogs({
                   return (
                     <tr
                       key={log.id}
-                      className="hover:bg-blue-50/20 transition-colors"
+                      className="hover:bg-blue-50/20 transition-colors animate-slide-up"
+                      style={{ animationDelay: `${index * 0.05}s` }}
                     >
                       {/* Timestamp */}
                       <td className="py-3.5 px-4 whitespace-nowrap text-gray-600">

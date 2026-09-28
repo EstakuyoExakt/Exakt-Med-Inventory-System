@@ -1205,7 +1205,7 @@ function SkuManagement() {
   return (
     <div className="w-full max-w-full space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-slide-up">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
@@ -1247,7 +1247,7 @@ function SkuManagement() {
       </div>
 
       {/* 4 Metric KPI Cards for Current Facility */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up-1">
         {/* Total SKUs */}
         <Card className="p-5">
           <div className="flex items-center justify-between">
@@ -1330,7 +1330,7 @@ function SkuManagement() {
       </div>
 
       {/* Main Table Card */}
-      <Card className="p-0 overflow-hidden border border-gray-200">
+      <Card className="p-0 overflow-hidden border border-gray-200 animate-slide-up-2">
         {/* Search & Filter Controls */}
         <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row items-center justify-between gap-3 bg-gray-50/50">
           <div className="w-full md:w-80">
@@ -1401,7 +1401,7 @@ function SkuManagement() {
                   </td>
                 </tr>
               ) : paginatedSkus.length > 0 ? (
-                paginatedSkus.map((item) => {
+                paginatedSkus.map((item, index) => {
                   const status = getStockStatus(item);
                   const fillPercent = Math.min(
                     Math.round((item.currentStock / item.maximumLevel) * 100),
@@ -1418,7 +1418,8 @@ function SkuManagement() {
                   return (
                     <tr
                       key={item.id}
-                      className="hover:bg-blue-50/30 transition-colors"
+                      className="hover:bg-blue-50/30 transition-colors animate-slide-up"
+                      style={{ animationDelay: `${index * 0.05}s` }}
                     >
                       {/* SKU & Medicine Details */}
                       <td className="px-6 py-4 whitespace-nowrap">

@@ -324,7 +324,7 @@ function AuditLogs({
   return (
     <div className="w-full max-w-full space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-slide-up">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2.5">
@@ -374,7 +374,7 @@ function AuditLogs({
       </div>
 
       {/* 4 Summary KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up-1">
         {/* 1. Total Scoped Logs */}
         <Card className="p-5 border border-gray-200 shadow-xs hover:border-gray-300 transition-all bg-white">
           <div className="flex items-center justify-between">
@@ -459,7 +459,7 @@ function AuditLogs({
       </div>
 
       {/* Filter and Table Container */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-xs overflow-hidden">
+      <div className="rounded-xl border border-gray-200 bg-white shadow-xs overflow-hidden animate-slide-up-2">
         {/* Search & Filter Toolbar */}
         <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-gray-50/30">
           <div className="w-full md:w-80">
@@ -564,7 +564,7 @@ function AuditLogs({
                   </td>
                 </tr>
               ) : paginatedLogs.length > 0 ? (
-                paginatedLogs.map((log) => {
+                paginatedLogs.map((log, index) => {
                   const severityInfo = getSeverityBadge(log.severity);
                   const SeverityIcon = severityInfo.icon;
                   const logCode = log.logCode || log.id;
@@ -572,7 +572,8 @@ function AuditLogs({
                   return (
                     <tr
                       key={log.id}
-                      className="hover:bg-blue-50/30 transition-colors"
+                      className="hover:bg-blue-50/30 transition-colors animate-slide-up"
+                      style={{ animationDelay: `${index * 0.05}s` }}
                     >
                       {/* Timestamp & Log ID */}
                       <td className="px-6 py-4 whitespace-nowrap">

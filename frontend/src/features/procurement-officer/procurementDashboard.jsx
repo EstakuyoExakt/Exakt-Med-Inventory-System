@@ -94,7 +94,7 @@ function ProcurementDashboard() {
   return (
     <div className="w-full max-w-full space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-slide-up">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
@@ -162,7 +162,7 @@ function ProcurementDashboard() {
       )}
 
       {/* Main KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-slide-up-1">
         {/* 1. Total Reorder SKUs */}
         <Card className="p-5 border border-amber-200/80 shadow-xs hover:border-amber-300 transition-all bg-linear-to-br from-white to-amber-50/20">
           <div className="flex items-center justify-between">
@@ -225,7 +225,7 @@ function ProcurementDashboard() {
       </div>
 
       {/* Grid: Priority Restock Items & Recent Purchase Requests */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-slide-up-2">
         {/* Urgent Items Needing Reorder */}
         <Card className="lg:col-span-7 p-0 overflow-hidden border border-gray-200 flex flex-col justify-between">
           <div>
@@ -248,10 +248,11 @@ function ProcurementDashboard() {
 
             <div className="divide-y divide-gray-100">
               {priorityRestockSkus.length > 0 ? (
-                priorityRestockSkus.map((item) => (
+                priorityRestockSkus.map((item, index) => (
                   <div
                     key={item.id}
-                    className="p-4 hover:bg-gray-50/60 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    style={{ animationDelay: `${index * 0.05}s` }}
+                    className="p-4 hover:bg-gray-50/60 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-slide-up"
                   >
                     <div className="flex items-start gap-3">
                       <div
@@ -355,10 +356,11 @@ function ProcurementDashboard() {
 
             <div className="divide-y divide-gray-100">
               {recentOrderRequests.length > 0 ? (
-                recentOrderRequests.map((order) => (
+                recentOrderRequests.map((order, index) => (
                   <div
                     key={order.orderId}
-                    className="p-4 hover:bg-gray-50/60 transition-colors space-y-1.5"
+                    style={{ animationDelay: `${index * 0.05}s` }}
+                    className="p-4 hover:bg-gray-50/60 transition-colors space-y-1.5 animate-slide-up"
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-mono font-bold text-blue-700 text-xs">

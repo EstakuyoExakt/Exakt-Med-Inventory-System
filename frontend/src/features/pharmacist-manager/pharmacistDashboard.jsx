@@ -142,7 +142,7 @@ function PharmacistDashboard() {
   return (
     <div className="w-full max-w-full space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-slide-up">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
@@ -210,7 +210,7 @@ function PharmacistDashboard() {
       )}
 
       {/* 8 Metric KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up-1">
         {/* 1. Total SKUs */}
         <Card className="p-5 border border-gray-200/80 shadow-xs hover:border-blue-200 transition-all">
           <div className="flex items-center justify-between">
@@ -373,7 +373,7 @@ function PharmacistDashboard() {
       </div>
 
       {/* Charts Section: Pie/Ring Chart & Bar Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-slide-up-2">
         {/* Ring / Donut Chart: SKUs Stock Distribution */}
         <Card className="lg:col-span-5 p-5 border border-gray-200/80 flex flex-col justify-between">
           <div>
@@ -540,7 +540,7 @@ function PharmacistDashboard() {
       </div>
 
       {/* Urgent Operational Alerts Section */}
-      <Card className="p-5 border border-gray-200/80">
+      <Card className="p-5 border border-gray-200/80 animate-slide-up-3">
         <div className="flex items-center justify-between pb-3 border-b border-gray-100">
           <div>
             <h3 className="text-base font-bold text-gray-900">
@@ -558,10 +558,11 @@ function PharmacistDashboard() {
 
         {urgentAlerts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mt-4">
-            {urgentAlerts.map((alert) => (
+            {urgentAlerts.map((alert, index) => (
               <div
                 key={alert.id}
-                className={`p-4 rounded-xl border flex flex-col justify-between transition-all ${
+                style={{ animationDelay: `${index * 0.05}s` }}
+                className={`p-4 rounded-xl border flex flex-col justify-between transition-all animate-slide-up ${
                   alert.severity === "critical"
                     ? "bg-red-50/40 border-red-200 text-red-900"
                     : "bg-amber-50/40 border-amber-200 text-amber-900"

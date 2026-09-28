@@ -285,7 +285,7 @@ function SupplierManagement() {
   return (
     <div className="w-full max-w-full space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-slide-up">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
@@ -348,7 +348,7 @@ function SupplierManagement() {
       )}
 
       {/* 3 Total Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-slide-up-1">
         {/* Total Suppliers */}
         <Card className="p-5">
           <div className="flex items-center justify-between">
@@ -411,7 +411,7 @@ function SupplierManagement() {
       </div>
 
       {/* Main Table Card */}
-      <Card className="p-0 overflow-hidden border border-gray-200">
+      <Card className="p-0 overflow-hidden border border-gray-200 animate-slide-up-2">
         {/* Search & Filter Controls */}
         <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row items-center justify-between gap-3 bg-gray-50/50">
           <div className="w-full md:w-80">
@@ -496,10 +496,11 @@ function SupplierManagement() {
                   </td>
                 </tr>
               ) : paginatedSuppliers.length > 0 ? (
-                paginatedSuppliers.map((supplier) => (
+                paginatedSuppliers.map((supplier, index) => (
                   <tr
                     key={supplier.id}
-                    className="hover:bg-blue-50/30 transition-colors"
+                    className="hover:bg-blue-50/30 transition-colors animate-slide-up"
+                    style={{ animationDelay: `${index * 0.05}s` }}
                   >
                     {/* Supplier Name */}
                     <td className="px-6 py-4 whitespace-nowrap">

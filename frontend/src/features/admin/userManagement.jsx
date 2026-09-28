@@ -391,7 +391,7 @@ function UserManagement() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-slide-up">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
@@ -444,7 +444,7 @@ function UserManagement() {
       </div>
 
       {/* 4 Total Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up-1">
         {/* Total Registered Users */}
         <Card className="p-5">
           <div className="flex items-center justify-between">
@@ -527,7 +527,7 @@ function UserManagement() {
       </div>
 
       {/* Main Table Card */}
-      <Card className="p-0 overflow-hidden border border-gray-200">
+      <Card className="p-0 overflow-hidden border border-gray-200 animate-slide-up-2">
         {/* Table Controls (Search & Filter) */}
         <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row items-center justify-between gap-3 bg-gray-50/50">
           <div className="w-full md:w-80">
@@ -630,12 +630,13 @@ function UserManagement() {
                   </td>
                 </tr>
               ) : paginatedUsers.length > 0 ? (
-                paginatedUsers.map((user) => {
+                paginatedUsers.map((user, index) => {
                   const roleMeta = ROLE_DETAILS[user.role];
                   return (
                     <tr
                       key={user.id}
-                      className="hover:bg-blue-50/30 transition-colors"
+                      className="hover:bg-blue-50/30 transition-colors animate-slide-up"
+                      style={{ animationDelay: `${index * 0.05}s` }}
                     >
                       {/* Name & Email */}
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -927,9 +928,7 @@ function UserManagement() {
                   <option value={ROLES.SUPER_ADMIN}>Super Admin</option>
                   <option value={ROLES.ADMIN}>Admin</option>
                   <option value={ROLES.PHARMACIST}>Pharmacist Manager</option>
-                  <option value={ROLES.PROCUREMENT}>
-                    Procurement Officer
-                  </option>
+                  <option value={ROLES.PROCUREMENT}>Procurement Officer</option>
                 </>
               ) : (
                 <>
@@ -938,9 +937,7 @@ function UserManagement() {
                       <option value={ROLES.ADMIN}>Admin</option>
                     )}
                   <option value={ROLES.PHARMACIST}>Pharmacist Manager</option>
-                  <option value={ROLES.PROCUREMENT}>
-                    Procurement Officer
-                  </option>
+                  <option value={ROLES.PROCUREMENT}>Procurement Officer</option>
                 </>
               )}
             </Dropdown>
