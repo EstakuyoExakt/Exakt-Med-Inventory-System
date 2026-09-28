@@ -25,6 +25,7 @@ import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 import Dropdown from "../../components/common/dropdown";
+import Skeleton from "../../components/common/skeleton";
 import skuService from "../../services/sku";
 import useAuth from "../../hooks/useAuth";
 import { facilities } from "../../data/facility";
@@ -111,7 +112,7 @@ function StockAdjustmentLogs({
   }, [propFacilityId, facility?.id, currentFacilityName]);
 
   const [logs, setLogs] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // Filters & Search
@@ -326,105 +327,149 @@ function StockAdjustmentLogs({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up-1">
         {/* Total Logs */}
         <Card className="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Total Adjustments
-              </p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                {metrics.totalLogs}
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-gray-500 mt-1">
-                Recorded events
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-28" />
+                <Skeleton className="h-7 w-12 mt-1" />
+                <Skeleton className="h-3 w-32 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
-              <ClipboardList className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Total Adjustments
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                  {metrics.totalLogs}
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-gray-500 mt-1">
+                  Recorded events
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
+                <ClipboardList className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* Net Stock Movement */}
         <Card className="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Net Stock Impact
-              </p>
-              <h3
-                className={`text-2xl font-bold mt-1 ${
-                  metrics.netDelta > 0
-                    ? "text-emerald-600"
-                    : metrics.netDelta < 0
-                      ? "text-rose-600"
-                      : "text-gray-900"
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-28" />
+                <Skeleton className="h-7 w-16 mt-1" />
+                <Skeleton className="h-3 w-36 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Net Stock Impact
+                </p>
+                <h3
+                  className={`text-2xl font-bold mt-1 ${
+                    metrics.netDelta > 0
+                      ? "text-emerald-600"
+                      : metrics.netDelta < 0
+                        ? "text-rose-600"
+                        : "text-gray-900"
+                  }`}
+                >
+                  {metrics.netDelta > 0
+                    ? `+${metrics.netDelta}`
+                    : metrics.netDelta}{" "}
+                  <span className="text-xs font-normal text-gray-500">units</span>
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-gray-500 mt-1">
+                  Across filtered logs
+                </span>
+              </div>
+              <div
+                className={`flex h-11 w-11 items-center justify-center rounded-xl border ${
+                  metrics.netDelta >= 0
+                    ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                    : "bg-rose-50 text-rose-600 border-rose-100"
                 }`}
               >
-                {metrics.netDelta > 0
-                  ? `+${metrics.netDelta}`
-                  : metrics.netDelta}{" "}
-                <span className="text-xs font-normal text-gray-500">units</span>
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-gray-500 mt-1">
-                Across filtered logs
-              </span>
+                {metrics.netDelta >= 0 ? (
+                  <ArrowUpRight className="w-5 h-5" />
+                ) : (
+                  <ArrowDownRight className="w-5 h-5" />
+                )}
+              </div>
             </div>
-            <div
-              className={`flex h-11 w-11 items-center justify-center rounded-xl border ${
-                metrics.netDelta >= 0
-                  ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                  : "bg-rose-50 text-rose-600 border-rose-100"
-              }`}
-            >
-              {metrics.netDelta >= 0 ? (
-                <ArrowUpRight className="w-5 h-5" />
-              ) : (
-                <ArrowDownRight className="w-5 h-5" />
-              )}
-            </div>
-          </div>
+          )}
         </Card>
 
         {/* Additions */}
         <Card className="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Total Additions
-              </p>
-              <h3 className="text-2xl font-bold text-emerald-600 mt-1">
-                +{metrics.additionsUnits}{" "}
-                <span className="text-xs font-normal text-gray-500">units</span>
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-emerald-600 mt-1">
-                {metrics.additionsCount} addition logs
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-7 w-16 mt-1" />
+                <Skeleton className="h-3 w-32 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
-              <ArrowUpRight className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Total Additions
+                </p>
+                <h3 className="text-2xl font-bold text-emerald-600 mt-1">
+                  +{metrics.additionsUnits}{" "}
+                  <span className="text-xs font-normal text-gray-500">units</span>
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-emerald-600 mt-1">
+                  {metrics.additionsCount} addition logs
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
+                <ArrowUpRight className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* Deductions */}
         <Card className="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Total Deductions
-              </p>
-              <h3 className="text-2xl font-bold text-rose-600 mt-1">
-                -{metrics.deductionsUnits}{" "}
-                <span className="text-xs font-normal text-gray-500">units</span>
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-rose-600 mt-1">
-                {metrics.deductionsCount} deduction logs
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-28" />
+                <Skeleton className="h-7 w-16 mt-1" />
+                <Skeleton className="h-3 w-32 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-50 text-rose-600 border border-rose-100">
-              <ArrowDownRight className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Total Deductions
+                </p>
+                <h3 className="text-2xl font-bold text-rose-600 mt-1">
+                  -{metrics.deductionsUnits}{" "}
+                  <span className="text-xs font-normal text-gray-500">units</span>
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-rose-600 mt-1">
+                  {metrics.deductionsCount} deduction logs
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-50 text-rose-600 border border-rose-100">
+                <ArrowDownRight className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
       </div>
 
@@ -521,16 +566,63 @@ function StockAdjustmentLogs({
             </thead>
             <tbody className="divide-y divide-gray-100 text-xs">
               {isLoading ? (
-                <tr>
-                  <td colSpan={9} className="py-16 text-center text-gray-400">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <RefreshCw className="w-6 h-6 animate-spin text-blue-600" />
-                      <p className="text-sm font-medium text-gray-500">
-                        Loading stock adjustment logs...
-                      </p>
-                    </div>
-                  </td>
-                </tr>
+                Array.from({ length: 5 }).map((_, index) => (
+                  <tr key={`skeleton-${index}`}>
+                    {/* Timestamp */}
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <div className="space-y-1">
+                        <Skeleton className="h-3.5 w-24" />
+                        <Skeleton className="h-2.5 w-16" />
+                      </div>
+                    </td>
+
+                    {/* SKU / Medicine */}
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <div className="space-y-1">
+                        <Skeleton className="h-3.5 w-32" />
+                        <Skeleton className="h-2.5 w-20" />
+                      </div>
+                    </td>
+
+                    {/* Type */}
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <Skeleton className="h-5 w-24 rounded-full" />
+                    </td>
+
+                    {/* Previous */}
+                    <td className="py-3.5 px-4 whitespace-nowrap text-right">
+                      <Skeleton className="h-3.5 w-12 ml-auto" />
+                    </td>
+
+                    {/* Change */}
+                    <td className="py-3.5 px-4 whitespace-nowrap text-center">
+                      <Skeleton className="h-5 w-14 rounded-full mx-auto" />
+                    </td>
+
+                    {/* New Stock */}
+                    <td className="py-3.5 px-4 whitespace-nowrap text-right">
+                      <Skeleton className="h-3.5 w-12 ml-auto" />
+                    </td>
+
+                    {/* Reason */}
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <Skeleton className="h-5 w-24 rounded-md" />
+                    </td>
+
+                    {/* Adjusted By */}
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <div className="space-y-1">
+                        <Skeleton className="h-3.5 w-24" />
+                        <Skeleton className="h-2.5 w-16" />
+                      </div>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="py-3.5 px-4 whitespace-nowrap text-center">
+                      <Skeleton className="h-7 w-7 rounded-lg mx-auto" />
+                    </td>
+                  </tr>
+                ))
               ) : paginatedLogs.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-16 text-center text-gray-400">

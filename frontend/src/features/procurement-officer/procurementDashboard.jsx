@@ -21,10 +21,10 @@ import {
   Loader2,
 } from "lucide-react";
 
-// Common Components & Hooks
 import Card from "../../components/common/card";
 import useAuth from "../../hooks/useAuth";
 import dashboardService from "../../services/dashboard";
+import Skeleton from "../../components/common/skeleton";
 
 function ProcurementDashboard() {
   const { facility } = useAuth();
@@ -165,62 +165,95 @@ function ProcurementDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-slide-up-1">
         {/* 1. Total Reorder SKUs */}
         <Card className="p-5 border border-amber-200/80 shadow-xs hover:border-amber-300 transition-all bg-linear-to-br from-white to-amber-50/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
-                Total Reorder SKUs
-              </p>
-              <h3 className="text-3xl font-extrabold text-amber-600 mt-1.5">
-                {metrics.totalReorder}
-              </h3>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 mt-1 bg-amber-100/70 px-2 py-0.5 rounded-full">
-                <Clock className="w-3 h-3" /> &le; Reorder trigger point
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-32 bg-amber-200/60" />
+                <Skeleton className="h-8 w-16 mt-1.5 bg-amber-200/60" />
+                <Skeleton className="h-5 w-40 mt-1 rounded-full bg-amber-200/60" />
+              </div>
+              <Skeleton className="h-12 w-12 rounded-xl shrink-0 bg-amber-200/60" />
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 text-amber-600 border border-amber-200 shadow-xs">
-              <ShoppingCart className="w-6 h-6" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
+                  Total Reorder SKUs
+                </p>
+                <h3 className="text-3xl font-extrabold text-amber-600 mt-1.5">
+                  {metrics.totalReorder}
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 mt-1 bg-amber-100/70 px-2 py-0.5 rounded-full">
+                  <Clock className="w-3 h-3" /> &le; Reorder trigger point
+                </span>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 text-amber-600 border border-amber-200 shadow-xs">
+                <ShoppingCart className="w-6 h-6" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* 2. Total Minimum SKUs */}
         <Card className="p-5 border border-red-200/80 shadow-xs hover:border-red-300 transition-all bg-linear-to-br from-white to-red-50/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-red-700">
-                Total Minimum SKUs
-              </p>
-              <h3 className="text-3xl font-extrabold text-red-600 mt-1.5">
-                {metrics.totalMinimumSkus}
-              </h3>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 mt-1 bg-red-100/70 px-2 py-0.5 rounded-full">
-                <AlertCircle className="w-3 h-3" /> Critical shortage (&le; Min safety level)
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-32 bg-red-200/60" />
+                <Skeleton className="h-8 w-16 mt-1.5 bg-red-200/60" />
+                <Skeleton className="h-5 w-44 mt-1 rounded-full bg-red-200/60" />
+              </div>
+              <Skeleton className="h-12 w-12 rounded-xl shrink-0 bg-red-200/60" />
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-100 text-red-600 border border-red-200 shadow-xs">
-              <AlertTriangle className="w-6 h-6" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-red-700">
+                  Total Minimum SKUs
+                </p>
+                <h3 className="text-3xl font-extrabold text-red-600 mt-1.5">
+                  {metrics.totalMinimumSkus}
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 mt-1 bg-red-100/70 px-2 py-0.5 rounded-full">
+                  <AlertCircle className="w-3 h-3" /> Critical shortage (&le; Min safety level)
+                </span>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-100 text-red-600 border border-red-200 shadow-xs">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* 3. Total Batches */}
         <Card className="p-5 border border-blue-200/80 shadow-xs hover:border-blue-300 transition-all bg-linear-to-br from-white to-blue-50/20 sm:col-span-2 lg:col-span-1">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
-                Total Batches
-              </p>
-              <h3 className="text-3xl font-extrabold text-gray-900 mt-1.5">
-                {metrics.totalBatches}
-              </h3>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 mt-1 bg-blue-100/70 px-2 py-0.5 rounded-full">
-                <Boxes className="w-3 h-3" /> Tracked inventory lots across facilities
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-28 bg-blue-200/60" />
+                <Skeleton className="h-8 w-16 mt-1.5 bg-blue-200/60" />
+                <Skeleton className="h-5 w-48 mt-1 rounded-full bg-blue-200/60" />
+              </div>
+              <Skeleton className="h-12 w-12 rounded-xl shrink-0 bg-blue-200/60" />
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-600 border border-blue-200 shadow-xs">
-              <Package className="w-6 h-6" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
+                  Total Batches
+                </p>
+                <h3 className="text-3xl font-extrabold text-gray-900 mt-1.5">
+                  {metrics.totalBatches}
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 mt-1 bg-blue-100/70 px-2 py-0.5 rounded-full">
+                  <Boxes className="w-3 h-3" /> Tracked inventory lots across facilities
+                </span>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-600 border border-blue-200 shadow-xs">
+                <Package className="w-6 h-6" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
       </div>
 
@@ -247,7 +280,30 @@ function ProcurementDashboard() {
             </div>
 
             <div className="divide-y divide-gray-100">
-              {priorityRestockSkus.length > 0 ? (
+              {isLoading ? (
+                Array.from({ length: 4 }).map((_, idx) => (
+                  <div key={`skel-restock-${idx}`} className="p-4 flex items-center justify-between gap-3">
+                    <div className="flex items-start gap-3 flex-1">
+                      <Skeleton className="h-9 w-9 rounded-lg shrink-0 mt-0.5" />
+                      <div className="space-y-1.5 flex-1">
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-4 w-20 rounded" />
+                        </div>
+                        <Skeleton className="h-3 w-40" />
+                        <Skeleton className="h-2.5 w-24" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="space-y-1 text-right">
+                        <Skeleton className="h-3.5 w-16 ml-auto" />
+                        <Skeleton className="h-4 w-24 rounded" />
+                      </div>
+                      <Skeleton className="h-8 w-16 rounded-lg" />
+                    </div>
+                  </div>
+                ))
+              ) : priorityRestockSkus.length > 0 ? (
                 priorityRestockSkus.map((item, index) => (
                   <div
                     key={item.id}
@@ -355,7 +411,24 @@ function ProcurementDashboard() {
             </div>
 
             <div className="divide-y divide-gray-100">
-              {recentOrderRequests.length > 0 ? (
+              {isLoading ? (
+                Array.from({ length: 4 }).map((_, idx) => (
+                  <div key={`skel-order-${idx}`} className="p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-4 w-20 rounded" />
+                      <Skeleton className="h-4 w-16 rounded-full" />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-4 w-20" />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                  </div>
+                ))
+              ) : recentOrderRequests.length > 0 ? (
                 recentOrderRequests.map((order, index) => (
                   <div
                     key={order.orderId}

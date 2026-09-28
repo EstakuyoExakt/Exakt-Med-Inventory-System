@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   DollarSign,
   TrendingUp,
@@ -23,6 +23,7 @@ import {
   User,
   ChevronLeft,
   ChevronRight,
+  RefreshCw,
 } from "lucide-react";
 
 // Common Components
@@ -31,6 +32,7 @@ import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 import Dropdown from "../../components/common/dropdown";
+import Skeleton from "../../components/common/skeleton";
 
 // Data Imports & Auth Hook
 import { requestedOrders as initialOrders } from "../../data/orders";
@@ -60,6 +62,22 @@ function Accounting() {
   const currentFacilityId = currentFacility?.id || 1;
 
   const [orders] = useState(initialOrders);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    setIsLoading(true);
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [currentFacilityName]);
+
+  const handleRefresh = () => {
+    setIsLoading(true);
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 400);
+  };
 
   // Filter orders that reference the current active facility
   const currentFacilityOrders = useMemo(() => {
@@ -327,6 +345,18 @@ function Accounting() {
         <div className="flex items-center gap-2.5">
           <button
             type="button"
+            onClick={handleRefresh}
+            disabled={isLoading}
+            className="btn-secondary p-2.5 text-gray-600 hover:text-blue-600"
+            title="Refresh Ledger"
+            aria-label="Refresh Ledger"
+          >
+            <RefreshCw
+              className={`w-4 h-4 ${isLoading ? "animate-spin text-blue-600" : ""}`}
+            />
+          </button>
+          <button
+            type="button"
             onClick={handleExportCSV}
             className="btn-secondary text-xs shadow-xs flex items-center gap-1.5"
             title="Export financial ledger to CSV"
@@ -341,84 +371,128 @@ function Accounting() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up-1">
         {/* 1. Total Approved Expenditure */}
         <Card className="p-5 border border-emerald-200/80 shadow-xs hover:border-emerald-300 transition-all bg-linear-to-br from-white to-emerald-50/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">
-                Approved Spend (YTD)
-              </p>
-              <h3 className="text-2xl font-extrabold text-emerald-700 mt-1.5 font-mono">
-                {formatCurrency(metrics.approvedSpend)}
-              </h3>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 mt-1 bg-emerald-100/70 px-2 py-0.5 rounded-full">
-                <CheckCircle2 className="w-3 h-3" /> {metrics.approvedCount}{" "}
-                Dispatched Orders
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-32 bg-emerald-200/60" />
+                <Skeleton className="h-7 w-28 mt-1.5 bg-emerald-200/60" />
+                <Skeleton className="h-5 w-36 mt-1 rounded-full bg-emerald-200/60" />
+              </div>
+              <Skeleton className="h-12 w-12 rounded-xl shrink-0 bg-emerald-200/60" />
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 border border-emerald-200 shadow-xs">
-              <Wallet className="w-6 h-6" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">
+                  Approved Spend (YTD)
+                </p>
+                <h3 className="text-2xl font-extrabold text-emerald-700 mt-1.5 font-mono">
+                  {formatCurrency(metrics.approvedSpend)}
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 mt-1 bg-emerald-100/70 px-2 py-0.5 rounded-full">
+                  <CheckCircle2 className="w-3 h-3" /> {metrics.approvedCount}{" "}
+                  Dispatched Orders
+                </span>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 border border-emerald-200 shadow-xs">
+                <Wallet className="w-6 h-6" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* 2. Pending Commitments Pipeline */}
         <Card className="p-5 border border-amber-200/80 shadow-xs hover:border-amber-300 transition-all bg-linear-to-br from-white to-amber-50/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
-                Pending Commitments
-              </p>
-              <h3 className="text-2xl font-extrabold text-amber-700 mt-1.5 font-mono">
-                {formatCurrency(metrics.pendingSpend)}
-              </h3>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 mt-1 bg-amber-100/70 px-2 py-0.5 rounded-full">
-                <Clock className="w-3 h-3" /> {metrics.pendingCount} Awaiting
-                Sign-off
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-36 bg-amber-200/60" />
+                <Skeleton className="h-7 w-28 mt-1.5 bg-amber-200/60" />
+                <Skeleton className="h-5 w-40 mt-1 rounded-full bg-amber-200/60" />
+              </div>
+              <Skeleton className="h-12 w-12 rounded-xl shrink-0 bg-amber-200/60" />
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 text-amber-600 border border-amber-200 shadow-xs">
-              <CreditCard className="w-6 h-6" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
+                  Pending Commitments
+                </p>
+                <h3 className="text-2xl font-extrabold text-amber-700 mt-1.5 font-mono">
+                  {formatCurrency(metrics.pendingSpend)}
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 mt-1 bg-amber-100/70 px-2 py-0.5 rounded-full">
+                  <Clock className="w-3 h-3" /> {metrics.pendingCount} Awaiting
+                  Sign-off
+                </span>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 text-amber-600 border border-amber-200 shadow-xs">
+                <CreditCard className="w-6 h-6" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* 3. Total Requisitions Value */}
         <Card className="p-5 border border-gray-200 shadow-xs hover:border-gray-300 transition-all bg-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                Total Pipeline Value
-              </p>
-              <h3 className="text-2xl font-extrabold text-gray-900 mt-1.5 font-mono">
-                {formatCurrency(metrics.totalRequisitionSpend)}
-              </h3>
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 mt-1">
-                {metrics.totalOrders} total purchase requests
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-32" />
+                <Skeleton className="h-7 w-28 mt-1.5" />
+                <Skeleton className="h-4 w-36 mt-1" />
+              </div>
+              <Skeleton className="h-12 w-12 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100 shadow-xs">
-              <TrendingUp className="w-6 h-6" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                  Total Pipeline Value
+                </p>
+                <h3 className="text-2xl font-extrabold text-gray-900 mt-1.5 font-mono">
+                  {formatCurrency(metrics.totalRequisitionSpend)}
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 mt-1">
+                  {metrics.totalOrders} total purchase requests
+                </span>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100 shadow-xs">
+                <TrendingUp className="w-6 h-6" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* 4. Average Order Value (AOV) */}
         <Card className="p-5 border border-purple-200/80 shadow-xs hover:border-purple-300 transition-all bg-linear-to-br from-white to-purple-50/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-purple-700">
-                Average Requisition Value
-              </p>
-              <h3 className="text-2xl font-extrabold text-purple-700 mt-1.5 font-mono">
-                {formatCurrency(metrics.avgOrderValue)}
-              </h3>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 mt-1 bg-purple-100/70 px-2 py-0.5 rounded-full">
-                <Receipt className="w-3 h-3" /> Average Cost per PO
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-40 bg-purple-200/60" />
+                <Skeleton className="h-7 w-28 mt-1.5 bg-purple-200/60" />
+                <Skeleton className="h-5 w-36 mt-1 rounded-full bg-purple-200/60" />
+              </div>
+              <Skeleton className="h-12 w-12 rounded-xl shrink-0 bg-purple-200/60" />
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-100 text-purple-600 border border-purple-200 shadow-xs">
-              <Receipt className="w-6 h-6" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-purple-700">
+                  Average Requisition Value
+                </p>
+                <h3 className="text-2xl font-extrabold text-purple-700 mt-1.5 font-mono">
+                  {formatCurrency(metrics.avgOrderValue)}
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 mt-1 bg-purple-100/70 px-2 py-0.5 rounded-full">
+                  <Receipt className="w-3 h-3" /> Average Cost per PO
+                </span>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-100 text-purple-600 border border-purple-200 shadow-xs">
+                <Receipt className="w-6 h-6" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
       </div>
 
@@ -441,7 +515,17 @@ function Accounting() {
             </div>
 
             <div className="space-y-4 pt-4 min-h-48">
-              {paginatedMedications.length > 0 ? (
+              {isLoading ? (
+                Array.from({ length: 4 }).map((_, idx) => (
+                  <div key={`skeleton-med-${idx}`} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-4 w-48" />
+                      <Skeleton className="h-4 w-20" />
+                    </div>
+                    <Skeleton className="h-2 w-full rounded-full" />
+                  </div>
+                ))
+              ) : paginatedMedications.length > 0 ? (
                 paginatedMedications.map((med) => {
                   const percentage =
                     metrics.totalRequisitionSpend > 0
@@ -581,7 +665,26 @@ function Accounting() {
             </div>
 
             <div className="divide-y divide-gray-100 pt-1">
-              {supplierSpendBreakdown.length > 0 ? (
+              {isLoading ? (
+                Array.from({ length: 4 }).map((_, idx) => (
+                  <div
+                    key={`skeleton-supp-${idx}`}
+                    className="py-3 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-6 w-6 rounded-full shrink-0" />
+                      <div className="space-y-1">
+                        <Skeleton className="h-3.5 w-32" />
+                        <Skeleton className="h-2.5 w-20" />
+                      </div>
+                    </div>
+                    <div className="space-y-1 text-right">
+                      <Skeleton className="h-3.5 w-20 ml-auto" />
+                      <Skeleton className="h-2.5 w-16 ml-auto" />
+                    </div>
+                  </div>
+                ))
+              ) : supplierSpendBreakdown.length > 0 ? (
                 supplierSpendBreakdown.slice(0, 4).map((supplier, idx) => (
                   <div
                     key={supplier.name}
@@ -715,7 +818,51 @@ function Accounting() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {paginatedOrders.length > 0 ? (
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, index) => (
+                  <tr key={`skeleton-ledger-${index}`}>
+                    {/* PO Reference & Date */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-5 w-24 rounded" />
+                        <Skeleton className="h-3 w-28" />
+                      </div>
+                    </td>
+
+                    {/* Medication & SKU */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-40" />
+                        <Skeleton className="h-2.5 w-20" />
+                      </div>
+                    </td>
+
+                    {/* Vendor & Requester */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-28" />
+                      </div>
+                    </td>
+
+                    {/* Total Amount */}
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <Skeleton className="h-4 w-20 ml-auto" />
+                    </td>
+
+                    {/* Status */}
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <Skeleton className="h-6 w-24 rounded-full mx-auto" />
+                    </td>
+
+                    {/* Voucher */}
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <Skeleton className="h-7 w-16 rounded-lg ml-auto" />
+                    </td>
+                  </tr>
+                ))
+              ) : paginatedOrders.length > 0 ? (
                 paginatedOrders.map((order, index) => {
                   const cost = Number(
                     order.estimatedCost || order.totalCost || 0,

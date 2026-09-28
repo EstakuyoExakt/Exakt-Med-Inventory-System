@@ -29,6 +29,7 @@ import SearchBar from "../../components/common/searchBar";
 import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 import Dropdown from "../../components/common/dropdown";
+import Skeleton from "../../components/common/skeleton";
 import RoleGuard from "../../components/guard/roleGuard";
 import { ROLES } from "../../config/roles";
 
@@ -412,87 +413,130 @@ function RequestedOrders() {
           </button>
         </div>
       )}
-
       {/* 4 Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up-1">
         {/* 1. Total Orders */}
         <Card className="p-5 border border-gray-200 shadow-xs hover:border-gray-300 transition-all bg-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                Total Requisitions
-              </p>
-              <h3 className="text-3xl font-extrabold text-gray-900 mt-1.5">
-                {metrics.total}
-              </h3>
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 mt-1">
-                All submitted order records
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-32" />
+                <Skeleton className="h-8 w-16 mt-1.5" />
+                <Skeleton className="h-4 w-36 mt-1" />
+              </div>
+              <Skeleton className="h-12 w-12 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100 shadow-xs">
-              <ClipboardCheck className="w-6 h-6" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                  Total Requisitions
+                </p>
+                <h3 className="text-3xl font-extrabold text-gray-900 mt-1.5">
+                  {metrics.total}
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 mt-1">
+                  All submitted order records
+                </span>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100 shadow-xs">
+                <ClipboardCheck className="w-6 h-6" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* 2. Pending Approval */}
         <Card className="p-5 border border-amber-200/80 shadow-xs hover:border-amber-300 transition-all bg-linear-to-br from-white to-amber-50/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
-                Pending Approval
-              </p>
-              <h3 className="text-3xl font-extrabold text-amber-600 mt-1.5">
-                {metrics.pending}
-              </h3>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 mt-1 bg-amber-100/70 px-2 py-0.5 rounded-full">
-                <Clock className="w-3 h-3" /> Requires Admin Review
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-32 bg-amber-200/60" />
+                <Skeleton className="h-8 w-16 mt-1.5 bg-amber-200/60" />
+                <Skeleton className="h-5 w-40 mt-1 rounded-full bg-amber-200/60" />
+              </div>
+              <Skeleton className="h-12 w-12 rounded-xl shrink-0 bg-amber-200/60" />
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 text-amber-600 border border-amber-200 shadow-xs">
-              <Clock className="w-6 h-6" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
+                  Pending Approval
+                </p>
+                <h3 className="text-3xl font-extrabold text-amber-600 mt-1.5">
+                  {metrics.pending}
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 mt-1 bg-amber-100/70 px-2 py-0.5 rounded-full">
+                  <Clock className="w-3 h-3" /> Requires Admin Review
+                </span>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 text-amber-600 border border-amber-200 shadow-xs">
+                <Clock className="w-6 h-6" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* 3. Approved Orders */}
         <Card className="p-5 border border-emerald-200/80 shadow-xs hover:border-emerald-300 transition-all bg-linear-to-br from-white to-emerald-50/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">
-                Approved Orders
-              </p>
-              <h3 className="text-3xl font-extrabold text-emerald-600 mt-1.5">
-                {metrics.approved}
-              </h3>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 mt-1 bg-emerald-100/70 px-2 py-0.5 rounded-full">
-                <CheckCircle2 className="w-3 h-3" /> Dispatched to Vendor
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-28 bg-emerald-200/60" />
+                <Skeleton className="h-8 w-16 mt-1.5 bg-emerald-200/60" />
+                <Skeleton className="h-5 w-36 mt-1 rounded-full bg-emerald-200/60" />
+              </div>
+              <Skeleton className="h-12 w-12 rounded-xl shrink-0 bg-emerald-200/60" />
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 border border-emerald-200 shadow-xs">
-              <CheckCircle2 className="w-6 h-6" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">
+                  Approved Orders
+                </p>
+                <h3 className="text-3xl font-extrabold text-emerald-600 mt-1.5">
+                  {metrics.approved}
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 mt-1 bg-emerald-100/70 px-2 py-0.5 rounded-full">
+                  <CheckCircle2 className="w-3 h-3" /> Dispatched to Vendor
+                </span>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 border border-emerald-200 shadow-xs">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* 4. Rejected Orders */}
         <Card className="p-5 border border-red-200/80 shadow-xs hover:border-red-300 transition-all bg-linear-to-br from-white to-red-50/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-red-700">
-                Denied / Rejected
-              </p>
-              <h3 className="text-3xl font-extrabold text-red-600 mt-1.5">
-                {metrics.rejected}
-              </h3>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 mt-1 bg-red-100/70 px-2 py-0.5 rounded-full">
-                <XCircle className="w-3 h-3" /> Cancelled Requisitions
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-32 bg-red-200/60" />
+                <Skeleton className="h-8 w-16 mt-1.5 bg-red-200/60" />
+                <Skeleton className="h-5 w-40 mt-1 rounded-full bg-red-200/60" />
+              </div>
+              <Skeleton className="h-12 w-12 rounded-xl shrink-0 bg-red-200/60" />
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-100 text-red-600 border border-red-200 shadow-xs">
-              <XCircle className="w-6 h-6" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-red-700">
+                  Denied / Rejected
+                </p>
+                <h3 className="text-3xl font-extrabold text-red-600 mt-1.5">
+                  {metrics.rejected}
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 mt-1 bg-red-100/70 px-2 py-0.5 rounded-full">
+                  <XCircle className="w-3 h-3" /> Cancelled Requisitions
+                </span>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-100 text-red-600 border border-red-200 shadow-xs">
+                <XCircle className="w-6 h-6" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
       </div>
 
@@ -573,7 +617,48 @@ function RequestedOrders() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {paginatedOrders.length > 0 ? (
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, index) => (
+                  <tr key={`order-skeleton-${index}`} className="animate-pulse">
+                    {/* PO Number & Date */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-3 w-20 mt-1.5" />
+                    </td>
+
+                    {/* Quantity & Cost */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-3 w-24 mt-1.5" />
+                    </td>
+
+                    {/* Supplier & Destination */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-3.5 w-32" />
+                        <Skeleton className="h-3 w-28" />
+                      </div>
+                    </td>
+
+                    {/* Priority & Status */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-5 w-28 rounded-full" />
+                        <Skeleton className="h-4 w-20 rounded" />
+                      </div>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Skeleton className="h-7 w-7 rounded-lg" />
+                        <Skeleton className="h-7 w-16 rounded-lg" />
+                        <Skeleton className="h-7 w-14 rounded-lg" />
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : paginatedOrders.length > 0 ? (
                 paginatedOrders.map((order, index) => {
                   const statusInfo = getStatusBadge(order.status);
                   const StatusIcon = statusInfo.icon;
@@ -701,18 +786,6 @@ function RequestedOrders() {
                     </tr>
                   );
                 })
-              ) : isLoading ? (
-                <tr>
-                  <td
-                    colSpan="5"
-                    className="px-6 py-12 text-center text-gray-400"
-                  >
-                    <Loader2 className="w-8 h-8 mx-auto mb-2 text-blue-600 animate-spin" />
-                    <p className="text-sm font-semibold text-gray-700">
-                      Loading purchase order requisitions...
-                    </p>
-                  </td>
-                </tr>
               ) : (
                 <tr>
                   <td

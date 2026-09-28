@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import {
   Boxes,
   Package,
@@ -16,6 +16,7 @@ import {
   Clock,
   Calendar,
   Loader2,
+  RefreshCw,
 } from "lucide-react";
 
 // Common Components
@@ -27,6 +28,7 @@ import DeleteModal from "../../components/common/deleteModal";
 import SuccessModal from "../../components/common/successModal";
 import Dropdown from "../../components/common/dropdown";
 import ComboBox from "./components/comboBox";
+import Skeleton from "../../components/common/skeleton";
 import libMedicineService from "../../services/libMedicine";
 import skuService from "../../services/sku";
 import restockRequestService from "../../services/restockRequest";
@@ -347,7 +349,7 @@ function SkuManagement() {
   }, [facility]);
 
   const [skuList, setSkuList] = useState([]);
-  const [isLoadingSkus, setIsLoadingSkus] = useState(false);
+  const [isLoadingSkus, setIsLoadingSkus] = useState(true);
   const [skuError, setSkuError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -414,7 +416,15 @@ function SkuManagement() {
     [targetFacilityId],
   );
 
+  const isFirstRender = useRef(true);
+
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      fetchSkus(searchQuery);
+      return;
+    }
+
     const timer = setTimeout(() => {
       fetchSkus(searchQuery);
     }, 300);
@@ -1228,6 +1238,18 @@ function SkuManagement() {
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
           <button
             type="button"
+            onClick={fetchSkus}
+            disabled={isLoadingSkus}
+            className="btn-secondary p-2.5 text-gray-600 hover:text-blue-600"
+            title="Refresh SKUs"
+            aria-label="Refresh SKUs"
+          >
+            <RefreshCw
+              className={`w-4 h-4 ${isLoadingSkus ? "animate-spin text-blue-600" : ""}`}
+            />
+          </button>
+          <button
+            type="button"
             onClick={() => handleOpenRestockModal()}
             className="btn-secondary self-start sm:self-auto shadow-sm flex items-center gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50"
             title="Request Stock Replenishment"
@@ -1250,82 +1272,126 @@ function SkuManagement() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up-1">
         {/* Total SKUs */}
         <Card className="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Facility SKUs
-              </p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                {totalSkus}
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-blue-600 mt-1 truncate max-w-44">
-                At {currentFacilityName}
-              </span>
+          {isLoadingSkus ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-7 w-12 mt-1" />
+                <Skeleton className="h-3 w-32 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
-              <Boxes className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Facility SKUs
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                  {totalSkus}
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-blue-600 mt-1 truncate max-w-44">
+                  At {currentFacilityName}
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
+                <Boxes className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* Optimal Stock */}
         <Card className="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Optimal Stock
-              </p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                {optimalCount}
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-emerald-600 mt-1">
-                Above reorder level
-              </span>
+          {isLoadingSkus ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-7 w-12 mt-1" />
+                <Skeleton className="h-3 w-32 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
-              <CheckCircle2 className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Optimal Stock
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                  {optimalCount}
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-emerald-600 mt-1">
+                  Above reorder level
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* Reorder Needed */}
         <Card className="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Reorder Needed
-              </p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                {reorderCount}
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-amber-600 mt-1">
-                At or below reorder trigger
-              </span>
+          {isLoadingSkus ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-28" />
+                <Skeleton className="h-7 w-12 mt-1" />
+                <Skeleton className="h-3 w-36 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
-              <AlertTriangle className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Reorder Needed
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                  {reorderCount}
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-amber-600 mt-1">
+                  At or below reorder trigger
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* Critical / Out of Stock */}
         <Card className="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Critical / Low
-              </p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                {criticalCount}
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-red-600 mt-1">
-                At or below minimum level
-              </span>
+          {isLoadingSkus ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-7 w-12 mt-1" />
+                <Skeleton className="h-3 w-36 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-600 border border-red-100">
-              <AlertCircle className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Critical / Low
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                  {criticalCount}
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-red-600 mt-1">
+                  At or below minimum level
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-600 border border-red-100">
+                <AlertCircle className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
       </div>
 
@@ -1387,19 +1453,61 @@ function SkuManagement() {
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
               {isLoadingSkus ? (
-                <tr>
-                  <td
-                    colSpan="5"
-                    className="px-6 py-12 text-center text-gray-400"
-                  >
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                      <p className="text-xs font-medium text-gray-500">
-                        Loading SKUs from server...
-                      </p>
-                    </div>
-                  </td>
-                </tr>
+                Array.from({ length: 5 }).map((_, index) => (
+                  <tr key={`skeleton-${index}`}>
+                    {/* SKU & Medicine */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-start gap-3">
+                        <Skeleton className="h-9 w-9 rounded-lg shrink-0 mt-0.5" />
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex items-center gap-2">
+                            <Skeleton className="h-4 w-32" />
+                            <Skeleton className="h-4 w-20 rounded" />
+                          </div>
+                          <Skeleton className="h-3 w-40" />
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Form & Packaging */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-5 w-20 rounded-md" />
+                        <Skeleton className="h-3 w-28" />
+                      </div>
+                    </td>
+
+                    {/* Stock Health & Capacity */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-5 w-24 rounded-full" />
+                          <Skeleton className="h-4 w-12" />
+                        </div>
+                        <Skeleton className="h-1.5 w-36 rounded-full" />
+                      </div>
+                    </td>
+
+                    {/* Thresholds */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-5 w-14 rounded-md" />
+                        <Skeleton className="h-5 w-14 rounded-md" />
+                        <Skeleton className="h-5 w-14 rounded-md" />
+                      </div>
+                    </td>
+
+                    {/* Management Actions */}
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Skeleton className="h-7 w-7 rounded-lg" />
+                        <Skeleton className="h-7 w-7 rounded-lg" />
+                        <Skeleton className="h-7 w-7 rounded-lg" />
+                        <Skeleton className="h-7 w-7 rounded-lg" />
+                      </div>
+                    </td>
+                  </tr>
+                ))
               ) : paginatedSkus.length > 0 ? (
                 paginatedSkus.map((item, index) => {
                   const status = getStockStatus(item);

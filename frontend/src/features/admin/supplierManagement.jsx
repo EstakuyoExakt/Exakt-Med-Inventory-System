@@ -17,6 +17,7 @@ import {
   MapPin,
   User as UserIcon,
   Loader2,
+  RefreshCw,
 } from "lucide-react";
 
 // Components
@@ -26,6 +27,7 @@ import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 import DeleteModal from "../../components/common/deleteModal";
 import Dropdown from "../../components/common/dropdown";
+import Skeleton from "../../components/common/skeleton";
 
 import supplierService from "../../services/supplier";
 import useAuth from "../../hooks/useAuth";
@@ -318,16 +320,30 @@ function SupplierManagement() {
             )}
           </p>
         </div>
-        <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN]}>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
           <button
             type="button"
-            onClick={handleOpenAddModal}
-            className="btn-primary self-start sm:self-auto shadow-sm"
+            onClick={fetchSuppliers}
+            disabled={loading}
+            className="btn-secondary p-2.5 text-gray-600 hover:text-blue-600"
+            title="Refresh Suppliers"
+            aria-label="Refresh Suppliers"
           >
-            <Plus className="w-4 h-4" />
-            <span>Add New Supplier</span>
+            <RefreshCw
+              className={`w-4 h-4 ${loading ? "animate-spin text-blue-600" : ""}`}
+            />
           </button>
-        </RoleGuard>
+          <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN]}>
+            <button
+              type="button"
+              onClick={handleOpenAddModal}
+              className="btn-primary shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add New Supplier</span>
+            </button>
+          </RoleGuard>
+        </div>
       </div>
 
       {/* Error Banner */}
@@ -351,62 +367,95 @@ function SupplierManagement() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-slide-up-1">
         {/* Total Suppliers */}
         <Card className="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Total Suppliers
-              </p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                {totalSuppliers}
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-blue-600 mt-1">
-                Registered vendors
-              </span>
+          {loading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-7 w-12 mt-1" />
+                <Skeleton className="h-3 w-32 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
-              <Truck className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Total Suppliers
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                  {totalSuppliers}
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-blue-600 mt-1">
+                  Registered vendors
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
+                <Truck className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* Total Active */}
         <Card className="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Total Active
-              </p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                {totalActive}
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-emerald-600 mt-1">
-                Active partnership
-              </span>
+          {loading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-7 w-12 mt-1" />
+                <Skeleton className="h-3 w-32 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
-              <CheckCircle2 className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Total Active
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                  {totalActive}
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-emerald-600 mt-1">
+                  Active partnership
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* Total Inactive */}
         <Card className="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Total Inactive
-              </p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                {totalInactive}
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-rose-600 mt-1">
-                Inactive / Under review
-              </span>
+          {loading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-7 w-12 mt-1" />
+                <Skeleton className="h-3 w-36 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-50 text-rose-600 border border-rose-100">
-              <XCircle className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Total Inactive
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                  {totalInactive}
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-rose-600 mt-1">
+                  Inactive / Under review
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-50 text-rose-600 border border-rose-100">
+                <XCircle className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
       </div>
 
@@ -480,21 +529,44 @@ function SupplierManagement() {
                   </td>
                 </tr>
               ) : loading ? (
-                <tr>
-                  <td
-                    colSpan="5"
-                    className="px-6 py-12 text-center text-gray-400"
-                  >
-                    <Loader2 className="w-8 h-8 mx-auto mb-2 text-blue-500 animate-spin" />
-                    <p className="text-sm font-medium text-gray-700">
-                      Loading suppliers...
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Fetching live supplier data
-                      {currentFacilityName ? ` for ${currentFacilityName}` : ""}
-                    </p>
-                  </td>
-                </tr>
+                Array.from({ length: 5 }).map((_, index) => (
+                  <tr key={`skeleton-${index}`}>
+                    {/* Supplier Name */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+                        <Skeleton className="h-4 w-36" />
+                      </div>
+                    </td>
+
+                    {/* Contact Person Details */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-4 w-28" />
+                        <Skeleton className="h-3 w-40" />
+                      </div>
+                    </td>
+
+                    {/* Payment Terms */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <Skeleton className="h-6 w-24 rounded-md" />
+                    </td>
+
+                    {/* Status */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Skeleton className="h-7 w-7 rounded-lg" />
+                        <Skeleton className="h-7 w-7 rounded-lg" />
+                        <Skeleton className="h-7 w-7 rounded-lg" />
+                      </div>
+                    </td>
+                  </tr>
+                ))
               ) : paginatedSuppliers.length > 0 ? (
                 paginatedSuppliers.map((supplier, index) => (
                   <tr

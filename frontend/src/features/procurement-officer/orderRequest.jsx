@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import {
   AlertTriangle,
   AlertCircle,
@@ -21,6 +21,7 @@ import {
   ListPlus,
   ClipboardList,
   User,
+  RefreshCw,
 } from "lucide-react";
 
 // Common Components
@@ -30,6 +31,7 @@ import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 import SuccessModal from "../../components/common/successModal";
 import Dropdown from "../../components/common/dropdown";
+import Skeleton from "../../components/common/skeleton";
 
 // Constants & Helper Imports
 import { getStockStatus } from "../../utils/helpers";
@@ -128,7 +130,7 @@ function OrderRequest() {
   }, [facility]);
 
   const [skuList, setSkuList] = useState([]);
-  const [isLoadingSkus, setIsLoadingSkus] = useState(false);
+  const [isLoadingSkus, setIsLoadingSkus] = useState(true);
   const [skuError, setSkuError] = useState(null);
   const [supplierList, setSupplierList] = useState([]);
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
@@ -171,8 +173,16 @@ function OrderRequest() {
     [facility?.id, currentFacilityName],
   );
 
-  // Debounced search when user types in search bar
+  const initialSkuFetchDone = useRef(false);
+
+  // Debounced search when user types in search bar (immediate on mount)
   useEffect(() => {
+    if (!initialSkuFetchDone.current) {
+      initialSkuFetchDone.current = true;
+      fetchSkus("");
+      return;
+    }
+
     const timer = setTimeout(() => {
       fetchSkus(searchQuery);
     }, 300);
@@ -226,7 +236,7 @@ function OrderRequest() {
   // Restock Request States
   const [restockRequests, setRestockRequests] = useState([]);
   const [isLoadingRestockRequests, setIsLoadingRestockRequests] =
-    useState(false);
+    useState(true);
   const [restockRequestError, setRestockRequestError] = useState(null);
   const [activeTab, setActiveTab] = useState("requests"); // "requests" | "thresholds"
   const [restockSearchQuery, setRestockSearchQuery] = useState("");
@@ -932,6 +942,22 @@ function OrderRequest() {
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
             type="button"
+            onClick={() => {
+              fetchSkus(searchQuery);
+              fetchRestockRequests();
+            }}
+            disabled={isLoadingSkus || isLoadingRestockRequests}
+            className="p-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-lg shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+            title="Refresh Orders & SKUs"
+          >
+            <RefreshCw
+              className={`w-4 h-4 ${
+                isLoadingSkus || isLoadingRestockRequests ? "animate-spin" : ""
+              }`}
+            />
+          </button>
+          <button
+            type="button"
             onClick={() => handleOpenMultiOrderModal([])}
             className="btn-primary shadow-xs flex items-center gap-2 text-xs py-2 px-3.5 cursor-pointer"
           >
@@ -945,85 +971,118 @@ function OrderRequest() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-slide-up-1">
         {/* 1. Total Minimum SKUs */}
         <Card className="p-5 border border-red-200/80 shadow-xs hover:border-red-300 transition-all bg-linear-to-br from-white to-red-50/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-red-700">
-                Total Minimum SKUs
-              </p>
-              <h3 className="text-3xl font-extrabold text-red-600 mt-1.5">
-                {totalMinimumSkus}
-              </h3>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 bg-red-100/70 px-2 py-0.5 rounded-full">
-                  <AlertCircle className="w-3 h-3" /> Critical shortage (&le;
-                  Min)
-                </span>
-                {totalMinimumSkus > 0 && activeTab === "thresholds" && (
-                  <button
-                    type="button"
-                    onClick={handleSelectAllCritical}
-                    className="text-[11px] font-bold text-red-700 underline hover:text-red-900 cursor-pointer"
-                  >
-                    Select Critical
-                  </button>
-                )}
+          {isLoadingSkus ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-32 bg-red-200/60" />
+                <Skeleton className="h-8 w-16 mt-1.5 bg-red-200/60" />
+                <Skeleton className="h-5 w-44 mt-1 rounded-full bg-red-200/60" />
+              </div>
+              <Skeleton className="h-12 w-12 rounded-xl shrink-0 bg-red-200/60" />
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-red-700">
+                  Total Minimum SKUs
+                </p>
+                <h3 className="text-3xl font-extrabold text-red-600 mt-1.5">
+                  {totalMinimumSkus}
+                </h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 bg-red-100/70 px-2 py-0.5 rounded-full">
+                    <AlertCircle className="w-3 h-3" /> Critical shortage (&le;
+                    Min)
+                  </span>
+                  {totalMinimumSkus > 0 && activeTab === "thresholds" && (
+                    <button
+                      type="button"
+                      onClick={handleSelectAllCritical}
+                      className="text-[11px] font-bold text-red-700 underline hover:text-red-900 cursor-pointer"
+                    >
+                      Select Critical
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-100 text-red-600 border border-red-200 shadow-xs">
+                <AlertTriangle className="w-6 h-6" />
               </div>
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-100 text-red-600 border border-red-200 shadow-xs">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-          </div>
+          )}
         </Card>
 
         {/* 2. Total Needs Reorder SKUs */}
         <Card className="p-5 border border-amber-200/80 shadow-xs hover:border-amber-300 transition-all bg-linear-to-br from-white to-amber-50/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
-                Needs Reorder SKUs
-              </p>
-              <h3 className="text-3xl font-extrabold text-amber-600 mt-1.5">
-                {totalNeedsReorderSkus}
-              </h3>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 mt-1 bg-amber-100/70 px-2 py-0.5 rounded-full">
-                <Clock className="w-3 h-3" /> &le; Reorder point
-              </span>
+          {isLoadingSkus ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-32 bg-amber-200/60" />
+                <Skeleton className="h-8 w-16 mt-1.5 bg-amber-200/60" />
+                <Skeleton className="h-5 w-36 mt-1 rounded-full bg-amber-200/60" />
+              </div>
+              <Skeleton className="h-12 w-12 rounded-xl shrink-0 bg-amber-200/60" />
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 text-amber-600 border border-amber-200 shadow-xs">
-              <ShoppingCart className="w-6 h-6" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
+                  Needs Reorder SKUs
+                </p>
+                <h3 className="text-3xl font-extrabold text-amber-600 mt-1.5">
+                  {totalNeedsReorderSkus}
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 mt-1 bg-amber-100/70 px-2 py-0.5 rounded-full">
+                  <Clock className="w-3 h-3" /> &le; Reorder point
+                </span>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 text-amber-600 border border-amber-200 shadow-xs">
+                <ShoppingCart className="w-6 h-6" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* 3. Pending Pharmacist Restock Requests */}
         <Card className="p-5 border border-blue-200/80 shadow-xs hover:border-blue-300 transition-all bg-linear-to-br from-white to-blue-50/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
-                Pharmacist Requests
-              </p>
-              <h3 className="text-3xl font-extrabold text-blue-600 mt-1.5">
-                {pendingRestockRequestsCount}
-              </h3>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-full">
-                  <ClipboardList className="w-3 h-3" /> Pending Review
-                </span>
-                {activeTab !== "requests" && (
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("requests")}
-                    className="text-[11px] font-bold text-blue-700 underline hover:text-blue-900 cursor-pointer"
-                  >
-                    View Requests
-                  </button>
-                )}
+          {isLoadingRestockRequests ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-36 bg-blue-200/60" />
+                <Skeleton className="h-8 w-16 mt-1.5 bg-blue-200/60" />
+                <Skeleton className="h-5 w-36 mt-1 rounded-full bg-blue-200/60" />
+              </div>
+              <Skeleton className="h-12 w-12 rounded-xl shrink-0 bg-blue-200/60" />
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
+                  Pharmacist Requests
+                </p>
+                <h3 className="text-3xl font-extrabold text-blue-600 mt-1.5">
+                  {pendingRestockRequestsCount}
+                </h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-full">
+                    <ClipboardList className="w-3 h-3" /> Pending Review
+                  </span>
+                  {activeTab !== "requests" && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("requests")}
+                      className="text-[11px] font-bold text-blue-700 underline hover:text-blue-900 cursor-pointer"
+                    >
+                      View Requests
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-600 border border-blue-200 shadow-xs">
+                <ClipboardList className="w-6 h-6" />
               </div>
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-600 border border-blue-200 shadow-xs">
-              <ClipboardList className="w-6 h-6" />
-            </div>
-          </div>
+          )}
         </Card>
       </div>
 
@@ -1172,19 +1231,41 @@ function OrderRequest() {
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {isLoadingRestockRequests ? (
-                    <tr>
-                      <td
-                        colSpan="5"
-                        className="px-6 py-12 text-center text-gray-400"
-                      >
-                        <div className="flex flex-col items-center justify-center gap-2">
-                          <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                          <p className="text-xs font-medium text-gray-500">
-                            Loading pharmacist restock requests...
-                          </p>
-                        </div>
-                      </td>
-                    </tr>
+                    Array.from({ length: 5 }).map((_, index) => (
+                      <tr key={`restock-skeleton-${index}`} className="animate-pulse">
+                        <td className="px-4 py-4 text-center">
+                          <Skeleton className="h-4 w-4 mx-auto rounded" />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="space-y-1.5">
+                            <Skeleton className="h-3.5 w-24" />
+                            <Skeleton className="h-3 w-20" />
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-start gap-3">
+                            <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+                            <div className="space-y-1.5 flex-1">
+                              <div className="flex items-center gap-2">
+                                <Skeleton className="h-4 w-28" />
+                                <Skeleton className="h-4 w-16 rounded" />
+                              </div>
+                              <Skeleton className="h-3 w-36" />
+                              <Skeleton className="h-2.5 w-24" />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Skeleton className="h-7 w-20 rounded-lg" />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Skeleton className="h-7 w-7 rounded-lg" />
+                            <Skeleton className="h-7 w-20 rounded-lg" />
+                          </div>
+                        </td>
+                      </tr>
+                    ))
                   ) : paginatedRestockRequests.length > 0 ? (
                     paginatedRestockRequests.map((req, index) => (
                       <tr
@@ -1450,19 +1531,48 @@ function OrderRequest() {
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {isLoadingSkus ? (
-                    <tr>
-                      <td
-                        colSpan="6"
-                        className="px-6 py-12 text-center text-gray-400"
-                      >
-                        <div className="flex flex-col items-center justify-center gap-2">
-                          <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                          <p className="text-xs font-medium text-gray-500">
-                            Loading critical and reorder level SKUs...
-                          </p>
-                        </div>
-                      </td>
-                    </tr>
+                    Array.from({ length: 5 }).map((_, index) => (
+                      <tr key={`sku-skeleton-${index}`} className="animate-pulse">
+                        <td className="px-4 py-4 text-center">
+                          <Skeleton className="h-4 w-4 mx-auto rounded" />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-start gap-3">
+                            <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+                            <div className="space-y-1.5 flex-1">
+                              <div className="flex items-center gap-2">
+                                <Skeleton className="h-4 w-28" />
+                                <Skeleton className="h-4 w-16 rounded" />
+                              </div>
+                              <Skeleton className="h-3 w-36" />
+                              <Skeleton className="h-2.5 w-20" />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="space-y-1.5">
+                            <Skeleton className="h-3.5 w-20" />
+                            <Skeleton className="h-3 w-16" />
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <Skeleton className="h-8 w-12 rounded" />
+                            <Skeleton className="h-8 w-12 rounded" />
+                            <Skeleton className="h-8 w-12 rounded" />
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Skeleton className="h-6 w-24 rounded-full" />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Skeleton className="h-7 w-7 rounded-lg" />
+                            <Skeleton className="h-7 w-20 rounded-lg" />
+                          </div>
+                        </td>
+                      </tr>
+                    ))
                   ) : paginatedReorderSkus.length > 0 ? (
                     paginatedReorderSkus.map((item, index) => {
                       const status = getStockStatus(item);

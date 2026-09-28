@@ -36,6 +36,7 @@ import {
 import Card from "../../components/common/card";
 import useAuth from "../../hooks/useAuth";
 import dashboardService from "../../services/dashboard";
+import Skeleton from "../../components/common/skeleton";
 
 // Custom Tooltip for Ring/Pie Chart
 const CustomPieTooltip = ({ active, payload }) => {
@@ -213,162 +214,250 @@ function PharmacistDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up-1">
         {/* 1. Total SKUs */}
         <Card className="p-5 border border-gray-200/80 shadow-xs hover:border-blue-200 transition-all">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Total SKUs
-              </p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                {metrics.totalSkus}
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-blue-600 mt-1">
-                Active catalog items
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-7 w-12 mt-1" />
+                <Skeleton className="h-3 w-32 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
-              <Boxes className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Total SKUs
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                  {metrics.totalSkus}
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-blue-600 mt-1">
+                  Active catalog items
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
+                <Boxes className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* 2. Total Stock Quantity */}
         <Card className="p-5 border border-gray-200/80 shadow-xs hover:border-emerald-200 transition-all">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Total Stock Quantity
-              </p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                {metrics.totalStockQuantity.toLocaleString()}
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-emerald-600 mt-1">
-                Total physical units
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-28" />
+                <Skeleton className="h-7 w-20 mt-1" />
+                <Skeleton className="h-3 w-32 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
-              <Layers className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Total Stock Quantity
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                  {metrics.totalStockQuantity.toLocaleString()}
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-emerald-600 mt-1">
+                  Total physical units
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
+                <Layers className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* 3. Total Low Stock */}
         <Card className="p-5 border border-gray-200/80 shadow-xs hover:border-amber-200 transition-all">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Total Low Stock
-              </p>
-              <h3 className="text-2xl font-bold text-amber-600 mt-1">
-                {metrics.totalLowStock}
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-amber-700 mt-1">
-                &le; Safety minimum level
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-7 w-12 mt-1" />
+                <Skeleton className="h-3 w-36 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
-              <TrendingDown className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Total Low Stock
+                </p>
+                <h3 className="text-2xl font-bold text-amber-600 mt-1">
+                  {metrics.totalLowStock}
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-amber-700 mt-1">
+                  &le; Safety minimum level
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
+                <TrendingDown className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* 4. Total Over Stock */}
         <Card className="p-5 border border-gray-200/80 shadow-xs hover:border-purple-200 transition-all">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Total Over Stock
-              </p>
-              <h3 className="text-2xl font-bold text-purple-600 mt-1">
-                {metrics.totalOverStock}
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-purple-700 mt-1">
-                Exceeding max capacity
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-28" />
+                <Skeleton className="h-7 w-12 mt-1" />
+                <Skeleton className="h-3 w-36 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-50 text-purple-600 border border-purple-100">
-              <TrendingUp className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Total Over Stock
+                </p>
+                <h3 className="text-2xl font-bold text-purple-600 mt-1">
+                  {metrics.totalOverStock}
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-purple-700 mt-1">
+                  Exceeding max capacity
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-50 text-purple-600 border border-purple-100">
+                <TrendingUp className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* 5. Total Expiry */}
         <Card className="p-5 border border-gray-200/80 shadow-xs hover:border-red-200 transition-all">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Total Expiry
-              </p>
-              <h3 className="text-2xl font-bold text-red-600 mt-1">
-                {metrics.totalExpiry}
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-red-700 mt-1">
-                Batches past expiry date
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-7 w-12 mt-1" />
+                <Skeleton className="h-3 w-36 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-600 border border-red-100">
-              <AlertTriangle className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Total Expiry
+                </p>
+                <h3 className="text-2xl font-bold text-red-600 mt-1">
+                  {metrics.totalExpiry}
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-red-700 mt-1">
+                  Batches past expiry date
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-600 border border-red-100">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* 6. Total Near Expiry */}
         <Card className="p-5 border border-gray-200/80 shadow-xs hover:border-amber-200 transition-all">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Total Near Expiry
-              </p>
-              <h3 className="text-2xl font-bold text-amber-600 mt-1">
-                {metrics.totalNearExpiry}
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-amber-700 mt-1">
-                Expiring within &le; 90 days
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-28" />
+                <Skeleton className="h-7 w-12 mt-1" />
+                <Skeleton className="h-3 w-36 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
-              <Clock className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Total Near Expiry
+                </p>
+                <h3 className="text-2xl font-bold text-amber-600 mt-1">
+                  {metrics.totalNearExpiry}
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-amber-700 mt-1">
+                  Expiring within &le; 90 days
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
+                <Clock className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* 7. Total Batches */}
         <Card className="p-5 border border-gray-200/80 shadow-xs hover:border-blue-200 transition-all">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Total Batches
-              </p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                {metrics.totalBatches}
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-blue-600 mt-1">
-                Tracked lot records
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-7 w-12 mt-1" />
+                <Skeleton className="h-3 w-32 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
-              <Package className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Total Batches
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                  {metrics.totalBatches}
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-blue-600 mt-1">
+                  Tracked lot records
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
+                <Package className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* 8. Total Quarantined */}
         <Card className="p-5 border border-gray-200/80 shadow-xs hover:border-red-200 transition-all">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Total Quarantined
-              </p>
-              <h3 className="text-2xl font-bold text-red-600 mt-1">
-                {metrics.totalQuarantined}
-              </h3>
-              <span className="inline-block text-[11px] font-medium text-red-700 mt-1">
-                Dispensing lock enforced
-              </span>
+          {isLoading ? (
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3.5 w-28" />
+                <Skeleton className="h-7 w-12 mt-1" />
+                <Skeleton className="h-3 w-36 mt-1" />
+              </div>
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-600 border border-red-100">
-              <ShieldAlert className="w-5 h-5" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Total Quarantined
+                </p>
+                <h3 className="text-2xl font-bold text-red-600 mt-1">
+                  {metrics.totalQuarantined}
+                </h3>
+                <span className="inline-block text-[11px] font-medium text-red-700 mt-1">
+                  Dispensing lock enforced
+                </span>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-600 border border-red-100">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
       </div>
 
@@ -394,7 +483,11 @@ function PharmacistDashboard() {
 
             {/* Ring Chart Container */}
             <div className="h-68 w-full mt-3">
-              {skuStockDistribution.length > 0 ? (
+              {isLoading ? (
+                <div className="h-full w-full flex items-center justify-center">
+                  <Skeleton variant="circular" className="h-44 w-44" />
+                </div>
+              ) : skuStockDistribution.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <RechartsTooltip content={<CustomPieTooltip />} />
@@ -470,7 +563,17 @@ function PharmacistDashboard() {
 
             {/* Bar Chart Container */}
             <div className="h-72 w-full mt-4">
-              {skuHealthBarData.length > 0 ? (
+              {isLoading ? (
+                <div className="h-full w-full flex items-end justify-between gap-4 px-6 pb-6 pt-4">
+                  {Array.from({ length: 6 }).map((_, idx) => (
+                    <div key={`bar-skel-${idx}`} className="flex-1 flex items-end gap-1.5 h-full">
+                      <Skeleton className="w-full h-3/5 rounded-t" />
+                      <Skeleton className="w-full h-4/5 rounded-t" />
+                      <Skeleton className="w-full h-2/5 rounded-t" />
+                    </div>
+                  ))}
+                </div>
+              ) : skuHealthBarData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={skuHealthBarData}
@@ -556,7 +659,27 @@ function PharmacistDashboard() {
           </span>
         </div>
 
-        {urgentAlerts.length > 0 ? (
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mt-4">
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <div
+                key={`alert-skel-${idx}`}
+                className="p-4 rounded-xl border border-gray-200 bg-white space-y-3"
+              >
+                <div className="flex items-center gap-2">
+                  <Skeleton className="w-4 h-4 rounded-full shrink-0" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-4/5" />
+                <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : urgentAlerts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mt-4">
             {urgentAlerts.map((alert, index) => (
               <div
