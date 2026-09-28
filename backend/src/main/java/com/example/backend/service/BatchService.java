@@ -316,6 +316,15 @@ public class BatchService {
         return expiredBatches.size();
     }
 
+    // 7. CHECK IF SKU HAS UNPROCESSED EXPIRED BATCHES
+    @Transactional(readOnly = true)
+    public boolean hasUnprocessedExpiredBatches(Long facilityId, Long skuId) {
+        if (facilityId == null || skuId == null) {
+            return false;
+        }
+        return !batchRepository.findExpiredBatches(facilityId, skuId, LocalDate.now()).isEmpty();
+    }
+
     // 8. DEDUCT BATCHES ACCORDING TO FEFO (FIRST EXPIRE FIRST OUT - AVAILABLE & UNEXPIRED ONLY)
     @Transactional
     public void deductBatchesFEFO(Long skuId, Long facilityId, long unitsToDeduct) {

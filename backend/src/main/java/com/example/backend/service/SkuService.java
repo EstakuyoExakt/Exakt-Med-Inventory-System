@@ -234,6 +234,10 @@ public class SkuService {
                 }
             }
             case SUBTRACT -> {
+                Long facilityId = sku.getFacility() != null ? sku.getFacility().getId() : null;
+                if (facilityId != null && batchService.hasUnprocessedExpiredBatches(facilityId, sku.getId())) {
+                    throw new RuntimeException("This SKU has unprocessed expired batches. Please deduct expired batches first before adjusting stock.");
+                }
                 if (request.getAmount() > currentUnits) {
                     throw new RuntimeException("Cannot deduct more than current stock (" + currentUnits + " units).");
                 }

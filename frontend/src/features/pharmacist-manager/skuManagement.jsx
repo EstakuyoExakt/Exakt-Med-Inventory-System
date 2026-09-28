@@ -1133,6 +1133,12 @@ function SkuManagement() {
       errors.amount = "Please enter a valid non-negative quantity.";
     } else if (
       adjustFormData.type === "SUBTRACT" &&
+      (expiredBatchesBySkuId[selectedSku.id]?.length || 0) > 0
+    ) {
+      errors.amount =
+        "This SKU has unprocessed expired batches. Please deduct expired batches first before deducting stock.";
+    } else if (
+      adjustFormData.type === "SUBTRACT" &&
       amt > selectedSku.currentStock
     ) {
       errors.amount = `Cannot deduct more than available current stock (${selectedSku.currentStock}).`;
@@ -1568,28 +1574,27 @@ function SkuManagement() {
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* 2. Stock Adjustment (Batch Action) */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenAdjustModal(item)}
-                            className="btn-secondary p-1.5 text-gray-600 hover:text-amber-600 hover:border-amber-300"
-                            title="Stock Adjustment (Count / Write-off)"
-                            aria-label="Stock Adjustment"
-                          >
-                            <Sliders className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* 2b. Deduct Expired Batches (Row Action) */}
-                          {skuExpiredCount > 0 && (
+                          {/* 2. Stock Adjustment OR Process Expired (replaces adjustment when expired batches exist) */}
+                          {skuExpiredCount > 0 ? (
                             <button
                               type="button"
                               onClick={() => handleOpenExpiredModalForSku(item)}
                               disabled={isProcessingExpired}
                               className="p-1.5 rounded border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:border-amber-400 transition-colors shadow-xs cursor-pointer"
                               title={`Deduct ${skuExpiredCount} expired batch(es) (${skuExpiredUnits.toLocaleString()} units)`}
-                              aria-label="Deduct Expired Batches"
+                              aria-label="Process Expired Batches"
                             >
                               <Clock className="w-3.5 h-3.5 text-amber-600" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAdjustModal(item)}
+                              className="btn-secondary p-1.5 text-gray-600 hover:text-amber-600 hover:border-amber-300"
+                              title="Stock Adjustment (Count / Write-off)"
+                              aria-label="Stock Adjustment"
+                            >
+                              <Sliders className="w-3.5 h-3.5" />
                             </button>
                           )}
 
@@ -2094,6 +2099,27 @@ function SkuManagement() {
               </div>
             </div>
 
+            {/* Warning if trying to deduct when unprocessed expired batches exist */}
+            {adjustFormData.type === "SUBTRACT" &&
+              (expiredBatchesBySkuId[selectedSku.id]?.length || 0) > 0 && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-xs flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-amber-950">
+                      Unprocessed Expired Batches Detected
+                    </p>
+                    <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                      This SKU has{" "}
+                      <strong>
+                        {expiredBatchesBySkuId[selectedSku.id].length}
+                      </strong>{" "}
+                      expired batch(es). Please deduct expired batches first
+                      before making manual stock adjustments.
+                    </p>
+                  </div>
+                </div>
+              )}
+
             {/* Target Batch Selector & Expiry Date Display (Only when Add Stock is active) */}
             {adjustFormData.type === "ADD" && (
               <div className="space-y-2.5 p-3.5 rounded-xl bg-blue-50/50 border border-blue-200/80">
@@ -2476,14 +2502,32 @@ function SkuManagement() {
 
             {/* Actions */}
             <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => handleOpenAdjustModal(selectedSku)}
-                className="btn-secondary text-xs text-amber-700 hover:text-amber-800"
-              >
-                <Sliders className="w-3.5 h-3.5" />
-                <span>Adjust Stock</span>
-              </button>
+              {(expiredBatchesBySkuId[selectedSku.id]?.length || 0) > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleCloseModal();
+                    handleOpenExpiredModalForSku(selectedSku);
+                  }}
+                  className="btn-secondary text-xs text-amber-700 hover:text-amber-800 border-amber-300 bg-amber-50"
+                  title="Deduct Expired Batches"
+                >
+                  <Clock className="w-3.5 h-3.5 text-amber-600" />
+                  <span>
+                    Deduct Expired (
+                    {expiredBatchesBySkuId[selectedSku.id].length})
+                  </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleOpenAdjustModal(selectedSku)}
+                  className="btn-secondary text-xs text-amber-700 hover:text-amber-800"
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>Adjust Stock</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleOpenRestockModal(selectedSku)}
