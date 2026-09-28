@@ -11,10 +11,8 @@ const batchApi = {
   },
   getBatchById: (id) => `${API_URL}/${id}`,
   updateBatchStatus: (id) => `${API_URL}/${id}/status`,
-  processExpiredBatches: (facilityId, skuId = null) => {
-    let url = `${API_URL}/process-expired?facilityId=${facilityId}`;
-    if (skuId) url += `&skuId=${skuId}`;
-    return url;
+  processExpiredBatches: (facilityId, skuId) => {
+    return `${API_URL}/process-expired?facilityId=${facilityId}&skuId=${skuId}`;
   },
 };
 

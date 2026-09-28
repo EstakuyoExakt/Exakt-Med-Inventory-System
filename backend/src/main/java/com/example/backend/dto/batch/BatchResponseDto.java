@@ -35,5 +35,6 @@ public class BatchResponseDto {
     private LocalDate expiryDate;
     private Batch.Status status;
     private String notes;
+    private Boolean skuDeducted;
     private LocalDateTime receivedAt;
 }

@@ -117,6 +117,9 @@ public class SkuService {
             throw new RuntimeException("Facility not found with id: " + facilityId);
         }
 
+        // Ensure past-due batches have their status marked Expired (no automatic SKU deduction)
+        batchService.markPastDueBatchesAsExpired(facilityId);
+
         List<Sku> skus = skuRepository.findByFacilityId(facilityId);
         Map<Long, List<RestockRequest>> activeRestockMap = getActiveRestockMap(facilityId);
 
@@ -345,6 +348,7 @@ public class SkuService {
             throw new RuntimeException("Facility not found with id: " + facilityId);
         }
 
+        batchService.markPastDueBatchesAsExpired(facilityId);
         String query = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
         List<Sku> skus = skuRepository.searchSkus(query, facilityId);
         Map<Long, List<RestockRequest>> activeRestockMap = getActiveRestockMap(facilityId);
@@ -364,6 +368,7 @@ public class SkuService {
             throw new RuntimeException("Facility not found with id: " + facilityId);
         }
 
+        batchService.markPastDueBatchesAsExpired(facilityId);
         String query = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
         List<Sku> skus = skuRepository.findReorderNeededSkus(facilityId, query);
         Map<Long, List<RestockRequest>> activeRestockMap = getActiveRestockMap(facilityId);

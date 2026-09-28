@@ -75,20 +75,20 @@ public class BatchController {
         return ResponseEntity.ok(batchService.updateBatchStatus(id, status, notes));
     }
 
-    // 6. PROCESS EXPIRED BATCHES
+    // 6. PROCESS EXPIRED BATCHES FOR A SKU
     @PostMapping("/process-expired")
-    @Operation(summary = "Process Expired Batches", description = "Scans batches past their expiry date for a required facility, marks them EXPIRED, decrements active SKU stock, and logs audit events.")
+    @Operation(summary = "Process Expired Batches for SKU", description = "Scans batches past their expiry date for a required facility and SKU, marks them EXPIRED, decrements active SKU stock, and logs audit events.")
     public ResponseEntity<Map<String, Object>> processExpiredBatches(
             @Parameter(description = "Facility ID (required)", required = true)
             @RequestParam Long facilityId,
-            @Parameter(description = "Optional SKU ID filter")
-            @RequestParam(required = false) Long skuId) {
+            @Parameter(description = "SKU ID (required)", required = true)
+            @RequestParam Long skuId) {
         int count = batchService.processExpiredBatches(facilityId, skuId);
         return ResponseEntity.ok(Map.of(
                 "count", count,
                 "message", count > 0
                         ? "Successfully processed and deducted " + count + " expired batch(es)."
-                        : "No expired batches found to process."
+                        : "No expired batches found to process for this SKU."
         ));
     }
 }

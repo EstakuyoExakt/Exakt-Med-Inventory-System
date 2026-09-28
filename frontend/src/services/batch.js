@@ -65,9 +65,12 @@ const batchService = {
     return response.data;
   },
 
-  processExpiredBatches: async (facilityId, skuId = null, config = {}) => {
+  processExpiredBatches: async (facilityId, skuId, config = {}) => {
     if (!facilityId) {
       throw new Error("Facility ID is required to process expired batches.");
+    }
+    if (!skuId) {
+      throw new Error("SKU ID is required to process expired batches.");
     }
     const response = await axios.post(
       batchApi.processExpiredBatches(facilityId, skuId),

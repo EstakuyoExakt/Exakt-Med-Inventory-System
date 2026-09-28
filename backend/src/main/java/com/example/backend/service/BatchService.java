@@ -165,7 +165,8 @@ public class BatchService {
             throw new RuntimeException("Facility ID is required.");
         }
 
-        // Retrieve batches for the facility without automatic deduction
+        // Automatically update any past-due batches to Expired status (without deducting active SKU units)
+        markPastDueBatchesAsExpired(facilityId);
 
         List<Batch> batches;
         if (status != null) {
@@ -240,28 +241,61 @@ public class BatchService {
         return mapToResponseDto(updated);
     }
 
-    // 6. PROCESS EXPIRED BATCHES (Deducts SKU units & sets status to Expired)
+    // 5c. MARK PAST-DUE BATCHES AS EXPIRED (Status change only, no SKU deduction)
     @Transactional
-    public int processExpiredBatches(Long facilityId) {
-        return processExpiredBatches(facilityId, null);
+    public void markPastDueBatchesAsExpired(Long facilityId) {
+        LocalDate today = LocalDate.now();
+        List<Batch> pastDue;
+        if (facilityId != null) {
+            pastDue = batchRepository.findByFacilityIdAndStatusAndExpiryDateLessThanEqual(
+                    facilityId, Batch.Status.Available, today);
+        } else {
+            pastDue = batchRepository.findByStatusAndExpiryDateLessThanEqual(
+                    Batch.Status.Available, today);
+        }
+        for (Batch batch : pastDue) {
+            batch.setStatus(Batch.Status.Expired);
+            String autoNote = "Expired on " + today;
+            if (batch.getNotes() == null || batch.getNotes().isBlank()) {
+                batch.setNotes(autoNote);
+            } else if (!batch.getNotes().contains(autoNote)) {
+                batch.setNotes(batch.getNotes() + " | " + autoNote);
+            }
+            batchRepository.save(batch);
+        }
     }
 
+    // 5d. SCHEDULED DAILY MIDNIGHT EXPIRATION STATUS UPDATE
+    @Scheduled(cron = "0 0 0 * * ?")
+    public void autoMarkExpiredBatchesScheduled() {
+        markPastDueBatchesAsExpired(null);
+    }
+
+    // 6. PROCESS EXPIRED BATCHES FOR A SKU (Deducts active SKU units & keeps batch units intact)
     @Transactional
     public int processExpiredBatches(Long facilityId, Long skuId) {
         if (facilityId == null) {
             throw new IllegalArgumentException("Facility ID is required to process expired batches.");
         }
+        if (skuId == null) {
+            throw new IllegalArgumentException("SKU ID is required to process expired batches.");
+        }
         LocalDate today = LocalDate.now();
         List<Batch> expiredBatches = batchRepository.findExpiredBatches(
-                facilityId, skuId, Batch.Status.Available, today);
+                facilityId, skuId, today);
 
         for (Batch batch : expiredBatches) {
+            long batchUnits = batch.getUnits() != null ? batch.getUnits() : 0L;
             batch.setStatus(Batch.Status.Expired);
-            adjustSkuUnits(batch, -batch.getUnits());
-            String autoNote = "Expired on " + today;
+            if (batchUnits > 0 && !Boolean.TRUE.equals(batch.getSkuDeducted())) {
+                adjustSkuUnits(batch, -batchUnits);
+                batch.setSkuDeducted(true);
+            }
+            // Do not make batch units 0; deduction is only in SKU units
+            String autoNote = "Expired & SKU units deducted on " + today;
             if (batch.getNotes() == null || batch.getNotes().isBlank()) {
                 batch.setNotes(autoNote);
-            } else {
+            } else if (!batch.getNotes().contains(autoNote)) {
                 batch.setNotes(batch.getNotes() + " | " + autoNote);
             }
             batchRepository.save(batch);
@@ -275,22 +309,23 @@ public class BatchService {
                     AuditLog.Severity.CRITICAL,
                     batch.getBatchNum(),
                     batch.getId(),
-                    "Batch '" + batch.getBatchNum() + "' passed expiration date (" + batch.getExpiryDate() + "). Deducted " + batch.getUnits() + " units from active SKU inventory.",
+                    "Batch '" + batch.getBatchNum() + "' passed expiration date (" + batch.getExpiryDate() + "). Deducted " + batchUnits + " units from active SKU inventory.",
                     "Admin,Pharmacist"
             );
         }
         return expiredBatches.size();
     }
 
-    // 8. DEDUCT BATCHES ACCORDING TO FEFO (FIRST EXPIRE FIRST OUT)
+    // 8. DEDUCT BATCHES ACCORDING TO FEFO (FIRST EXPIRE FIRST OUT - AVAILABLE & UNEXPIRED ONLY)
     @Transactional
     public void deductBatchesFEFO(Long skuId, Long facilityId, long unitsToDeduct) {
         if (unitsToDeduct <= 0 || skuId == null || facilityId == null) {
             return;
         }
 
+        LocalDate today = LocalDate.now();
         List<Batch> availableBatches = batchRepository.findAvailableBatchesForSkuFEFO(
-                skuId, facilityId, Batch.Status.Available);
+                skuId, facilityId, Batch.Status.Available, today);
 
         long remaining = unitsToDeduct;
         for (Batch batch : availableBatches) {
@@ -309,10 +344,11 @@ public class BatchService {
                 batch.setUnits(currentBatchUnits - remaining);
                 remaining = 0L;
             }
+            batchRepository.save(batch);
         }
     }
 
-    // 9. ADD UNITS TO SPECIFIC BATCH
+    // 9. ADD UNITS TO SPECIFIC BATCH (Disallows expired batches)
     @Transactional
     public Batch addUnitsToBatch(Long batchId, Long skuId, long unitsToAdd) {
         if (batchId == null || unitsToAdd <= 0) {
@@ -325,6 +361,11 @@ public class BatchService {
             if (!batch.getOrderedItem().getSku().getId().equals(skuId)) {
                 throw new RuntimeException("Selected batch does not belong to this SKU.");
             }
+        }
+
+        if (batch.getStatus() == Batch.Status.Expired ||
+                (batch.getExpiryDate() != null && !batch.getExpiryDate().isAfter(LocalDate.now()))) {
+            throw new RuntimeException("Cannot add stock to an expired batch.");
         }
 
         long currentBatchUnits = batch.getUnits() != null ? batch.getUnits() : 0L;
@@ -387,6 +428,7 @@ public class BatchService {
                 }
             }
         }
+        dto.setSkuDeducted(batch.getSkuDeducted() != null ? batch.getSkuDeducted() : false);
 
         return dto;
     }

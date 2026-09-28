@@ -30,22 +30,25 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
 
     @Query("SELECT b FROM Batch b WHERE " +
            "b.facility.id = :facilityId AND " +
-           "(:skuId IS NULL OR b.orderedItem.sku.id = :skuId) AND " +
-           "b.status = :status AND b.expiryDate <= :date")
+           "b.orderedItem.sku.id = :skuId AND " +
+           "(b.status = com.example.backend.entity.Batch.Status.Expired OR (b.status = com.example.backend.entity.Batch.Status.Available AND b.expiryDate <= :date)) AND " +
+           "(b.skuDeducted IS NULL OR b.skuDeducted = false) AND " +
+           "b.units > 0")
     List<Batch> findExpiredBatches(
             @Param("facilityId") Long facilityId,
             @Param("skuId") Long skuId,
-            @Param("status") Batch.Status status,
             @Param("date") java.time.LocalDate date);
 
     @Query("SELECT b FROM Batch b WHERE b.orderedItem.sku.id = :skuId " +
            "AND b.facility.id = :facilityId " +
            "AND b.status = :status " +
+           "AND b.expiryDate > :today " +
            "AND b.units > 0 " +
            "ORDER BY b.expiryDate ASC, b.id ASC")
     List<Batch> findAvailableBatchesForSkuFEFO(
             @Param("skuId") Long skuId,
             @Param("facilityId") Long facilityId,
-            @Param("status") Batch.Status status);
+            @Param("status") Batch.Status status,
+            @Param("today") java.time.LocalDate today);
 }
 

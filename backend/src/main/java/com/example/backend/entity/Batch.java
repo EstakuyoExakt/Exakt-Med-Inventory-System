@@ -49,6 +49,13 @@ public class Batch {
 
     private String notes;
 
+    @Column(name = "skuDeducted", columnDefinition = "boolean default false")
+    private Boolean skuDeducted = false;
+
+    public Boolean getSkuDeducted() {
+        return skuDeducted != null ? skuDeducted : false;
+    }
+
     @Column(nullable = false)
     private LocalDateTime receivedAt;
 

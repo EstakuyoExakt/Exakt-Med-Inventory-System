@@ -463,13 +463,17 @@ function SkuManagement() {
   const [targetSkuForExpiredDeduction, setTargetSkuForExpiredDeduction] =
     useState(null);
 
-  // Expired batches that are still in active status and have not been deducted yet
+  // Expired batches that still have units and have not had SKU units deducted yet
   const expiredBatches = useMemo(() => {
     const todayStr = new Date().toISOString().split("T")[0];
     return facilityBatches.filter((b) => {
-      if (b.status === "Expired") return false;
-      if (!b.expiryDate) return false;
-      return b.expiryDate <= todayStr;
+      const units = Number(b.units || 0);
+      if (units <= 0) return false;
+      if (b.skuDeducted) return false;
+      return (
+        b.status === "Expired" ||
+        (b.expiryDate && b.expiryDate <= todayStr)
+      );
     });
   }, [facilityBatches]);
 
@@ -483,9 +487,13 @@ function SkuManagement() {
     const todayStr = new Date().toISOString().split("T")[0];
     const map = {};
     for (const b of facilityBatches) {
-      if (b.status === "Expired") continue;
-      if (!b.expiryDate) continue;
-      if (b.expiryDate <= todayStr) {
+      const units = Number(b.units || 0);
+      if (units <= 0) continue;
+      if (b.skuDeducted) continue;
+      const isExpired =
+        b.status === "Expired" ||
+        (b.expiryDate && b.expiryDate <= todayStr);
+      if (isExpired) {
         const key = b.skuId;
         if (key) {
           if (!map[key]) map[key] = [];
@@ -533,31 +541,31 @@ function SkuManagement() {
     loadFacilityBatches();
   }, [loadFacilityBatches]);
 
-  // Handler to manually process/deduct expired batches (for a specific SKU or entire facility)
+  // Handler to manually process/deduct expired batches for a specific SKU
   const handleProcessExpiredBatches = async () => {
     if (!targetFacilityId) {
       setSkuError("Facility is required to process expired batches.");
       return;
     }
-    setIsProcessingExpired(true);
     const skuToDeduct = targetSkuForExpiredDeduction;
+    if (!skuToDeduct || !skuToDeduct.id) {
+      setSkuError("Target SKU is required to process expired batches.");
+      return;
+    }
+    setIsProcessingExpired(true);
     setIsConfirmExpiredModalOpen(false);
     try {
       const result = await batchService.processExpiredBatches(
         targetFacilityId,
-        skuToDeduct?.id || null,
+        skuToDeduct.id,
       );
       const count =
         typeof result?.count === "number"
           ? result.count
-          : skuToDeduct
-            ? expiredBatchesBySkuId[skuToDeduct.id]?.length || 0
-            : expiredBatchesCount;
+          : expiredBatchesBySkuId[skuToDeduct.id]?.length || 0;
       const msg =
         result?.message ||
-        `Successfully processed and deducted ${count} expired batch(es)${
-          skuToDeduct ? ` for ${skuToDeduct.brandName}` : ""
-        }.`;
+        `Successfully processed and deducted ${count} expired batch(es) for ${skuToDeduct.brandName}.`;
       setExpiredResultModal({
         count,
         message: msg,
@@ -804,13 +812,15 @@ function SkuManagement() {
       .getBatchesByFacility(activeFacilityId)
       .then((data) => {
         if (!isMounted) return;
-        const list = Array.isArray(data) ? data : [];
+        const todayStr = new Date().toISOString().split("T")[0];
         const filtered = list.filter(
           (b) =>
             (b.skuId === selectedSku.id ||
               b.skuName === selectedSku.sku ||
               b.sku === selectedSku.sku) &&
-            b.status !== "Expired",
+            b.status === "Available" &&
+            b.expiryDate &&
+            b.expiryDate > todayStr,
         );
         // Sort FEFO (earliest expiring batches first)
         filtered.sort(
@@ -1137,6 +1147,20 @@ function SkuManagement() {
         "Please select a target batch to receive the added stock.";
     }
 
+    if (adjustFormData.type === "ADD" && adjustFormData.batchId) {
+      const todayStr = new Date().toISOString().split("T")[0];
+      const chosen = skuBatches.find(
+        (b) => String(b.id) === String(adjustFormData.batchId),
+      );
+      if (
+        chosen &&
+        (chosen.status === "Expired" ||
+          (chosen.expiryDate && chosen.expiryDate <= todayStr))
+      ) {
+        errors.batchId = "Cannot add stock to an expired batch.";
+      }
+    }
+
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
@@ -1435,8 +1459,7 @@ function SkuManagement() {
                                 >
                                   <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
                                   <span>
-                                    Has Expired Batches ({skuExpiredCount}) •
-                                    Deduct
+                                    Has Expired Batches ({skuExpiredCount})
                                   </span>
                                 </button>
                               )}
@@ -2867,26 +2890,13 @@ function SkuManagement() {
                 Confirm Expiration Deduction
               </p>
               <p className="text-amber-800 text-xs mt-1">
-                {targetSkuForExpiredDeduction ? (
-                  <>
-                    This action will mark past-due batches for{" "}
-                    <span className="font-bold text-gray-900">
-                      {targetSkuForExpiredDeduction.brandName} (
-                      {targetSkuForExpiredDeduction.sku})
-                    </span>{" "}
-                    as <span className="font-bold text-red-600">Expired</span>{" "}
-                    and automatically deduct their units from active stock
-                    counts.
-                  </>
-                ) : (
-                  <>
-                    This action will mark all past-due batches at{" "}
-                    <span className="font-semibold">{currentFacilityName}</span>{" "}
-                    as <span className="font-bold text-red-600">Expired</span>{" "}
-                    and automatically deduct their remaining units from active
-                    SKU stock counts.
-                  </>
-                )}
+                This action will mark past-due batches for{" "}
+                <span className="font-bold text-gray-900">
+                  {targetSkuForExpiredDeduction?.brandName} (
+                  {targetSkuForExpiredDeduction?.sku})
+                </span>{" "}
+                as <span className="font-bold text-red-600">Expired</span> and
+                automatically deduct their units from active stock counts.
               </p>
             </div>
           </div>
@@ -2894,9 +2904,8 @@ function SkuManagement() {
           <div className="rounded-xl border border-gray-200 overflow-hidden text-xs">
             <div className="bg-gray-50 px-3.5 py-2 font-semibold text-gray-700 flex justify-between items-center border-b border-gray-200">
               <span>
-                {targetSkuForExpiredDeduction
-                  ? `${targetSkuForExpiredDeduction.brandName} Expired Batches (${targetSkuExpiredBatches.length})`
-                  : `Expired Batches Pending Deduction (${targetSkuExpiredBatches.length})`}
+                {targetSkuForExpiredDeduction?.brandName} Expired Batches (
+                {targetSkuExpiredBatches.length})
               </span>
               <span className="text-red-600 font-bold">
                 Total: -{targetSkuExpiredUnits.toLocaleString()} units
