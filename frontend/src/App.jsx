@@ -5,6 +5,7 @@ import Login from "./features/authentication/login";
 import SelectFacility from "./features/authentication/selectFacility";
 import SelectProject from "./features/authentication/selectProject";
 import Unauthorized from "./features/authentication/unauthorized";
+import UnderMaintenance from "./features/authentication/underMaintenance";
 
 // Admin Pages
 import SupplierManagement from "./features/admin/supplierManagement";
@@ -35,6 +36,8 @@ function App() {
   const isAuthPage =
     location.pathname === "/" ||
     location.pathname === "/unauthorized" ||
+    location.pathname === "/maintenance" ||
+    location.pathname === "/under-maintenance" ||
     location.pathname === "/select-facility" ||
     location.pathname === "/select-project";
 
@@ -53,6 +56,7 @@ function App() {
           {/* Public Routes */}
           <Route path="/" element={<Login />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
+          <Route path="/under-maintenance" element={<UnderMaintenance />} />
 
           {/* Authenticated: Facility Selection (All Roles) */}
           <Route element={<ProtectedRoute />}>
@@ -78,7 +82,10 @@ function App() {
               path="/admin/requested-orders"
               element={<RequestedOrders />}
             />
-            <Route path="/admin/accounting" element={<Accounting />} />
+
+            {/* This page is under development */}
+            <Route path="/admin/accounting" element={<UnderMaintenance />} />
+
             <Route path="/admin/audit-logs" element={<AuditLogs />} />
           </Route>
 
