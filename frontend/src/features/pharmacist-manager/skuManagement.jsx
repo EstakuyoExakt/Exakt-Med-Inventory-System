@@ -324,6 +324,8 @@ const mapDtoToSku = (dto) => {
     facilityId: dto.facilityId,
     facility: dto.facilityName || "",
     status: "Active",
+    pendingUnits: Number(dto.pendingUnits || 0),
+    toReceiveUnits: Number(dto.toReceiveUnits || 0),
     hasPendingRestock: Boolean(dto.hasPendingRestock),
     pendingRestockUnits: Number(dto.pendingRestockUnits || 0),
     pendingRestockRequestId: dto.pendingRestockRequestId || null,
@@ -1441,6 +1443,9 @@ function SkuManagement() {
                 <th scope="col" className="px-6 py-3.5">
                   Thresholds (Min / Reorder / Max)
                 </th>
+                <th scope="col" className="px-6 py-3.5">
+                  Incoming Orders (Pending / To Receive)
+                </th>
                 <th scope="col" className="px-6 py-3.5 text-right">
                   Management Actions
                 </th>
@@ -1489,6 +1494,14 @@ function SkuManagement() {
                         <Skeleton className="h-5 w-14 rounded-md" />
                         <Skeleton className="h-5 w-14 rounded-md" />
                         <Skeleton className="h-5 w-14 rounded-md" />
+                      </div>
+                    </td>
+
+                    {/* Incoming Orders Skeletons */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-8 w-14 rounded-md" />
+                        <Skeleton className="h-8 w-16 rounded-md" />
                       </div>
                     </td>
 
@@ -1543,22 +1556,6 @@ function SkuManagement() {
                               {item.genericName} • {item.dosage}
                             </div>
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              {item.hasPendingRestock && (
-                                <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
-                                  title={`Active restock request: ${item.pendingRestockUnits} units (${item.pendingRestockStatus || "Requested"}). Can only request again once Received.`}
-                                >
-                                  <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
-                                  <span>
-                                    Restock: {item.pendingRestockUnits} units
-                                  </span>
-                                  {item.pendingRestockStatus && (
-                                    <span className="text-[9px] uppercase font-bold px-1 py-0.2 bg-amber-200/60 rounded text-amber-900">
-                                      {item.pendingRestockStatus}
-                                    </span>
-                                  )}
-                                </span>
-                              )}
                               {/* Deduct Expired Batches Button inside row */}
                               {skuExpiredCount > 0 && (
                                 <button
@@ -1667,6 +1664,69 @@ function SkuManagement() {
                         </div>
                       </td>
 
+                      {/* Incoming Orders (Pending & To Receive) */}
+                      <td className="px-6 py-4 whitespace-nowrap text-xs">
+                        <div className="flex items-center gap-2">
+                          {/* 1. Pending Box */}
+                          <div
+                            className={`px-2.5 py-1 rounded text-center min-w-13 border ${
+                              item.pendingUnits > 0
+                                ? "bg-amber-50 border-amber-200 text-amber-700 shadow-xs"
+                                : "bg-gray-50 border-gray-200 text-gray-400"
+                            }`}
+                            title={`Pending Orders / Requests: ${item.pendingUnits || 0} units awaiting approval/ordering`}
+                          >
+                            <span
+                              className={`text-[10px] block uppercase font-medium ${
+                                item.pendingUnits > 0
+                                  ? "text-amber-600"
+                                  : "text-gray-400"
+                              }`}
+                            >
+                              Pending
+                            </span>
+                            <span
+                              className={`font-bold text-xs ${
+                                item.pendingUnits > 0
+                                  ? "text-amber-800"
+                                  : "text-gray-600"
+                              }`}
+                            >
+                              {item.pendingUnits || 0}
+                            </span>
+                          </div>
+
+                          {/* 2. To Receive Box */}
+                          <div
+                            className={`px-2.5 py-1 rounded text-center min-w-16 border ${
+                              item.toReceiveUnits > 0
+                                ? "bg-blue-50 border-blue-200 text-blue-700 shadow-xs"
+                                : "bg-gray-50 border-gray-200 text-gray-400"
+                            }`}
+                            title={`To Receive (Approved Orders): ${item.toReceiveUnits || 0} units awaiting delivery`}
+                          >
+                            <span
+                              className={`text-[10px] block uppercase font-medium ${
+                                item.toReceiveUnits > 0
+                                  ? "text-blue-600"
+                                  : "text-gray-400"
+                              }`}
+                            >
+                              To Receive
+                            </span>
+                            <span
+                              className={`font-bold text-xs ${
+                                item.toReceiveUnits > 0
+                                  ? "text-blue-800"
+                                  : "text-gray-600"
+                              }`}
+                            >
+                              {item.toReceiveUnits || 0}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
                       {/* Management Actions Group */}
                       <td className="px-6 py-4 whitespace-nowrap text-right text-xs">
                         <div className="flex items-center justify-end gap-1.5">
@@ -1753,7 +1813,7 @@ function SkuManagement() {
               ) : (
                 <tr>
                   <td
-                    colSpan="5"
+                    colSpan="6"
                     className="px-6 py-12 text-center text-gray-400"
                   >
                     <Boxes className="w-8 h-8 mx-auto mb-2 text-gray-300" />

@@ -30,7 +30,9 @@ public class SkuResponseDto {
     private LocalDateTime updatedAt;
     private String message;
 
-    // Restock request tracking
+    // Restock & Order Pipeline tracking
+    private Long pendingUnits;
+    private Long toReceiveUnits;
     private Boolean hasPendingRestock;
     private Long pendingRestockUnits;
     private Long pendingRestockRequestId;

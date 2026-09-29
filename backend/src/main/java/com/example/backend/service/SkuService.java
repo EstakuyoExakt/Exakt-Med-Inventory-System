@@ -12,8 +12,11 @@ import com.example.backend.entity.Sku;
 import com.example.backend.entity.StockAdjustmentLog;
 import com.example.backend.entity.User;
 import com.example.backend.entity.RestockRequest;
+import com.example.backend.entity.Order;
+import com.example.backend.entity.OrderedItem;
 import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.LibMedicineRepository;
+import com.example.backend.repository.OrderedItemRepository;
 import com.example.backend.repository.RestockRequestRepository;
 import com.example.backend.repository.SkuRepository;
 import com.example.backend.repository.StockAdjustmentLogRepository;
@@ -25,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -40,6 +44,7 @@ public class SkuService {
     private final AuditLogService auditLogService;
     private final UserRepository userRepository;
     private final RestockRequestRepository restockRequestRepository;
+    private final OrderedItemRepository orderedItemRepository;
 
     public SkuService(SkuRepository skuRepository,
                       FacilityRepository facilityRepository,
@@ -48,7 +53,8 @@ public class SkuService {
                       StockAdjustmentLogRepository stockAdjustmentLogRepository,
                       AuditLogService auditLogService,
                       UserRepository userRepository,
-                      RestockRequestRepository restockRequestRepository) {
+                      RestockRequestRepository restockRequestRepository,
+                      OrderedItemRepository orderedItemRepository) {
         this.skuRepository = skuRepository;
         this.facilityRepository = facilityRepository;
         this.libMedicineRepository = libMedicineRepository;
@@ -57,6 +63,7 @@ public class SkuService {
         this.auditLogService = auditLogService;
         this.userRepository = userRepository;
         this.restockRequestRepository = restockRequestRepository;
+        this.orderedItemRepository = orderedItemRepository;
     }
 
     // 1. CREATE SKU (Units field is automatically defaulted to 0 by @PrePersist in Sku entity)
@@ -121,10 +128,10 @@ public class SkuService {
         batchService.markPastDueBatchesAsExpired(facilityId);
 
         List<Sku> skus = skuRepository.findByFacilityId(facilityId);
-        Map<Long, List<RestockRequest>> activeRestockMap = getActiveRestockMap(facilityId);
+        Map<Long, SkuOrderMetrics> activeMetricsMap = getActiveOrderMetricsMap(facilityId);
 
         return skus.stream()
-                .map(sku -> mapToResponseDto(sku, null, activeRestockMap.get(sku.getId())))
+                .map(sku -> mapToResponseDto(sku, null, activeMetricsMap.get(sku.getId())))
                 .collect(Collectors.toList());
     }
 
@@ -355,9 +362,9 @@ public class SkuService {
         batchService.markPastDueBatchesAsExpired(facilityId);
         String query = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
         List<Sku> skus = skuRepository.searchSkus(query, facilityId);
-        Map<Long, List<RestockRequest>> activeRestockMap = getActiveRestockMap(facilityId);
+        Map<Long, SkuOrderMetrics> activeMetricsMap = getActiveOrderMetricsMap(facilityId);
         return skus.stream()
-                .map(sku -> mapToResponseDto(sku, null, activeRestockMap.get(sku.getId())))
+                .map(sku -> mapToResponseDto(sku, null, activeMetricsMap.get(sku.getId())))
                 .collect(Collectors.toList());
     }
 
@@ -375,24 +382,94 @@ public class SkuService {
         batchService.markPastDueBatchesAsExpired(facilityId);
         String query = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
         List<Sku> skus = skuRepository.findReorderNeededSkus(facilityId, query);
-        Map<Long, List<RestockRequest>> activeRestockMap = getActiveRestockMap(facilityId);
+        Map<Long, SkuOrderMetrics> activeMetricsMap = getActiveOrderMetricsMap(facilityId);
         return skus.stream()
-                .map(sku -> mapToResponseDto(sku, null, activeRestockMap.get(sku.getId())))
+                .map(sku -> mapToResponseDto(sku, null, activeMetricsMap.get(sku.getId())))
                 .collect(Collectors.toList());
     }
 
-    private Map<Long, List<RestockRequest>> getActiveRestockMap(Long facilityId) {
+    private static class SkuOrderMetrics {
+        long pendingUnits = 0L;
+        long toReceiveUnits = 0L;
+        boolean hasActiveRestockRequest = false;
+        long activeRestockUnits = 0L;
+        RestockRequest latestRestockRequest = null;
+    }
+
+    private Map<Long, SkuOrderMetrics> getActiveOrderMetricsMap(Long facilityId) {
         if (facilityId == null) {
             return Collections.emptyMap();
         }
-        return restockRequestRepository.findActiveRestockRequestsByFacilityId(facilityId)
-                .stream()
-                .filter(r -> r.getSku() != null && r.getSku().getId() != null)
-                .collect(Collectors.groupingBy(r -> r.getSku().getId()));
+        Map<Long, SkuOrderMetrics> map = new HashMap<>();
+
+        // 1. Active Pharmacist Restock Requests
+        List<RestockRequest> activeRestocks = restockRequestRepository.findActiveRestockRequestsByFacilityId(facilityId);
+        for (RestockRequest rr : activeRestocks) {
+            if (rr.getSku() != null && rr.getSku().getId() != null) {
+                SkuOrderMetrics m = map.computeIfAbsent(rr.getSku().getId(), k -> new SkuOrderMetrics());
+                long units = rr.getRequestedUnits() != null ? rr.getRequestedUnits() : 0L;
+                m.hasActiveRestockRequest = true;
+                m.activeRestockUnits += units;
+                if (m.latestRestockRequest == null) {
+                    m.latestRestockRequest = rr;
+                }
+                // If it has not been assigned to a purchase order yet, add to pending units
+                if (rr.getOrder() == null) {
+                    m.pendingUnits += units;
+                }
+            }
+        }
+
+        // 2. Active Ordered Items (from POs, whether automated threshold PO or pharmacist requested PO)
+        List<OrderedItem> activeItems = orderedItemRepository.findActiveOrderedItemsByFacilityId(facilityId);
+        for (OrderedItem oi : activeItems) {
+            if (oi.getSku() != null && oi.getSku().getId() != null && oi.getOrder() != null) {
+                SkuOrderMetrics m = map.computeIfAbsent(oi.getSku().getId(), k -> new SkuOrderMetrics());
+                long units = oi.getOrderedUnits() != null ? oi.getOrderedUnits() : 0L;
+                if (oi.getOrder().getStatus() == Order.Status.Pending) {
+                    m.pendingUnits += units;
+                } else if (oi.getOrder().getStatus() == Order.Status.Approved) {
+                    m.toReceiveUnits += units;
+                }
+            }
+        }
+
+        return map;
+    }
+
+    private SkuOrderMetrics getSingleSkuOrderMetrics(Long facilityId, Long skuId) {
+        if (facilityId == null || skuId == null) {
+            return new SkuOrderMetrics();
+        }
+        SkuOrderMetrics m = new SkuOrderMetrics();
+        List<RestockRequest> activeRestocks = restockRequestRepository.findActiveRestockRequestsByFacilityIdAndSkuId(facilityId, skuId);
+        for (RestockRequest rr : activeRestocks) {
+            long units = rr.getRequestedUnits() != null ? rr.getRequestedUnits() : 0L;
+            m.hasActiveRestockRequest = true;
+            m.activeRestockUnits += units;
+            if (m.latestRestockRequest == null) {
+                m.latestRestockRequest = rr;
+            }
+            if (rr.getOrder() == null) {
+                m.pendingUnits += units;
+            }
+        }
+        List<OrderedItem> activeItems = orderedItemRepository.findActiveOrderedItemsByFacilityIdAndSkuId(facilityId, skuId);
+        for (OrderedItem oi : activeItems) {
+            if (oi.getOrder() != null) {
+                long units = oi.getOrderedUnits() != null ? oi.getOrderedUnits() : 0L;
+                if (oi.getOrder().getStatus() == Order.Status.Pending) {
+                    m.pendingUnits += units;
+                } else if (oi.getOrder().getStatus() == Order.Status.Approved) {
+                    m.toReceiveUnits += units;
+                }
+            }
+        }
+        return m;
     }
 
     // Helper: Map Sku entity to SkuResponseDto with restock enrichment
-    private SkuResponseDto mapToResponseDto(Sku sku, String message, List<RestockRequest> activeRestocks) {
+    private SkuResponseDto mapToResponseDto(Sku sku, String message, SkuOrderMetrics metrics) {
         SkuResponseDto dto = new SkuResponseDto();
         dto.setId(sku.getId());
 
@@ -418,20 +495,26 @@ public class SkuService {
         dto.setUpdatedAt(sku.getUpdatedAt());
         dto.setMessage(message);
 
-        if (activeRestocks != null && !activeRestocks.isEmpty()) {
-            dto.setHasPendingRestock(true);
-            long totalUnits = activeRestocks.stream()
-                    .mapToLong(r -> r.getRequestedUnits() != null ? r.getRequestedUnits() : 0L)
-                    .sum();
-            dto.setPendingRestockUnits(totalUnits);
-            RestockRequest latest = activeRestocks.get(0);
-            dto.setPendingRestockRequestId(latest.getId());
-            dto.setPendingRestockCreatedAt(latest.getCreatedAt());
-            String status = latest.getOrder() == null ? "Requested" : latest.getOrder().getStatus().name();
+        long pending = metrics != null ? metrics.pendingUnits : 0L;
+        long toReceive = metrics != null ? metrics.toReceiveUnits : 0L;
+
+        dto.setPendingUnits(pending);
+        dto.setToReceiveUnits(toReceive);
+
+        // hasPendingRestock is strictly for pharmacist restock requests
+        // System threshold orders DO NOT block a pharmacist from requesting restock!
+        boolean hasActiveRestock = metrics != null && metrics.hasActiveRestockRequest;
+        dto.setHasPendingRestock(hasActiveRestock);
+        dto.setPendingRestockUnits(hasActiveRestock ? metrics.activeRestockUnits : 0L);
+
+        if (hasActiveRestock && metrics.latestRestockRequest != null) {
+            dto.setPendingRestockRequestId(metrics.latestRestockRequest.getId());
+            dto.setPendingRestockCreatedAt(metrics.latestRestockRequest.getCreatedAt());
+            String status = metrics.latestRestockRequest.getOrder() == null
+                    ? "Requested"
+                    : metrics.latestRestockRequest.getOrder().getStatus().name();
             dto.setPendingRestockStatus(status);
         } else {
-            dto.setHasPendingRestock(false);
-            dto.setPendingRestockUnits(0L);
             dto.setPendingRestockRequestId(null);
             dto.setPendingRestockCreatedAt(null);
             dto.setPendingRestockStatus(null);
@@ -442,12 +525,11 @@ public class SkuService {
 
     // Overloaded helper for single-entity callers
     private SkuResponseDto mapToResponseDto(Sku sku, String message) {
-        List<RestockRequest> active = null;
+        SkuOrderMetrics metrics = null;
         if (sku.getFacility() != null && sku.getId() != null) {
-            active = restockRequestRepository.findActiveRestockRequestsByFacilityIdAndSkuId(
-                    sku.getFacility().getId(), sku.getId());
+            metrics = getSingleSkuOrderMetrics(sku.getFacility().getId(), sku.getId());
         }
-        return mapToResponseDto(sku, message, active);
+        return mapToResponseDto(sku, message, metrics);
     }
 
     private StockAdjustmentLogResponseDto mapAdjustmentLogToDto(StockAdjustmentLog log) {
