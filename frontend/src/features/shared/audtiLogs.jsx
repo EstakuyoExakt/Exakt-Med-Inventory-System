@@ -340,10 +340,7 @@ function AuditLogs({
           </div>
           <p className="text-sm text-gray-500 mt-1">
             Immutable chronological record of inventory transactions, catalog
-            modifications, approvals, and security events for{" "}
-            <span className="font-semibold text-gray-700">
-              {currentFacilityName}
-            </span>
+            modifications, approvals, and security events
           </p>
         </div>
 

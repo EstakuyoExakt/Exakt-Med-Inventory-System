@@ -407,17 +407,6 @@ function UserManagement() {
           </div>
           <p className="text-sm text-gray-500 mt-1">
             Manage system users, access roles, and credentials
-            {facility?.name ? (
-              <>
-                {" "}
-                for{" "}
-                <span className="font-semibold text-gray-700">
-                  {facility.name}
-                </span>
-              </>
-            ) : (
-              ""
-            )}
           </p>
         </div>
         <div className="flex items-center gap-2.5 self-start sm:self-auto">

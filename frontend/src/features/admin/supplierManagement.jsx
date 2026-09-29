@@ -202,10 +202,13 @@ function SupplierManagement() {
   // Save (Add or Edit) Supplier
   const handleSaveSupplier = async (e) => {
     e.preventDefault();
-    const { isValid, errors: validationErrors } = validateSupplierForm(formData, {
-      supplierList,
-      excludeId: selectedSupplier?.id,
-    });
+    const { isValid, errors: validationErrors } = validateSupplierForm(
+      formData,
+      {
+        supplierList,
+        excludeId: selectedSupplier?.id,
+      },
+    );
     if (!isValid) {
       setFormErrors(validationErrors);
       return;
@@ -307,17 +310,7 @@ function SupplierManagement() {
             )}
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            {currentFacilityName ? (
-              <>
-                Manage pharmaceutical vendors, distributors, and delivery terms
-                for{" "}
-                <span className="font-semibold text-gray-700">
-                  {currentFacilityName}
-                </span>
-              </>
-            ) : (
-              "Please select a facility from the navigation portal to manage its suppliers."
-            )}
+            Manage pharmaceutical vendors, distributors, and delivery terms
           </p>
         </div>
         <div className="flex items-center gap-2.5 self-start sm:self-auto">

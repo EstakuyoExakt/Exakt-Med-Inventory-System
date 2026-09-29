@@ -415,9 +415,7 @@ function BatchManagement() {
       );
 
       const mapped = mapBatchDtoToItem(updatedDto);
-      setBatchList((prev) =>
-        prev.map((b) => (b.id === batchId ? mapped : b)),
-      );
+      setBatchList((prev) => prev.map((b) => (b.id === batchId ? mapped : b)));
       setSelectedBatch(mapped);
       fetchBatches();
     } catch (err) {
@@ -491,7 +489,8 @@ function BatchManagement() {
       ...prev,
       items: prev.items.map((item) => ({
         ...item,
-        manufacturingDate: bulkDates.manufacturingDate || item.manufacturingDate,
+        manufacturingDate:
+          bulkDates.manufacturingDate || item.manufacturingDate,
         expiryDate: bulkDates.expiryDate || item.expiryDate,
       })),
     }));
@@ -538,7 +537,10 @@ function BatchManagement() {
     }
 
     if (!activeFacilityId) {
-      setFormErrors({ poNumber: "Operating facility could not be determined. Please re-select your active facility." });
+      setFormErrors({
+        poNumber:
+          "Operating facility could not be determined. Please re-select your active facility.",
+      });
       return;
     }
 
@@ -560,7 +562,8 @@ function BatchManagement() {
       }));
 
       // Call backend bulk batch intake API (this increments Sku.units by orderedItem.orderedUnits)
-      const savedBatchDtos = await batchService.receiveBatchesBulk(batchPayload);
+      const savedBatchDtos =
+        await batchService.receiveBatchesBulk(batchPayload);
 
       if (Array.isArray(savedBatchDtos) && savedBatchDtos.length > 0) {
         const newlyCreated = savedBatchDtos.map(mapBatchDtoToItem);
@@ -599,10 +602,7 @@ function BatchManagement() {
             </span>
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            Displaying active batches, expiration tracking, and stock intake for{" "}
-            <span className="font-semibold text-gray-700">
-              {currentFacilityName}
-            </span>
+            Displaying active batches, expiration tracking, and stock intake
           </p>
         </div>
 
@@ -929,11 +929,8 @@ function BatchManagement() {
                             <div className="text-xs text-gray-500 font-medium mt-0.5">
                               {batch.brandName || "Medicine"}{" "}
                               <span className="text-gray-400 font-normal">
-                                (
-                                {batch.genericName || "—"}{" "}
-                                •{" "}
-                                {batch.dosageForm || "Standard"}
-                                )
+                                ({batch.genericName || "—"} •{" "}
+                                {batch.dosageForm || "Standard"})
                               </span>
                             </div>
                           </div>
@@ -970,7 +967,7 @@ function BatchManagement() {
                           </span>
                         </div>
                       </td>
- 
+
                       {/* Status / Quarantine */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         {batch.isQuarantined ? (
@@ -1174,7 +1171,9 @@ function BatchManagement() {
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
                     <div className="flex items-center gap-2 text-blue-900 font-semibold text-xs">
                       <Calendar className="w-4 h-4 text-blue-600 shrink-0" />
-                      <span>Quick Autofill Dates across All Medicines (Optional):</span>
+                      <span>
+                        Quick Autofill Dates across All Medicines (Optional):
+                      </span>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                       <input
@@ -1218,7 +1217,8 @@ function BatchManagement() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
                     <Package className="w-4 h-4 text-blue-600" />
-                    Medicines to Receive ({receiveFormData.items?.length || 0}) — Individual Batch Allocation
+                    Medicines to Receive ({receiveFormData.items?.length || 0})
+                    — Individual Batch Allocation
                   </span>
                   <span className="text-[11px] text-gray-500 font-medium">
                     Each SKU receives its own lot & expiration data
@@ -1247,7 +1247,8 @@ function BatchManagement() {
                               </span>
                             </div>
                             <p className="text-[11px] text-gray-500 mt-0.5">
-                              {item.genericName} • {item.dosageForm} ({item.packagingUnit})
+                              {item.genericName} • {item.dosageForm} (
+                              {item.packagingUnit})
                             </p>
                           </div>
                         </div>
@@ -1268,14 +1269,19 @@ function BatchManagement() {
                             htmlFor={`receive-batch-number-${idx}`}
                             className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1"
                           >
-                            Lot / Batch Number <span className="text-red-500">*</span>
+                            Lot / Batch Number{" "}
+                            <span className="text-red-500">*</span>
                           </label>
                           <input
                             id={`receive-batch-number-${idx}`}
                             type="text"
                             value={item.batchNumber || ""}
                             onChange={(e) =>
-                              handleItemBatchChange(idx, "batchNumber", e.target.value)
+                              handleItemBatchChange(
+                                idx,
+                                "batchNumber",
+                                e.target.value,
+                              )
                             }
                             placeholder={`e.g. BAT-${item.sku.replace("SKU-", "")}-01`}
                             className={`input uppercase font-mono text-xs ${
@@ -1297,14 +1303,19 @@ function BatchManagement() {
                             htmlFor={`receive-batch-mfg-${idx}`}
                             className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1"
                           >
-                            Manufacturing Date <span className="text-red-500">*</span>
+                            Manufacturing Date{" "}
+                            <span className="text-red-500">*</span>
                           </label>
                           <input
                             id={`receive-batch-mfg-${idx}`}
                             type="date"
                             value={item.manufacturingDate || ""}
                             onChange={(e) =>
-                              handleItemBatchChange(idx, "manufacturingDate", e.target.value)
+                              handleItemBatchChange(
+                                idx,
+                                "manufacturingDate",
+                                e.target.value,
+                              )
                             }
                             className={`input text-xs ${
                               formErrors[`item_${idx}_manufacturingDate`]
@@ -1325,14 +1336,19 @@ function BatchManagement() {
                             htmlFor={`receive-batch-exp-${idx}`}
                             className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1"
                           >
-                            Expiration Date <span className="text-red-500">*</span>
+                            Expiration Date{" "}
+                            <span className="text-red-500">*</span>
                           </label>
                           <input
                             id={`receive-batch-exp-${idx}`}
                             type="date"
                             value={item.expiryDate || ""}
                             onChange={(e) =>
-                              handleItemBatchChange(idx, "expiryDate", e.target.value)
+                              handleItemBatchChange(
+                                idx,
+                                "expiryDate",
+                                e.target.value,
+                              )
                             }
                             className={`input text-xs ${
                               formErrors[`item_${idx}_expiryDate`]
@@ -1355,13 +1371,18 @@ function BatchManagement() {
                             type="checkbox"
                             checked={Boolean(item.isQuarantined)}
                             onChange={(e) =>
-                              handleItemBatchChange(idx, "isQuarantined", e.target.checked)
+                              handleItemBatchChange(
+                                idx,
+                                "isQuarantined",
+                                e.target.checked,
+                              )
                             }
                             className="rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
                           />
                           <span className="text-xs font-semibold text-gray-700 flex items-center gap-1">
                             <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
-                            Flag / Quarantine this medicine (Inspection Required)
+                            Flag / Quarantine this medicine (Inspection
+                            Required)
                           </span>
                         </label>
 
@@ -1378,14 +1399,19 @@ function BatchManagement() {
                             htmlFor={`receive-batch-quarantine-notes-${idx}`}
                             className="block text-[11px] font-semibold text-red-900 uppercase tracking-wider mb-1"
                           >
-                            Quarantine Notes / QA Remarks <span className="text-red-500">*</span>
+                            Quarantine Notes / QA Remarks{" "}
+                            <span className="text-red-500">*</span>
                           </label>
                           <input
                             id={`receive-batch-quarantine-notes-${idx}`}
                             type="text"
                             value={item.quarantineNotes || ""}
                             onChange={(e) =>
-                              handleItemBatchChange(idx, "quarantineNotes", e.target.value)
+                              handleItemBatchChange(
+                                idx,
+                                "quarantineNotes",
+                                e.target.value,
+                              )
                             }
                             placeholder="e.g. Temperature recorder logged 14°C excursion during freight"
                             className={`input text-xs bg-red-50/20 ${
@@ -1480,8 +1506,8 @@ function BatchManagement() {
                   selectedBatch.isQuarantined
                     ? "bg-red-600"
                     : selectedBatch.status === "Expired"
-                    ? "bg-amber-600"
-                    : "bg-blue-600"
+                      ? "bg-amber-600"
+                      : "bg-blue-600"
                 }`}
               >
                 {selectedBatch.isQuarantined ? (
@@ -1514,15 +1540,15 @@ function BatchManagement() {
                       selectedBatch.isQuarantined
                         ? "bg-red-100 text-red-800 border-red-200"
                         : selectedBatch.status === "Expired"
-                        ? "bg-amber-100 text-amber-800 border-amber-300"
-                        : "bg-emerald-100 text-emerald-800 border-emerald-200"
+                          ? "bg-amber-100 text-amber-800 border-amber-300"
+                          : "bg-emerald-100 text-emerald-800 border-emerald-200"
                     }`}
                   >
                     {selectedBatch.isQuarantined
                       ? "Under Quarantine"
                       : selectedBatch.status === "Expired"
-                      ? "Batch Expired (Deducted from SKU Units)"
-                      : "Active & Available"}
+                        ? "Batch Expired (Deducted from SKU Units)"
+                        : "Active & Available"}
                   </span>
                   {selectedBatch.poReference && (
                     <span className="font-mono text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded">

@@ -482,8 +482,7 @@ function SkuManagement() {
       if (units <= 0) return false;
       if (b.skuDeducted) return false;
       return (
-        b.status === "Expired" ||
-        (b.expiryDate && b.expiryDate <= todayStr)
+        b.status === "Expired" || (b.expiryDate && b.expiryDate <= todayStr)
       );
     });
   }, [facilityBatches]);
@@ -502,8 +501,7 @@ function SkuManagement() {
       if (units <= 0) continue;
       if (b.skuDeducted) continue;
       const isExpired =
-        b.status === "Expired" ||
-        (b.expiryDate && b.expiryDate <= todayStr);
+        b.status === "Expired" || (b.expiryDate && b.expiryDate <= todayStr);
       if (isExpired) {
         const key = b.skuId;
         if (key) {
@@ -1229,10 +1227,7 @@ function SkuManagement() {
           </div>
           <p className="text-sm text-gray-500 mt-1">
             Displaying stock-keeping units, threshold calibration, and inventory
-            levels for{" "}
-            <span className="font-semibold text-gray-700">
-              {currentFacilityName}
-            </span>
+            levels
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">

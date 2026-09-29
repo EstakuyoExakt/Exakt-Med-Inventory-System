@@ -373,10 +373,6 @@ function RequestedOrders() {
           </div>
           <p className="text-sm text-gray-500 mt-1">
             Review, track, and manage all medication purchase order requisitions
-            for{" "}
-            <span className="font-semibold text-gray-700">
-              {currentFacilityName}
-            </span>
           </p>
         </div>
 

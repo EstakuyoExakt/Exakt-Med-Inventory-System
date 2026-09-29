@@ -750,9 +750,7 @@ function OrderRequest() {
   // Available SKUs that need restocking in active facility and haven't had a standard order row added yet
   const availableSkusToAdd = useMemo(() => {
     const addedCatalogSkus = new Set(
-      orderForm.items
-        .filter((i) => !i.isRestockRequest)
-        .map((i) => i.sku),
+      orderForm.items.filter((i) => !i.isRestockRequest).map((i) => i.sku),
     );
     return currentFacilitySkus.filter(
       (s) => s.currentStock <= s.reorderLevel && !addedCatalogSkus.has(s.sku),
@@ -932,10 +930,6 @@ function OrderRequest() {
           </div>
           <p className="text-sm text-gray-500 mt-1">
             Manage replenishment requests and create purchase order requisitions
-            for{" "}
-            <span className="font-semibold text-gray-700">
-              {currentFacilityName}
-            </span>
           </p>
         </div>
 
@@ -1232,7 +1226,10 @@ function OrderRequest() {
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {isLoadingRestockRequests ? (
                     Array.from({ length: 5 }).map((_, index) => (
-                      <tr key={`restock-skeleton-${index}`} className="animate-pulse">
+                      <tr
+                        key={`restock-skeleton-${index}`}
+                        className="animate-pulse"
+                      >
                         <td className="px-4 py-4 text-center">
                           <Skeleton className="h-4 w-4 mx-auto rounded" />
                         </td>
@@ -1532,7 +1529,10 @@ function OrderRequest() {
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {isLoadingSkus ? (
                     Array.from({ length: 5 }).map((_, index) => (
-                      <tr key={`sku-skeleton-${index}`} className="animate-pulse">
+                      <tr
+                        key={`sku-skeleton-${index}`}
+                        className="animate-pulse"
+                      >
                         <td className="px-4 py-4 text-center">
                           <Skeleton className="h-4 w-4 mx-auto rounded" />
                         </td>
