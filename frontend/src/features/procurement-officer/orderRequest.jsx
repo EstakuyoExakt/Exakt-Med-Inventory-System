@@ -1930,7 +1930,8 @@ function OrderRequest() {
                     <th className="px-3.5 py-2.5">Medication & SKU</th>
                     <th className="px-3.5 py-2.5">Current / Max</th>
                     <th className="px-3.5 py-2.5 w-28">Order Quantity</th>
-                    <th className="px-3.5 py-2.5 w-36">Item Price (₱)</th>
+                    <th className="px-3.5 py-2.5 w-32">Total Price (₱)</th>
+                    <th className="px-3.5 py-2.5 w-28 text-right">Price / Unit</th>
                     <th className="px-3.5 py-2.5 w-10 text-center">Action</th>
                   </tr>
                 </thead>
@@ -1938,6 +1939,16 @@ function OrderRequest() {
                   {orderForm.items.length > 0 ? (
                     orderForm.items.map((item, idx) => {
                       const rowKey = item.rowId || `${item.sku}-${idx}`;
+                      const qty = Number(item.quantity) || 0;
+                      const hasPrice =
+                        item.price !== "" &&
+                        item.price !== null &&
+                        item.price !== undefined &&
+                        !isNaN(Number(item.price));
+                      const priceVal = hasPrice ? Number(item.price) : null;
+                      const unitPrice =
+                        priceVal !== null && qty > 0 ? priceVal / qty : null;
+
                       return (
                         <tr key={rowKey} className="hover:bg-gray-50/80">
                           <td className="px-3.5 py-2.5">
@@ -2028,6 +2039,27 @@ function OrderRequest() {
                             </div>
                           </td>
 
+                          <td className="px-3.5 py-2.5 text-right whitespace-nowrap">
+                            {unitPrice !== null ? (
+                              <div className="flex flex-col items-end">
+                                <span className="font-mono text-xs font-semibold text-emerald-700">
+                                  ₱
+                                  {unitPrice.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </span>
+                                <span className="text-[10px] text-gray-400">
+                                  / unit
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-gray-300 text-xs font-mono">
+                                —
+                              </span>
+                            )}
+                          </td>
+
                           <td className="px-3.5 py-2.5 text-center">
                             <button
                               type="button"
@@ -2044,7 +2076,7 @@ function OrderRequest() {
                   ) : (
                     <tr>
                       <td
-                        colSpan="5"
+                        colSpan="6"
                         className="px-4 py-8 text-center text-gray-400"
                       >
                         <Layers className="w-6 h-6 mx-auto mb-1 text-gray-300" />
@@ -2094,6 +2126,19 @@ function OrderRequest() {
                   className="input pl-7 font-mono font-bold bg-gray-100/80 text-gray-700 cursor-not-allowed border-gray-200 select-all"
                 />
               </div>
+              {totalFormUnits > 0 && computedTotalCost > 0 && (
+                <div className="flex items-center justify-between text-[11px] text-gray-500 mt-1 px-1">
+                  <span>Average Cost per Unit:</span>
+                  <span className="font-mono font-semibold text-emerald-700">
+                    ₱
+                    {(computedTotalCost / totalFormUnits).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    <span className="text-gray-400 font-normal">/ unit</span>
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Notes */}
@@ -2222,22 +2267,45 @@ function OrderRequest() {
                       <th className="px-3 py-1.5">Medicine</th>
                       <th className="px-3 py-1.5">SKU</th>
                       <th className="px-3 py-1.5 text-right">Quantity</th>
+                      <th className="px-3 py-1.5 text-right">Price / Unit</th>
+                      <th className="px-3 py-1.5 text-right">Total Price</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white">
-                    {submittedOrder.items.map((item) => (
-                      <tr key={item.sku}>
-                        <td className="px-3 py-1.5 font-semibold text-gray-900">
-                          {item.brandName} ({item.dosage})
-                        </td>
-                        <td className="px-3 py-1.5 font-mono text-[11px] text-blue-700">
-                          {item.sku}
-                        </td>
-                        <td className="px-3 py-1.5 text-right font-bold text-gray-900">
-                          {item.quantity.toLocaleString()} units
-                        </td>
-                      </tr>
-                    ))}
+                    {submittedOrder.items.map((item) => {
+                      const qty = Number(item.quantity) || 0;
+                      const priceVal = Number(item.price) || 0;
+                      const unitPrice = qty > 0 ? priceVal / qty : null;
+
+                      return (
+                        <tr key={item.sku}>
+                          <td className="px-3 py-1.5 font-semibold text-gray-900">
+                            {item.brandName} ({item.dosage})
+                          </td>
+                          <td className="px-3 py-1.5 font-mono text-[11px] text-blue-700">
+                            {item.sku}
+                          </td>
+                          <td className="px-3 py-1.5 text-right font-bold text-gray-900">
+                            {qty.toLocaleString()} units
+                          </td>
+                          <td className="px-3 py-1.5 text-right font-mono text-[11px] text-gray-700">
+                            {unitPrice !== null
+                              ? `₱${unitPrice.toLocaleString(undefined, {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}`
+                              : "—"}
+                          </td>
+                          <td className="px-3 py-1.5 text-right font-mono font-bold text-emerald-700">
+                            ₱
+                            {priceVal.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

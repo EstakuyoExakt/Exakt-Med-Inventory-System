@@ -116,7 +116,14 @@ public class OrderService {
             orderedItem.setOrder(savedOrder);
             orderedItem.setSku(sku);
             orderedItem.setOrderedUnits(itemDto.getOrderedUnits());
-            orderedItem.setPrice(itemDto.getPrice() != null ? itemDto.getPrice() : 0L);
+            long itemPrice = itemDto.getPrice() != null ? itemDto.getPrice() : 0L;
+            long units = itemDto.getOrderedUnits() != null ? itemDto.getOrderedUnits() : 0L;
+            orderedItem.setPrice(itemPrice);
+
+            double calculatedPricePerUnit = units > 0
+                    ? Math.round(((double) itemPrice / units) * 100.0) / 100.0
+                    : 0.0;
+            orderedItem.setPricePerUnit(calculatedPricePerUnit);
 
             orderedItems.add(orderedItem);
         }
@@ -278,6 +285,12 @@ public class OrderService {
         }
         dto.setOrderedUnits(item.getOrderedUnits());
         dto.setPrice(item.getPrice());
+
+        Double unitPrice = item.getPricePerUnit();
+        if (unitPrice == null && item.getOrderedUnits() != null && item.getOrderedUnits() > 0 && item.getPrice() != null) {
+            unitPrice = Math.round(((double) item.getPrice() / item.getOrderedUnits()) * 100.0) / 100.0;
+        }
+        dto.setPricePerUnit(unitPrice != null ? unitPrice : 0.0);
         return dto;
     }
 

@@ -20,4 +20,5 @@ public class OrderItemResponseDto {
     private String packagingUnit;
     private Long orderedUnits;
     private Long price;
+    private Double pricePerUnit;
 }

@@ -234,13 +234,13 @@ public class SkuService {
         Batch targetBatch = null;
 
         switch (request.getType()) {
-            case ADD -> {
+            case ADD:
                 newUnits = currentUnits + request.getAmount();
                 if (request.getBatchId() != null) {
                     targetBatch = batchService.addUnitsToBatch(request.getBatchId(), sku.getId(), request.getAmount());
                 }
-            }
-            case SUBTRACT -> {
+                break;
+            case SUBTRACT:
                 Long facilityId = sku.getFacility() != null ? sku.getFacility().getId() : null;
                 if (facilityId != null && batchService.hasUnprocessedExpiredBatches(facilityId, sku.getId())) {
                     throw new RuntimeException("This SKU has unprocessed expired batches. Please deduct expired batches first before adjusting stock.");
@@ -250,8 +250,9 @@ public class SkuService {
                 }
                 newUnits = currentUnits - request.getAmount();
                 unitsToDeduct = request.getAmount();
-            }
-            default -> throw new IllegalArgumentException("Unknown adjustment type: " + request.getType());
+                break;
+            default:
+                throw new IllegalArgumentException("Unknown adjustment type: " + request.getType());
         }
 
         sku.setUnits(newUnits);
@@ -282,14 +283,15 @@ public class SkuService {
         // Record central Audit Log entry
         long delta = newUnits - currentUnits;
         AuditLog.Severity severity = delta < 0 ? AuditLog.Severity.WARNING : AuditLog.Severity.INFO;
-        String action = switch (request.getType()) {
-            case ADD -> "STOCK_ADDITION";
-            case SUBTRACT -> "STOCK_DEDUCTION";
-        };
-        String actionLabel = switch (request.getType()) {
-            case ADD -> "Stock Addition (+" + request.getAmount() + " units)";
-            case SUBTRACT -> "Stock Deduction (-" + request.getAmount() + " units)";
-        };
+        String action;
+        String actionLabel;
+        if (request.getType() == SkuStockAdjustmentDto.Type.ADD) {
+            action = "STOCK_ADDITION";
+            actionLabel = "Stock Addition (+" + request.getAmount() + " units)";
+        } else {
+            action = "STOCK_DEDUCTION";
+            actionLabel = "Stock Deduction (-" + request.getAmount() + " units)";
+        }
         String batchInfo = targetBatch != null
                 ? String.format(" [Target Batch: %s, Expiry: %s, New Batch Units: %d]",
                     targetBatch.getBatchNum(), targetBatch.getExpiryDate(), targetBatch.getUnits())

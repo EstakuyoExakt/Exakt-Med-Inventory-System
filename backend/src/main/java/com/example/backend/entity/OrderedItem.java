@@ -28,4 +28,17 @@ public class OrderedItem {
     @Column(nullable = false)
     private Long price;
 
+    @Column(name = "pricePerUnit")
+    private Double pricePerUnit;
+
+    @PrePersist
+    @PreUpdate
+    private void calculatePricePerUnit() {
+        if (this.orderedUnits != null && this.orderedUnits > 0 && this.price != null) {
+            this.pricePerUnit = Math.round(((double) this.price / this.orderedUnits) * 100.0) / 100.0;
+        } else if (this.pricePerUnit == null) {
+            this.pricePerUnit = 0.0;
+        }
+    }
+
 }

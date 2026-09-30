@@ -880,7 +880,8 @@ function RequestedOrders() {
                         <th className="px-3 py-2">Medicine / SKU</th>
                         <th className="px-3 py-2">Form & Packaging</th>
                         <th className="px-3 py-2 text-right">Quantity</th>
-                        <th className="px-3 py-2 text-right">Item Price</th>
+                        <th className="px-3 py-2 text-right">Price / Unit</th>
+                        <th className="px-3 py-2 text-right">Total Price</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 bg-white">
@@ -907,6 +908,12 @@ function RequestedOrders() {
                           </td>
                           <td className="px-3 py-2.5 text-right font-bold text-gray-900 whitespace-nowrap">
                             {item.orderedUnits?.toLocaleString()} units
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-mono text-gray-700 whitespace-nowrap">
+                            ₱
+                            {item.pricePerUnit != null
+                              ? Number(item.pricePerUnit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                              : (item.orderedUnits && item.price ? (Number(item.price) / Number(item.orderedUnits)).toFixed(2) : "0.00")}
                           </td>
                           <td className="px-3 py-2.5 text-right font-mono font-bold text-emerald-700 whitespace-nowrap">
                             ₱
