@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   History,
   DollarSign,
+  FileSpreadsheet,
 } from "lucide-react";
 import { ROLES } from "./roles";
 
@@ -29,6 +30,12 @@ export const NAVIGATION_ITEMS = [
     title: "Requested Orders",
     path: "/admin/requested-orders",
     icon: ClipboardCheck,
+    roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
+  },
+  {
+    title: "Bin Cards",
+    path: "/admin/bin-cards",
+    icon: FileSpreadsheet,
     roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
   },
   {

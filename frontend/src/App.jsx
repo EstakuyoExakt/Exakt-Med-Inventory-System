@@ -11,6 +11,7 @@ import UnderMaintenance from "./features/authentication/underMaintenance";
 import SupplierManagement from "./features/admin/supplierManagement";
 import UserManagement from "./features/admin/userManagement";
 import Accounting from "./features/admin/accounting";
+import BinCard from "./features/admin/binCard";
 
 // Pharmacist Manager Pages
 import PharmacistDashboard from "./features/pharmacist-manager/pharmacistDashboard";
@@ -82,6 +83,8 @@ function App() {
               path="/admin/requested-orders"
               element={<RequestedOrders />}
             />
+            <Route path="/admin/bin-cards" element={<BinCard />} />
+            <Route path="/admin/bin-cards/:skuId" element={<BinCard />} />
 
             {/* This page is under development */}
             <Route path="/admin/accounting" element={<UnderMaintenance />} />

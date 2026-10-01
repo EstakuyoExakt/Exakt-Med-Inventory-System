@@ -327,9 +327,10 @@ public class BatchService {
 
     // 8. DEDUCT BATCHES ACCORDING TO FEFO (FIRST EXPIRE FIRST OUT - AVAILABLE & UNEXPIRED ONLY)
     @Transactional
-    public void deductBatchesFEFO(Long skuId, Long facilityId, long unitsToDeduct) {
+    public List<Batch> deductBatchesFEFO(Long skuId, Long facilityId, long unitsToDeduct) {
+        List<Batch> affectedBatches = new ArrayList<>();
         if (unitsToDeduct <= 0 || skuId == null || facilityId == null) {
-            return;
+            return affectedBatches;
         }
 
         LocalDate today = LocalDate.now();
@@ -346,6 +347,7 @@ public class BatchService {
                 continue;
             }
 
+            affectedBatches.add(batch);
             if (currentBatchUnits <= remaining) {
                 remaining -= currentBatchUnits;
                 batch.setUnits(0L);
@@ -355,7 +357,9 @@ public class BatchService {
             }
             batchRepository.save(batch);
         }
+        return affectedBatches;
     }
+
 
     // 9. ADD UNITS TO SPECIFIC BATCH (Disallows expired batches)
     @Transactional

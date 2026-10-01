@@ -27,6 +27,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -258,9 +259,25 @@ public class SkuService {
         sku.setUnits(newUnits);
         Sku savedSku = skuRepository.save(sku);
 
+        List<Batch> deductedBatches = new ArrayList<>();
         // FEFO: Deduct from the nearest expiring available batches
         if (unitsToDeduct > 0 && savedSku.getFacility() != null) {
-            batchService.deductBatchesFEFO(savedSku.getId(), savedSku.getFacility().getId(), unitsToDeduct);
+            deductedBatches = batchService.deductBatchesFEFO(savedSku.getId(), savedSku.getFacility().getId(), unitsToDeduct);
+        }
+
+        // Build batch metadata string for both additions and deductions
+        String batchDetails = null;
+        if (targetBatch != null) {
+            batchDetails = String.format("(Batch: %s, Expiry: %s)", targetBatch.getBatchNum(), targetBatch.getExpiryDate());
+        } else if (!deductedBatches.isEmpty()) {
+            if (deductedBatches.size() == 1) {
+                Batch b = deductedBatches.get(0);
+                batchDetails = String.format("(Batch: %s, Expiry: %s)", b.getBatchNum(), b.getExpiryDate());
+            } else {
+                batchDetails = "(Batches: " + deductedBatches.stream()
+                        .map(b -> b.getBatchNum() + " [Exp: " + b.getExpiryDate() + "]")
+                        .collect(Collectors.joining(", ")) + ")";
+            }
         }
 
         // Record stock adjustment log entry
@@ -274,9 +291,16 @@ public class SkuService {
         log.setDeltaUnits(newUnits - currentUnits);
         log.setNewUnits(newUnits);
         log.setReason(request.getReason());
-        String logNotes = (request.getNotes() != null && !request.getNotes().isBlank())
-                ? request.getNotes().trim() + (targetBatch != null ? " (Batch: " + targetBatch.getBatchNum() + ")" : "")
-                : (targetBatch != null ? "Added to Batch " + targetBatch.getBatchNum() : null);
+
+        String userNotes = (request.getNotes() != null && !request.getNotes().isBlank()) ? request.getNotes().trim() : null;
+        String logNotes;
+        if (userNotes != null && batchDetails != null) {
+            logNotes = userNotes + " " + batchDetails;
+        } else if (batchDetails != null) {
+            logNotes = batchDetails;
+        } else {
+            logNotes = userNotes;
+        }
         log.setNotes(logNotes);
         stockAdjustmentLogRepository.save(log);
 
@@ -292,10 +316,16 @@ public class SkuService {
             action = "STOCK_DEDUCTION";
             actionLabel = "Stock Deduction (-" + request.getAmount() + " units)";
         }
-        String batchInfo = targetBatch != null
-                ? String.format(" [Target Batch: %s, Expiry: %s, New Batch Units: %d]",
-                    targetBatch.getBatchNum(), targetBatch.getExpiryDate(), targetBatch.getUnits())
-                : "";
+        String batchInfo = "";
+        if (targetBatch != null) {
+            batchInfo = String.format(" [Target Batch: %s, Expiry: %s, New Batch Units: %d]",
+                    targetBatch.getBatchNum(), targetBatch.getExpiryDate(), targetBatch.getUnits());
+        } else if (!deductedBatches.isEmpty()) {
+            batchInfo = " [Deducted from: " + deductedBatches.stream()
+                    .map(b -> b.getBatchNum() + " (Exp: " + b.getExpiryDate() + ")")
+                    .collect(Collectors.joining(", ")) + "]";
+        }
+
         String description = String.format(
                 "Stock adjusted for SKU '%s' (%s). Previous: %d units, Change: %+d units, New Stock: %d units. Reason: %s.%s%s",
                 savedSku.getName(),

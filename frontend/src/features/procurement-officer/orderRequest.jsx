@@ -2126,19 +2126,6 @@ function OrderRequest() {
                   className="input pl-7 font-mono font-bold bg-gray-100/80 text-gray-700 cursor-not-allowed border-gray-200 select-all"
                 />
               </div>
-              {totalFormUnits > 0 && computedTotalCost > 0 && (
-                <div className="flex items-center justify-between text-[11px] text-gray-500 mt-1 px-1">
-                  <span>Average Cost per Unit:</span>
-                  <span className="font-mono font-semibold text-emerald-700">
-                    ₱
-                    {(computedTotalCost / totalFormUnits).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}{" "}
-                    <span className="text-gray-400 font-normal">/ unit</span>
-                  </span>
-                </div>
-              )}
             </div>
 
             {/* Notes */}

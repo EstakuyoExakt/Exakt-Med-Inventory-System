@@ -12,4 +12,7 @@ public interface StockAdjustmentLogRepository extends JpaRepository<StockAdjustm
     List<StockAdjustmentLog> findBySkuIdOrderByCreatedAtDesc(Long skuId);
 
     List<StockAdjustmentLog> findByFacilityIdOrderByCreatedAtDesc(Long facilityId);
+
+    List<StockAdjustmentLog> findByFacilityIdAndSkuIdOrderByCreatedAtAsc(Long facilityId, Long skuId);
 }
+

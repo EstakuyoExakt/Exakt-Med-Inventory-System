@@ -167,7 +167,7 @@ function Dropdown({
   return (
     <div
       ref={containerRef}
-      className={`relative ${className || "w-full"}`}
+      className={`relative ${isOpen ? "z-50" : ""} ${className || "w-full"}`}
     >
       {/* Optional Form Label */}
       {label && (
@@ -229,7 +229,7 @@ function Dropdown({
       {isOpen && (
         <div
           role="listbox"
-          className="absolute left-0 right-0 z-50 mt-1.5 min-w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto py-1 focus:outline-none"
+          className="absolute left-0 right-0 z-[60] mt-1.5 min-w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto py-1 focus:outline-none"
         >
           {allOptions.length === 0 ? (
             <div className="px-3 py-2 text-xs text-gray-400 text-center italic">

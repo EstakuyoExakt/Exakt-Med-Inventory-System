@@ -50,5 +50,13 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
             @Param("facilityId") Long facilityId,
             @Param("status") Batch.Status status,
             @Param("today") java.time.LocalDate today);
+
+    @Query("SELECT b FROM Batch b WHERE b.facility.id = :facilityId " +
+           "AND b.orderedItem.sku.id = :skuId " +
+           "ORDER BY b.receivedAt ASC, b.id ASC")
+    List<Batch> findBatchesForSkuOrderByReceivedAtAsc(
+            @Param("facilityId") Long facilityId,
+            @Param("skuId") Long skuId);
 }
+
 
