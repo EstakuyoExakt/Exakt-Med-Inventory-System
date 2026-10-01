@@ -36,7 +36,6 @@ import Skeleton from "../../components/common/skeleton";
 
 // Data Imports & Auth Hook
 import { requestedOrders as initialOrders } from "../../data/orders";
-import { suppliers } from "../../data/supplier";
 import { facilities } from "../../data/facility";
 import useAuth from "../../hooks/useAuth";
 

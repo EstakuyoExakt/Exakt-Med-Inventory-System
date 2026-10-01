@@ -451,12 +451,34 @@ function SkuManagement() {
     }
   };
 
+  // Facility Batches for Expired Batches Tracking, Deduction & Stock Adjustments
+  const [facilityBatches, setFacilityBatches] = useState([]);
+  const [isProcessingExpired, setIsProcessingExpired] = useState(false);
+  const [expiredResultModal, setExpiredResultModal] = useState(null);
+  const [isConfirmExpiredModalOpen, setIsConfirmExpiredModalOpen] =
+    useState(false);
+  const [targetSkuForExpiredDeduction, setTargetSkuForExpiredDeduction] =
+    useState(null);
+
   // Batch Management Action Form States in SKU Management
   const [adjustFormData, setAdjustFormData] = useState(
     DEFAULT_STOCK_ADJUSTMENT,
   );
-  const [skuBatches, setSkuBatches] = useState([]);
-  const [isLoadingBatches, setIsLoadingBatches] = useState(false);
+
+  // Available batches for the selected SKU derived directly from already-loaded facilityBatches (FEFO sorted)
+  const skuBatches = useMemo(() => {
+    if (!selectedSku) return [];
+    const todayStr = new Date().toISOString().split("T")[0];
+    return (facilityBatches || [])
+      .filter(
+        (b) =>
+          Number(b.skuId) === Number(selectedSku.id) &&
+          b.status === "Available" &&
+          b.expiryDate &&
+          b.expiryDate > todayStr,
+      )
+      .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+  }, [selectedSku, facilityBatches]);
 
   // Selected batch for stock adjustment (ADD mode)
   const selectedBatch = useMemo(() => {
@@ -466,15 +488,6 @@ function SkuManagement() {
       null
     );
   }, [adjustFormData.batchId, skuBatches]);
-
-  // Facility Batches for Expired Batches Tracking & Deduction
-  const [facilityBatches, setFacilityBatches] = useState([]);
-  const [isProcessingExpired, setIsProcessingExpired] = useState(false);
-  const [expiredResultModal, setExpiredResultModal] = useState(null);
-  const [isConfirmExpiredModalOpen, setIsConfirmExpiredModalOpen] =
-    useState(false);
-  const [targetSkuForExpiredDeduction, setTargetSkuForExpiredDeduction] =
-    useState(null);
 
   // Expired batches that still have units and have not had SKU units deducted yet
   const expiredBatches = useMemo(() => {
@@ -799,66 +812,21 @@ function SkuManagement() {
 
   const handleOpenAdjustModal = (skuItem) => {
     setSelectedSku(skuItem);
-    setAdjustFormData(DEFAULT_STOCK_ADJUSTMENT);
-    setSkuBatches([]);
+    const todayStr = new Date().toISOString().split("T")[0];
+    const available = (facilityBatches || []).filter(
+      (b) =>
+        Number(b.skuId) === Number(skuItem?.id) &&
+        b.status === "Available" &&
+        b.expiryDate &&
+        b.expiryDate > todayStr,
+    );
+    setAdjustFormData({
+      ...DEFAULT_STOCK_ADJUSTMENT,
+      batchId: available.length === 1 ? String(available[0].id) : "",
+    });
     clearErrors();
     setModalMode("adjust");
   };
-
-  // Fetch available batches for the selected SKU when opening Stock Adjustment Modal
-  useEffect(() => {
-    if (modalMode !== "adjust" || !selectedSku) {
-      setSkuBatches([]);
-      return;
-    }
-
-    const activeFacilityId =
-      facility?.id || selectedSku?.facilityId || targetFacilityId;
-    if (!activeFacilityId) return;
-
-    let isMounted = true;
-    setIsLoadingBatches(true);
-
-    batchService
-      .getBatchesByFacility(activeFacilityId)
-      .then((data) => {
-        if (!isMounted) return;
-        const todayStr = new Date().toISOString().split("T")[0];
-        const filtered = list.filter(
-          (b) =>
-            (b.skuId === selectedSku.id ||
-              b.skuName === selectedSku.sku ||
-              b.sku === selectedSku.sku) &&
-            b.status === "Available" &&
-            b.expiryDate &&
-            b.expiryDate > todayStr,
-        );
-        // Sort FEFO (earliest expiring batches first)
-        filtered.sort(
-          (a, b) => new Date(a.expiryDate) - new Date(b.expiryDate),
-        );
-        setSkuBatches(filtered);
-
-        // If only 1 batch exists, auto-select it for user convenience
-        if (filtered.length === 1) {
-          setAdjustFormData((prev) => ({
-            ...prev,
-            batchId: String(filtered[0].id),
-          }));
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load batches for SKU stock adjustment:", err);
-        if (isMounted) setSkuBatches([]);
-      })
-      .finally(() => {
-        if (isMounted) setIsLoadingBatches(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [modalMode, selectedSku, facility?.id, targetFacilityId]);
 
   const handleOpenRestockModal = (skuItem = null) => {
     if (skuItem && skuItem.id) {
@@ -885,7 +853,6 @@ function SkuManagement() {
     setSelectedSku(null);
     setRestockFormData(DEFAULT_RESTOCK_FORM_DATA);
     setAdjustFormData(DEFAULT_STOCK_ADJUSTMENT);
-    setSkuBatches([]);
     clearErrors();
   };
 
@@ -1197,7 +1164,7 @@ function SkuManagement() {
             : null,
       });
 
-      await fetchSkus(searchQuery);
+      await Promise.all([fetchSkus(searchQuery), loadFacilityBatches()]);
       handleCloseModal();
     } catch (err) {
       console.error("Failed to adjust stock:", err);
@@ -2300,20 +2267,9 @@ function SkuManagement() {
                       <span className="text-red-500">*</span>
                     )}
                   </label>
-                  {isLoadingBatches && (
-                    <span className="flex items-center gap-1 text-[11px] text-blue-600">
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      Loading batches...
-                    </span>
-                  )}
                 </div>
 
-                {isLoadingBatches ? (
-                  <div className="py-3 text-center text-xs text-gray-500 flex items-center justify-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                    <span>Loading available batches...</span>
-                  </div>
-                ) : skuBatches.length > 0 ? (
+                {skuBatches.length > 0 ? (
                   <div className="space-y-2.5">
                     <Dropdown
                       id="sku-adjust-batch"

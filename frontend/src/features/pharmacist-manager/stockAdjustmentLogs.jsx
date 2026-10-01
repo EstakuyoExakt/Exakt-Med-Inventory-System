@@ -28,7 +28,6 @@ import Dropdown from "../../components/common/dropdown";
 import Skeleton from "../../components/common/skeleton";
 import skuService from "../../services/sku";
 import useAuth from "../../hooks/useAuth";
-import { facilities } from "../../data/facility";
 
 const formatDate = (dateStr) => {
   if (!dateStr) return "—";
@@ -86,30 +85,16 @@ const getAdjustmentBadge = (type) => {
   }
 };
 
-function StockAdjustmentLogs({
-  facilityId: propFacilityId,
-  facilityName: propFacilityName,
-  onBack,
-  initialSkuId = null,
-}) {
+function StockAdjustmentLogs({ onBack, initialSkuId = null }) {
   const { facility } = useAuth();
 
   const currentFacilityName = useMemo(() => {
-    return (
-      propFacilityName ||
-      facility?.name ||
-      facilities[0]?.name ||
-      "Exakt Central General Hospital"
-    );
-  }, [propFacilityName, facility]);
+    return facility?.name || "";
+  }, [facility]);
 
   const targetFacilityId = useMemo(() => {
-    return (
-      propFacilityId ||
-      facility?.id ||
-      facilities.find((f) => f.name === currentFacilityName)?.id
-    );
-  }, [propFacilityId, facility?.id, currentFacilityName]);
+    return facility?.id || null;
+  }, [facility]);
 
   const [logs, setLogs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);

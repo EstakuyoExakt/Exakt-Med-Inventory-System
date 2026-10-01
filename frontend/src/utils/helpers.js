@@ -87,10 +87,8 @@ export const getStockStatus = (sku) => {
   };
 };
 
-import { projects } from "../data/projects";
-
 // Helper to get a project by ID
-export const getProjectById = (projectId, projectList = projects) => {
+export const getProjectById = (projectId, projectList = []) => {
   return projectList.find((p) => p.id === Number(projectId)) || null;
 };
 
@@ -98,7 +96,7 @@ export const getProjectById = (projectId, projectList = projects) => {
 export const getFacilitiesByProjectId = (
   projectId,
   facilityList = [],
-  projectList = projects,
+  projectList = [],
 ) => {
   const project = getProjectById(projectId, projectList);
   if (!project) return [];
@@ -110,7 +108,7 @@ export const getFacilitiesByProjectId = (
 };
 
 // Helper to get the parent project for a specific facility
-export const getProjectForFacility = (facility, projectList = projects) => {
+export const getProjectForFacility = (facility, projectList = []) => {
   if (!facility) return null;
   return (
     projectList.find(
