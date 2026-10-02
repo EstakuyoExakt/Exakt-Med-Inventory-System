@@ -39,6 +39,9 @@ public class Sku {
     @Column(nullable = false)
     private String dosageForm;
 
+    @Column(name = "dosageStrength")
+    private String dosageStrength;
+
     @Column(nullable = false)
     private String packagingUnit;
 

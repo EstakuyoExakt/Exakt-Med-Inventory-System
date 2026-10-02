@@ -21,6 +21,7 @@ public class SkuResponseDto {
     private String name;
     private String brandName;
     private String dosageForm;
+    private String dosageStrength;
     private String packagingUnit;
     private Long units;
     private Long minimumLevel;

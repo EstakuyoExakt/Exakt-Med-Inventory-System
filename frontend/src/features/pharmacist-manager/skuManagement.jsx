@@ -315,7 +315,8 @@ const mapDtoToSku = (dto) => {
     medicineId: dto.medicineId,
     brandName: dto.brandName || "",
     genericName: dto.drugDescription || "",
-    dosage: extractDosageFromDescription(dto.drugDescription) || "",
+    dosage: dto.dosageStrength || extractDosageFromDescription(dto.drugDescription) || "",
+    dosageStrength: dto.dosageStrength || extractDosageFromDescription(dto.drugDescription) || "",
     dosageForm: dto.dosageForm || "",
     packagingUnit: dto.packagingUnit || "",
     currentStock: Number(dto.units ?? 0),
@@ -1017,6 +1018,9 @@ function SkuManagement() {
           dosageForm: formData.dosageForm
             ? formData.dosageForm.trim().toUpperCase()
             : undefined,
+          dosageStrength: formData.dosage
+            ? formData.dosage.trim()
+            : undefined,
           units: 0,
           minimumLevel: Number(formData.minimumLevel),
           reorderLevel: Number(formData.reorderLevel),
@@ -1054,6 +1058,9 @@ function SkuManagement() {
           packagingUnit: formData.packagingUnit || undefined,
           dosageForm: formData.dosageForm
             ? formData.dosageForm.trim().toUpperCase()
+            : undefined,
+          dosageStrength: formData.dosage
+            ? formData.dosage.trim()
             : undefined,
           minimumLevel: Number(formData.minimumLevel),
           reorderLevel: Number(formData.reorderLevel),

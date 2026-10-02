@@ -405,6 +405,11 @@ public class SkuService {
                 : extractDosageForm(libMedicine);
         String formCode = getDosageFormCode(dosageForm);
 
+        // Resolve Dosage Strength
+        String dosageStrength = (request.getDosageStrength() != null && !request.getDosageStrength().trim().isEmpty())
+                ? request.getDosageStrength().trim()
+                : extractStrength(libMedicine);
+
         // 2. Resolve Packaging Unit
         PackagingInfo packagingInfo = resolvePackaging(request, libMedicine);
 
@@ -424,6 +429,7 @@ public class SkuService {
         sku.setName(skuName);
         sku.setBrandName(request.getBrandName().trim());
         sku.setDosageForm(dosageForm);
+        sku.setDosageStrength(dosageStrength);
         sku.setPackagingUnit(packagingInfo.name);
         sku.setMinimumLevel(request.getMinimumLevel());
         sku.setReorderLevel(request.getReorderLevel());
@@ -509,6 +515,11 @@ public class SkuService {
         // Dosage Form
         if (request.getDosageForm() != null && !request.getDosageForm().trim().isEmpty()) {
             existingSku.setDosageForm(request.getDosageForm().trim());
+        }
+
+        // Dosage Strength
+        if (request.getDosageStrength() != null && !request.getDosageStrength().trim().isEmpty()) {
+            existingSku.setDosageStrength(request.getDosageStrength().trim());
         }
 
         // Packaging Unit
@@ -873,6 +884,7 @@ public class SkuService {
         dto.setName(sku.getName());
         dto.setBrandName(sku.getBrandName());
         dto.setDosageForm(sku.getDosageForm());
+        dto.setDosageStrength(sku.getDosageStrength());
         dto.setPackagingUnit(sku.getPackagingUnit());
         dto.setUnits(sku.getUnits() != null ? sku.getUnits() : 0L);
         dto.setMinimumLevel(sku.getMinimumLevel());

@@ -26,6 +26,8 @@ public class SkuRequestDto {
 
     private String dosageForm;
 
+    private String dosageStrength;
+
     private String packagingUnit;
 
     private String packagingUnitCode;
