@@ -123,26 +123,105 @@ const extractDosageFormFromDescription = (description, rawPackageCode) => {
 const detectPackagingCodeFromDesc = (description) => {
   if (!description) return "BX100";
   const desc = description.toUpperCase();
-  if (desc.includes("60 ML BOTTLE") || desc.includes("60ML BOTTLE")) return "BL60";
-  if (desc.includes("120 ML BOTTLE") || desc.includes("120ML BOTTLE")) return "BL120";
-  if (desc.includes("100 ML BOTTLE") || desc.includes("100ML BOTTLE")) return "BL100";
-  if (desc.includes("250 ML BOTTLE") || desc.includes("250ML BOTTLE")) return "BL250";
-  if (desc.includes("500 ML BOTTLE") || desc.includes("500ML BOTTLE")) return "BL500";
-  if (desc.includes("1 L BOTTLE") || desc.includes("1L BOTTLE")) return "BL1L";
-  if (desc.includes("1 L BAG") || desc.includes("1L BAG")) return "BG1L";
-  if (desc.includes("500 ML BAG") || desc.includes("500ML BAG")) return "BG500";
+
+  // 1. Syringes
+  if (desc.includes("0.5 ML PRE-FILLED SYRINGE") || desc.includes("0.5ML PRE-FILLED SYRINGE")) return "PS05";
+  if (desc.includes("1 ML PRE-FILLED SYRINGE") || desc.includes("1ML PRE-FILLED SYRINGE")) return "PS10";
+  if (desc.includes("PRE-FILLED SYRINGE")) return "PS01";
+  if (desc.includes("SYRINGE")) return "SY01";
+
+  // 2. Eye / Ear Drops
+  if (desc.includes("2.5 ML") && (desc.includes("DROPS") || desc.includes("OPHTHALMIC"))) return "DR02";
+  if (desc.includes("5 ML") && (desc.includes("DROPS") || desc.includes("OPHTHALMIC"))) return "DR05";
+  if (desc.includes("10 ML DROPS") || desc.includes("DROPS 10 ML")) return "DR10";
+  if (desc.includes("15 ML DROPS") || desc.includes("DROPS 15 ML")) return "DR15";
+  if (desc.includes("30 ML DROPS") || desc.includes("DROPS 30 ML")) return "DR30";
+
+  // 3. Vials (check specific sizes first)
+  if (desc.includes("200 ML VIAL") || desc.includes("200ML VIAL")) return "VL200";
   if (desc.includes("100 ML VIAL") || desc.includes("100ML VIAL")) return "VL100";
   if (desc.includes("50 ML VIAL") || desc.includes("50ML VIAL")) return "VL50";
+  if (desc.includes("30 ML VIAL") || desc.includes("30ML VIAL")) return "VL30";
+  if (desc.includes("25 ML VIAL") || desc.includes("25ML VIAL")) return "VL25";
+  if (desc.includes("20 ML VIAL") || desc.includes("20ML VIAL")) return "VL20";
+  if (desc.includes("15 ML VIAL") || desc.includes("15ML VIAL")) return "VL15";
   if (desc.includes("10 ML VIAL") || desc.includes("10ML VIAL")) return "VL10";
   if (desc.includes("5 ML VIAL") || desc.includes("5ML VIAL")) return "VL05";
-  if (desc.includes("2 ML VIAL") || desc.includes("2ML VIAL")) return "VL01";
-  if (desc.includes("10 ML AMPULE") || desc.includes("10 ML AMP")) return "AM10";
-  if (desc.includes("5 ML AMPULE") || desc.includes("5 ML AMP")) return "AM05";
-  if (desc.includes("2 ML AMPULE") || desc.includes("2 ML AMP")) return "AM02";
+  if (desc.includes("4 ML VIAL") || desc.includes("4ML VIAL")) return "VL04";
+  if (desc.includes("3 ML VIAL") || desc.includes("3ML VIAL")) return "VL03";
+  if (desc.includes("2 ML VIAL") || desc.includes("2ML VIAL")) return "VL02";
+  if (desc.includes("1 ML VIAL") || desc.includes("1ML VIAL")) return "VL01";
+
+  // 4. Ampoules
+  if (desc.includes("10 ML AMPULE") || desc.includes("10 ML AMP") || desc.includes("10ML AMP")) return "AM10";
+  if (desc.includes("5 ML AMPULE") || desc.includes("5 ML AMP") || desc.includes("5ML AMP")) return "AM05";
+  if (desc.includes("2 ML AMPULE") || desc.includes("2 ML AMP") || desc.includes("2ML AMP")) return "AM02";
+  if (desc.includes("1 ML AMPULE") || desc.includes("1 ML AMP") || desc.includes("1ML AMP")) return "AM01";
+
+  // 5. Bottles & Oral Liquids
+  if (desc.includes("GALLON") || desc.includes("GL")) return "GL01";
+  if (desc.includes("5 L BOTTLE") || desc.includes("5L BOTTLE")) return "BL5L";
+  if (desc.includes("1 L BOTTLE") || desc.includes("1L BOTTLE")) return "BL1L";
+  if (desc.includes("500 ML BOTTLE") || desc.includes("500ML BOTTLE")) return "BL500";
+  if (desc.includes("250 ML BOTTLE") || desc.includes("250ML BOTTLE")) return "BL250";
+  if (desc.includes("240 ML BOTTLE") || desc.includes("240ML BOTTLE")) return "BL240";
+  if (desc.includes("200 ML BOTTLE") || desc.includes("200ML BOTTLE")) return "BL200";
+  if (desc.includes("150 ML BOTTLE") || desc.includes("150ML BOTTLE")) return "BL150";
+  if (desc.includes("120 ML BOTTLE") || desc.includes("120ML BOTTLE")) return "BL120";
+  if (desc.includes("100 ML BOTTLE") || desc.includes("100ML BOTTLE")) return "BL100";
+  if (desc.includes("70 ML BOTTLE") || desc.includes("70ML BOTTLE")) return "BL70";
+  if (desc.includes("60 ML BOTTLE") || desc.includes("60ML BOTTLE")) return "BL60";
+  if (desc.includes("50 ML BOTTLE") || desc.includes("50ML BOTTLE")) return "BL50";
+  if (desc.includes("30 ML BOTTLE") || desc.includes("30ML BOTTLE")) return "BL30";
+  if (desc.includes("25 ML BOTTLE") || desc.includes("25ML BOTTLE")) return "BL25";
+  if (desc.includes("15 ML BOTTLE") || desc.includes("15ML BOTTLE")) return "BL15";
+  if (desc.includes("10 ML BOTTLE") || desc.includes("10ML BOTTLE")) return "BL10";
+  if (desc.includes("5 ML BOTTLE") || desc.includes("5ML BOTTLE")) return "BL05";
+
+  // 6. IV Bags
+  if (desc.includes("1 L BAG") || desc.includes("1L BAG")) return "BG1L";
+  if (desc.includes("500 ML BAG") || desc.includes("500ML BAG")) return "BG500";
+  if (desc.includes("250 ML BAG") || desc.includes("250ML BAG")) return "BG250";
+  if (desc.includes("100 ML BAG") || desc.includes("100ML BAG")) return "BG100";
+
+  // 7. Topical Tubes & Jars
+  if (desc.includes("500 G JAR") || desc.includes("450 G JAR")) return "JR450";
+  if (desc.includes("100 G JAR")) return "JR100";
+  if (desc.includes("30 G JAR")) return "JR30";
+  if (desc.includes("15 G JAR")) return "JR15";
+  if (desc.includes("50 G TUBE") || desc.includes("50G TUBE")) return "TB50";
+  if (desc.includes("40 G TUBE") || desc.includes("40G TUBE")) return "TB40";
+  if (desc.includes("30 G TUBE") || desc.includes("30G TUBE")) return "TB30";
+  if (desc.includes("25 G TUBE") || desc.includes("25G TUBE")) return "TB25";
+  if (desc.includes("20 G TUBE") || desc.includes("20G TUBE")) return "TB20";
   if (desc.includes("15 G TUBE") || desc.includes("15G TUBE")) return "TB15";
   if (desc.includes("10 G TUBE") || desc.includes("10G TUBE")) return "TB10";
-  if (desc.includes("5 G TUBE") || desc.includes("5G TUBE") || desc.includes("4.5 G TUBE")) return "TB05";
+  if (desc.includes("5 G TUBE") || desc.includes("5G TUBE")) return "TB05";
+  if (desc.includes("4.5 G TUBE") || desc.includes("4G TUBE")) return "TB04";
+  if (desc.includes("3.5 G TUBE") || desc.includes("3.5G TUBE")) return "TB03";
+  if (desc.includes("2.5 G TUBE") || desc.includes("2G TUBE")) return "TB02";
+
+  // 8. Nebules, Sachets & Others
+  if (desc.includes("2.5 ML NEBULE") || desc.includes("NEBULE")) return "NB01";
+  if (desc.includes("2 ML NEBULE")) return "NB02";
+  if (desc.includes("10 ML SACHET") || desc.includes("10ML SACHET")) return "SC10";
+  if (desc.includes("6 ML SACHET") || desc.includes("6ML SACHET")) return "SC06";
   if (desc.includes("SACHET")) return "SC01";
+  if (desc.includes("CARTRIDGE")) return "CR01";
+  if (desc.includes("CARPULE")) return "CP01";
+  if (desc.includes("CANISTER") || desc.includes("INHALER")) return "IH01";
+  if (desc.includes("DISPENSER")) return "DP01";
+  if (desc.includes("SPRAY")) return "SP50";
+  if (desc.includes("PATCH")) return "PT01";
+  if (desc.includes("SUPPOSITORY")) return "SP01";
+
+  // 9. Generic container keywords fallback
+  if (desc.includes("VIAL")) return "VL01";
+  if (desc.includes("AMPOULE") || desc.includes("AMP")) return "AM01";
+  if (desc.includes("BOTTLE")) return "BL01";
+  if (desc.includes("TUBE")) return "TB01";
+
+  // 10. Default for tablets/capsules
   return "BX100";
 };
 

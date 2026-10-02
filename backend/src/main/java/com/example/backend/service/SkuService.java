@@ -264,26 +264,103 @@ public class SkuService {
 
         // 3. Fallback: Parse from drugDescription in libMedicine
         String desc = (med != null && med.getDrugDescription() != null) ? med.getDrugDescription().toUpperCase() : "";
-        if (desc.contains("60 ML BOTTLE")) return new PackagingInfo("Bottle of 60 mL", "BL60");
-        if (desc.contains("120 ML BOTTLE")) return new PackagingInfo("Bottle of 120 mL", "BL120");
-        if (desc.contains("100 ML BOTTLE")) return new PackagingInfo("Bottle of 100 mL", "BL100");
-        if (desc.contains("250 ML BOTTLE")) return new PackagingInfo("Bottle of 250 mL", "BL250");
-        if (desc.contains("500 ML BOTTLE")) return new PackagingInfo("Bottle of 500 mL", "BL500");
-        if (desc.contains("1 L BOTTLE")) return new PackagingInfo("Bottle of 1 L", "BL1L");
-        if (desc.contains("1 L BAG")) return new PackagingInfo("IV Bag of 1 L", "BG1L");
-        if (desc.contains("500 ML BAG")) return new PackagingInfo("IV Bag of 500 mL", "BG500");
-        if (desc.contains("100 ML VIAL")) return new PackagingInfo("Vial of 100 mL", "VL100");
-        if (desc.contains("50 ML VIAL")) return new PackagingInfo("Vial of 50 mL", "VL50");
-        if (desc.contains("10 ML VIAL")) return new PackagingInfo("Vial of 10 mL", "VL10");
-        if (desc.contains("5 ML VIAL")) return new PackagingInfo("Vial of 5 mL", "VL05");
-        if (desc.contains("2 ML VIAL") || desc.contains("2 mL VIAL")) return new PackagingInfo("Vial of 1 (Single Dose)", "VL01");
-        if (desc.contains("10 ML AMPULE") || desc.contains("10 ML AMP")) return new PackagingInfo("Ampoule of 1 (10 mL)", "AM10");
-        if (desc.contains("5 ML AMPULE") || desc.contains("5 ML AMP")) return new PackagingInfo("Ampoule of 1 (5 mL)", "AM05");
-        if (desc.contains("2 ML AMPULE") || desc.contains("2 ML AMP")) return new PackagingInfo("Ampoule of 1 (2 mL)", "AM02");
-        if (desc.contains("15 G TUBE") || desc.contains("15g TUBE")) return new PackagingInfo("Tube of 15g", "TB15");
-        if (desc.contains("10 G TUBE") || desc.contains("10g TUBE")) return new PackagingInfo("Tube of 10g", "TB10");
-        if (desc.contains("5 G TUBE") || desc.contains("5g TUBE") || desc.contains("4.5 G TUBE")) return new PackagingInfo("Tube of 5g", "TB05");
+
+        // Syringes
+        if (desc.contains("0.5 ML PRE-FILLED SYRINGE") || desc.contains("0.5ML PRE-FILLED SYRINGE")) return new PackagingInfo("Pre-filled Syringe of 0.5 mL", "PS05");
+        if (desc.contains("1 ML PRE-FILLED SYRINGE") || desc.contains("1ML PRE-FILLED SYRINGE")) return new PackagingInfo("Pre-filled Syringe of 1 mL", "PS10");
+        if (desc.contains("PRE-FILLED SYRINGE")) return new PackagingInfo("Pre-filled Syringe of 1", "PS01");
+        if (desc.contains("SYRINGE")) return new PackagingInfo("Syringe of 1", "SY01");
+
+        // Drops
+        if (desc.contains("2.5 ML") && (desc.contains("DROPS") || desc.contains("OPHTHALMIC"))) return new PackagingInfo("Dropper Bottle of 2.5 mL", "DR02");
+        if (desc.contains("5 ML") && (desc.contains("DROPS") || desc.contains("OPHTHALMIC"))) return new PackagingInfo("Dropper Bottle of 5 mL", "DR05");
+        if (desc.contains("10 ML DROPS") || desc.contains("DROPS 10 ML")) return new PackagingInfo("Dropper Bottle of 10 mL", "DR10");
+        if (desc.contains("15 ML DROPS") || desc.contains("DROPS 15 ML")) return new PackagingInfo("Dropper Bottle of 15 mL", "DR15");
+        if (desc.contains("30 ML DROPS") || desc.contains("DROPS 30 ML")) return new PackagingInfo("Dropper Bottle of 30 mL", "DR30");
+
+        // Vials
+        if (desc.contains("200 ML VIAL") || desc.contains("200ML VIAL")) return new PackagingInfo("Vial of 200 mL", "VL200");
+        if (desc.contains("100 ML VIAL") || desc.contains("100ML VIAL")) return new PackagingInfo("Vial of 100 mL", "VL100");
+        if (desc.contains("50 ML VIAL") || desc.contains("50ML VIAL")) return new PackagingInfo("Vial of 50 mL", "VL50");
+        if (desc.contains("30 ML VIAL") || desc.contains("30ML VIAL")) return new PackagingInfo("Vial of 30 mL", "VL30");
+        if (desc.contains("25 ML VIAL") || desc.contains("25ML VIAL")) return new PackagingInfo("Vial of 25 mL", "VL25");
+        if (desc.contains("20 ML VIAL") || desc.contains("20ML VIAL")) return new PackagingInfo("Vial of 20 mL", "VL20");
+        if (desc.contains("15 ML VIAL") || desc.contains("15ML VIAL")) return new PackagingInfo("Vial of 15 mL", "VL15");
+        if (desc.contains("10 ML VIAL") || desc.contains("10ML VIAL")) return new PackagingInfo("Vial of 10 mL", "VL10");
+        if (desc.contains("5 ML VIAL") || desc.contains("5ML VIAL")) return new PackagingInfo("Vial of 5 mL", "VL05");
+        if (desc.contains("4 ML VIAL") || desc.contains("4ML VIAL")) return new PackagingInfo("Vial of 4 mL", "VL04");
+        if (desc.contains("3 ML VIAL") || desc.contains("3ML VIAL")) return new PackagingInfo("Vial of 3 mL", "VL03");
+        if (desc.contains("2 ML VIAL") || desc.contains("2ML VIAL")) return new PackagingInfo("Vial of 2 mL", "VL02");
+        if (desc.contains("1 ML VIAL") || desc.contains("1ML VIAL")) return new PackagingInfo("Vial of 1 (Single Dose)", "VL01");
+
+        // Ampoules
+        if (desc.contains("10 ML AMPULE") || desc.contains("10 ML AMP") || desc.contains("10ML AMP")) return new PackagingInfo("Ampoule of 1 (10 mL)", "AM10");
+        if (desc.contains("5 ML AMPULE") || desc.contains("5 ML AMP") || desc.contains("5ML AMP")) return new PackagingInfo("Ampoule of 1 (5 mL)", "AM05");
+        if (desc.contains("2 ML AMPULE") || desc.contains("2 ML AMP") || desc.contains("2ML AMP")) return new PackagingInfo("Ampoule of 1 (2 mL)", "AM02");
+        if (desc.contains("1 ML AMPULE") || desc.contains("1 ML AMP") || desc.contains("1ML AMP")) return new PackagingInfo("Ampoule of 1 (1 mL)", "AM01");
+
+        // Bottles
+        if (desc.contains("GALLON") || desc.contains("GL")) return new PackagingInfo("Gallon of 1 (approx 4 L)", "GL01");
+        if (desc.contains("5 L BOTTLE") || desc.contains("5L BOTTLE")) return new PackagingInfo("Bottle of 5 L", "BL5L");
+        if (desc.contains("1 L BOTTLE") || desc.contains("1L BOTTLE")) return new PackagingInfo("Bottle of 1 L", "BL1L");
+        if (desc.contains("500 ML BOTTLE") || desc.contains("500ML BOTTLE")) return new PackagingInfo("Bottle of 500 mL", "BL500");
+        if (desc.contains("250 ML BOTTLE") || desc.contains("250ML BOTTLE")) return new PackagingInfo("Bottle of 250 mL", "BL250");
+        if (desc.contains("240 ML BOTTLE") || desc.contains("240ML BOTTLE")) return new PackagingInfo("Bottle of 240 mL", "BL240");
+        if (desc.contains("200 ML BOTTLE") || desc.contains("200ML BOTTLE")) return new PackagingInfo("Bottle of 200 mL", "BL200");
+        if (desc.contains("150 ML BOTTLE") || desc.contains("150ML BOTTLE")) return new PackagingInfo("Bottle of 150 mL", "BL150");
+        if (desc.contains("120 ML BOTTLE") || desc.contains("120ML BOTTLE")) return new PackagingInfo("Bottle of 120 mL", "BL120");
+        if (desc.contains("100 ML BOTTLE") || desc.contains("100ML BOTTLE")) return new PackagingInfo("Bottle of 100 mL", "BL100");
+        if (desc.contains("70 ML BOTTLE") || desc.contains("70ML BOTTLE")) return new PackagingInfo("Bottle of 70 mL", "BL70");
+        if (desc.contains("60 ML BOTTLE") || desc.contains("60ML BOTTLE")) return new PackagingInfo("Bottle of 60 mL", "BL60");
+        if (desc.contains("50 ML BOTTLE") || desc.contains("50ML BOTTLE")) return new PackagingInfo("Bottle of 50 mL", "BL50");
+        if (desc.contains("30 ML BOTTLE") || desc.contains("30ML BOTTLE")) return new PackagingInfo("Bottle of 30 mL", "BL30");
+        if (desc.contains("25 ML BOTTLE") || desc.contains("25ML BOTTLE")) return new PackagingInfo("Bottle of 25 mL", "BL25");
+        if (desc.contains("15 ML BOTTLE") || desc.contains("15ML BOTTLE")) return new PackagingInfo("Bottle of 15 mL", "BL15");
+        if (desc.contains("10 ML BOTTLE") || desc.contains("10ML BOTTLE")) return new PackagingInfo("Bottle of 10 mL", "BL10");
+        if (desc.contains("5 ML BOTTLE") || desc.contains("5ML BOTTLE")) return new PackagingInfo("Bottle of 5 mL", "BL05");
+
+        // IV Bags
+        if (desc.contains("1 L BAG") || desc.contains("1L BAG")) return new PackagingInfo("IV Bag of 1 L", "BG1L");
+        if (desc.contains("500 ML BAG") || desc.contains("500ML BAG")) return new PackagingInfo("IV Bag of 500 mL", "BG500");
+        if (desc.contains("250 ML BAG") || desc.contains("250ML BAG")) return new PackagingInfo("IV Bag of 250 mL", "BG250");
+        if (desc.contains("100 ML BAG") || desc.contains("100ML BAG")) return new PackagingInfo("IV Bag of 100 mL", "BG100");
+
+        // Topical Tubes & Jars
+        if (desc.contains("500 G JAR") || desc.contains("450 G JAR")) return new PackagingInfo("Jar of 450g / 500g", "JR450");
+        if (desc.contains("100 G JAR")) return new PackagingInfo("Jar of 100g", "JR100");
+        if (desc.contains("30 G JAR")) return new PackagingInfo("Jar of 30g", "JR30");
+        if (desc.contains("15 G JAR")) return new PackagingInfo("Jar of 15g", "JR15");
+        if (desc.contains("50 G TUBE") || desc.contains("50G TUBE")) return new PackagingInfo("Tube of 50g", "TB50");
+        if (desc.contains("40 G TUBE") || desc.contains("40G TUBE")) return new PackagingInfo("Tube of 40g", "TB40");
+        if (desc.contains("30 G TUBE") || desc.contains("30G TUBE")) return new PackagingInfo("Tube of 30g", "TB30");
+        if (desc.contains("25 G TUBE") || desc.contains("25G TUBE")) return new PackagingInfo("Tube of 25g", "TB25");
+        if (desc.contains("20 G TUBE") || desc.contains("20G TUBE")) return new PackagingInfo("Tube of 20g", "TB20");
+        if (desc.contains("15 G TUBE") || desc.contains("15G TUBE")) return new PackagingInfo("Tube of 15g", "TB15");
+        if (desc.contains("10 G TUBE") || desc.contains("10G TUBE")) return new PackagingInfo("Tube of 10g", "TB10");
+        if (desc.contains("5 G TUBE") || desc.contains("5G TUBE")) return new PackagingInfo("Tube of 5g", "TB05");
+        if (desc.contains("4.5 G TUBE") || desc.contains("4G TUBE")) return new PackagingInfo("Tube of 4.5g (Eye Ointment)", "TB04");
+        if (desc.contains("3.5 G TUBE") || desc.contains("3.5G TUBE")) return new PackagingInfo("Tube of 3.5g (Eye Ointment)", "TB03");
+        if (desc.contains("2.5 G TUBE") || desc.contains("2G TUBE")) return new PackagingInfo("Tube of 2g", "TB02");
+
+        // Nebules, Sachets & Others
+        if (desc.contains("2.5 ML NEBULE") || desc.contains("NEBULE")) return new PackagingInfo("Nebule of 1 (2.5 mL)", "NB01");
+        if (desc.contains("2 ML NEBULE")) return new PackagingInfo("Nebule of 2 mL", "NB02");
+        if (desc.contains("10 ML SACHET") || desc.contains("10ML SACHET")) return new PackagingInfo("Sachet of 10 mL", "SC10");
+        if (desc.contains("6 ML SACHET") || desc.contains("6ML SACHET")) return new PackagingInfo("Sachet of 6 mL", "SC06");
         if (desc.contains("SACHET")) return new PackagingInfo("Sachet of 1", "SC01");
+        if (desc.contains("CARTRIDGE")) return new PackagingInfo("Cartridge of 1", "CR01");
+        if (desc.contains("CARPULE")) return new PackagingInfo("Dental Carpule of 1", "CP01");
+        if (desc.contains("CANISTER") || desc.contains("INHALER")) return new PackagingInfo("Inhaler Canister of 1", "IH01");
+        if (desc.contains("DISPENSER")) return new PackagingInfo("Dispenser of 1", "DP01");
+        if (desc.contains("SPRAY")) return new PackagingInfo("Spray Bottle of 50 mL", "SP50");
+        if (desc.contains("PATCH")) return new PackagingInfo("Transdermal Patch of 1", "PT01");
+        if (desc.contains("SUPPOSITORY")) return new PackagingInfo("Suppository of 1", "SP01");
+
+        // Standalone keywords
+        if (desc.contains("VIAL")) return new PackagingInfo("Vial of 1 (Single Dose)", "VL01");
+        if (desc.contains("AMPOULE") || desc.contains("AMP")) return new PackagingInfo("Ampoule of 1 (1 mL)", "AM01");
+        if (desc.contains("BOTTLE")) return new PackagingInfo("Bottle of 1 (Standard)", "BL01");
+        if (desc.contains("TUBE")) return new PackagingInfo("Tube of 1 (Standard)", "TB01");
 
         // 4. Default for solids
         return new PackagingInfo("Box of 100", "BX100");
