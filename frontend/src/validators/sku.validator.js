@@ -12,17 +12,6 @@ export const validateSkuForm = (
   formData = {},
   { currentFacilitySkus = [], excludeId = null, currentFacilityName = "" } = {}
 ) => {
-  let skuError = isRequired(formData.sku, "SKU code is required.");
-  if (!skuError) {
-    skuError = isUnique(
-      formData.sku,
-      currentFacilitySkus,
-      "sku",
-      excludeId,
-      `SKU code already exists in ${currentFacilityName || "this facility"}.`
-    );
-  }
-
   const minLevelErr = isPositiveNumber(
     formData.minimumLevel,
     "Minimum level cannot be negative."
@@ -44,13 +33,6 @@ export const validateSkuForm = (
       "Please select a medicine from the library."
     ),
     brandName: isRequired(formData.brandName, "Brand name is required."),
-    dosage: isRequired(formData.dosage, "Dosage / strength is required."),
-    dosageForm: isRequired(formData.dosageForm, "Dosage form is required."),
-    sku: skuError,
-    packagingUnit: isRequired(
-      formData.packagingUnit,
-      "Packaging unit is required."
-    ),
     minimumLevel: minLevelErr,
     reorderLevel: reorderLevelErr,
     maximumLevel: maxLevelErr,

@@ -33,6 +33,7 @@ import libMedicineService from "../../services/libMedicine";
 import skuService from "../../services/sku";
 import restockRequestService from "../../services/restockRequest";
 import batchService from "../../services/batch";
+import libPackagingUnitService from "../../services/libPackagingUnit";
 
 // Constants Imports
 import {
@@ -52,117 +53,26 @@ const DEFAULT_RESTOCK_FORM_DATA = {
   reason: "",
 };
 
-const extractPackSize = (packagingUnit) => {
-  const match = packagingUnit ? packagingUnit.match(/\b(\d+)\b/) : null;
-  if (match) {
-    return String(match[1]).padStart(3, "0");
-  }
-  return "000";
-};
-
 const extractDosageFromDescription = (description) => {
   if (!description) return "";
-
-  // Single dose pattern (supports percentages like 10%, 0.9%, as well as mg, mcg, units, etc.)
   const singleDosePattern =
     /(?:\b\d+(?:\.\d+)?%|\b\d+(?:\.\d+)?\s*(?:mg|mcg|µg|g|iu|units?|u|meq|mmol)(?:\s*\/\s*\d*(?:\.\d+)?\s*(?:ml|l|g|dose|actuation|drop|spray))?\b)/i;
-
-  // 1. Check for combination dosage separated by "+", e.g. "200 units + 3 mg + 4000 units/g", "20 mg + 120 mg", or "5% + 0.9%"
   const comboPattern = new RegExp(
     `${singleDosePattern.source}(?:\\s*\\+\\s*${singleDosePattern.source})+`,
     "i",
   );
-
   const comboMatch = description.match(comboPattern);
-  if (comboMatch) {
-    return comboMatch[0].trim();
-  }
+  if (comboMatch) return comboMatch[0].trim();
 
-  // 2. Look for dosage before dosage form keywords to avoid container sizes (e.g. "10 g TUBE" or "500 mL BOTTLE")
-  const formKeywords =
-    /(TABLET|CAPSULE|OINTMENT|CREAM|SYRUP|SUSPENSION|SOLUTION|INJECTION|DROPS|GEL|LOTION|INHALER|PATCH|SUPPOSITORY|POWDER|SHAMPOO)/i;
-  const formIndex = description.search(formKeywords);
-
-  const unitPatternGlobal = new RegExp(singleDosePattern.source, "gi");
-
-  if (formIndex > 0) {
-    const textBeforeForm = description.substring(0, formIndex);
-    const matchesBefore = textBeforeForm.match(unitPatternGlobal);
-    if (matchesBefore && matchesBefore.length > 0) {
-      return matchesBefore[0].trim();
-    }
-  }
-
-  // 3. Fallback: match any dose unit not directly preceding packaging container descriptors
-  const allMatches = description.match(unitPatternGlobal);
+  const allMatches = description.match(new RegExp(singleDosePattern.source, "gi"));
   if (allMatches && allMatches.length > 0) {
-    const nonPackMatches = allMatches.filter((m) => {
-      const regex = new RegExp(
-        `${m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*(?:bottle|tube|vial|ampoule|pack|box|bag|canister)`,
-        "i",
-      );
-      return !regex.test(description);
+    const nonPack = allMatches.filter((m) => {
+      const rx = new RegExp(`${m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*(?:bottle|tube|vial|ampoule|pack|box|bag|canister)`, "i");
+      return !rx.test(description);
     });
-    if (nonPackMatches.length > 0) {
-      return nonPackMatches[0].trim();
-    }
-    return allMatches[0].trim();
+    return nonPack.length > 0 ? nonPack[0].trim() : allMatches[0].trim();
   }
-
   return "";
-};
-
-const extractPackagingFromDescription = (description) => {
-  if (!description) return null;
-
-  const trimmed = description.trim();
-  // Standalone TABLET or CAPSULE is a dosage form, not packaging unit
-  if (/^(?:TABLET|CAPSULE|TAB|CAP)S?$/i.test(trimmed)) {
-    return null;
-  }
-
-  // 1. Look after dosage form keywords for packaging info
-  const formKeywords =
-    /(?:SOLUTION FOR INJECTION|POWDER FOR SUSPENSION|POWDER FOR INJECTION|TABLET|CAPSULE|OINTMENT|CREAM|SYRUP|SUSPENSION|SOLUTION|INJECTION|DROPS|GEL|LOTION|INHALER|PATCH|SUPPOSITORY|POWDER|SHAMPOO)/i;
-  const formMatch = trimmed.match(formKeywords);
-  if (formMatch) {
-    const formIndex = trimmed.indexOf(formMatch[0]);
-    const afterForm = trimmed.substring(formIndex + formMatch[0].length).trim();
-    if (afterForm) {
-      let cleaned = afterForm.trim();
-      if (cleaned.startsWith("(") && cleaned.endsWith(")")) {
-        cleaned = cleaned.slice(1, -1).trim();
-      }
-      cleaned = cleaned.replace(/^[-,/:\s]+|[-,/:\s]+$/g, "").trim();
-      if (cleaned) {
-        // Refactor for TABLET === null or CAPSULE === null
-        if (/^(?:TABLET|CAPSULE|TAB|CAP)S?$/i.test(cleaned)) {
-          return null;
-        }
-        if (!/^(?:ORAL|IV|IM|SC|TOPICAL)$/i.test(cleaned)) {
-          return cleaned;
-        }
-      }
-    }
-  }
-
-  // 2. Match container patterns anywhere in description
-  const packMatch = trimmed.match(
-    /\b(?:\d+(?:\.\d+)?\s*(?:ml|l|g|kg|'s|s)\s+)?(?:BOTTLE|TUBE|VIAL|AMPOULE|AMP|BAG|BOX|BLISTER|STRIP|CANISTER|SACHET|CARPULE|JAR|TIN)\b.*$/i,
-  );
-  if (packMatch) {
-    let res = packMatch[0].trim();
-    if (res.startsWith("(") && res.endsWith(")")) {
-      res = res.slice(1, -1).trim();
-    }
-    res = res.replace(/^[-,/:\s]+|[-,/:\s]+$/g, "").trim();
-    if (res && !/^(?:TABLET|CAPSULE|TAB|CAP)S?$/i.test(res)) {
-      return res;
-    }
-  }
-
-  // No packaging unit displayed in drug_description
-  return null;
 };
 
 const extractDosageFormFromDescription = (description, rawPackageCode) => {
@@ -190,8 +100,7 @@ const extractDosageFormFromDescription = (description, rawPackageCode) => {
 
   if (description) {
     for (const kw of formKeywords) {
-      const regex = new RegExp(`\\b${kw}\\b`, "i");
-      if (regex.test(description)) {
+      if (new RegExp(`\\b${kw}\\b`, "i").test(description)) {
         return kw.toUpperCase();
       }
     }
@@ -200,7 +109,6 @@ const extractDosageFormFromDescription = (description, rawPackageCode) => {
   if (rawPackageCode) {
     const code = rawPackageCode.trim().toUpperCase();
     const prefix = code.slice(0, 3);
-    // Find matching full name from FORM_CODES
     const match = Object.entries(FORM_CODES).find(
       ([fullName, shortCode]) =>
         fullName === code || shortCode === code || shortCode === prefix,
@@ -209,100 +117,115 @@ const extractDosageFormFromDescription = (description, rawPackageCode) => {
     return code;
   }
 
-  return "";
+  return "TABLET";
 };
 
-const extractSkuIdentifierGeneric = (generic, dosage) => {
-  if (!generic && !dosage) return "";
+const detectPackagingCodeFromDesc = (description) => {
+  if (!description) return "BX100";
+  const desc = description.toUpperCase();
+  if (desc.includes("60 ML BOTTLE") || desc.includes("60ML BOTTLE")) return "BL60";
+  if (desc.includes("120 ML BOTTLE") || desc.includes("120ML BOTTLE")) return "BL120";
+  if (desc.includes("100 ML BOTTLE") || desc.includes("100ML BOTTLE")) return "BL100";
+  if (desc.includes("250 ML BOTTLE") || desc.includes("250ML BOTTLE")) return "BL250";
+  if (desc.includes("500 ML BOTTLE") || desc.includes("500ML BOTTLE")) return "BL500";
+  if (desc.includes("1 L BOTTLE") || desc.includes("1L BOTTLE")) return "BL1L";
+  if (desc.includes("1 L BAG") || desc.includes("1L BAG")) return "BG1L";
+  if (desc.includes("500 ML BAG") || desc.includes("500ML BAG")) return "BG500";
+  if (desc.includes("100 ML VIAL") || desc.includes("100ML VIAL")) return "VL100";
+  if (desc.includes("50 ML VIAL") || desc.includes("50ML VIAL")) return "VL50";
+  if (desc.includes("10 ML VIAL") || desc.includes("10ML VIAL")) return "VL10";
+  if (desc.includes("5 ML VIAL") || desc.includes("5ML VIAL")) return "VL05";
+  if (desc.includes("2 ML VIAL") || desc.includes("2ML VIAL")) return "VL01";
+  if (desc.includes("10 ML AMPULE") || desc.includes("10 ML AMP")) return "AM10";
+  if (desc.includes("5 ML AMPULE") || desc.includes("5 ML AMP")) return "AM05";
+  if (desc.includes("2 ML AMPULE") || desc.includes("2 ML AMP")) return "AM02";
+  if (desc.includes("15 G TUBE") || desc.includes("15G TUBE")) return "TB15";
+  if (desc.includes("10 G TUBE") || desc.includes("10G TUBE")) return "TB10";
+  if (desc.includes("5 G TUBE") || desc.includes("5G TUBE") || desc.includes("4.5 G TUBE")) return "TB05";
+  if (desc.includes("SACHET")) return "SC01";
+  return "BX100";
+};
 
-  const effectiveDosage = dosage || extractDosageFromDescription(generic) || "";
+const generateSkuPreview = (brand, generic, dosage, form, packagingUnitCode) => {
+  const cleanBrand = (brand || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  const brandCode = cleanBrand.length >= 4
+    ? cleanBrand.slice(0, 4)
+    : (cleanBrand ? cleanBrand.padEnd(4, "X") : "GENE");
 
-  // 1. Isolate the generic active ingredient names from any trailing dosage/container text
-  let ingredientText = generic || "";
-  if (
-    effectiveDosage &&
-    ingredientText.toLowerCase().includes(effectiveDosage.toLowerCase())
-  ) {
-    ingredientText = ingredientText.substring(
-      0,
-      ingredientText.toLowerCase().indexOf(effectiveDosage.toLowerCase()),
-    );
-  } else {
-    // Find the start of dosage units or strength numbers
-    const doseMatch = ingredientText.match(
-      /\b\d+(?:\.\d+)?\s*(?:%|mg|mcg|µg|g|iu|units?|u|meq|mmol)\b/i,
-    );
-    if (doseMatch && doseMatch.index > 0) {
-      ingredientText = ingredientText.substring(0, doseMatch.index);
-    }
-  }
-
-  // 2. Extract 4-letter codes for each active ingredient (handles combinations like "ALUMINUM HYDROXIDE + MAGNESIUM HYDROXIDE")
-  let genericCode = "";
-  if (ingredientText.includes("+")) {
-    const parts = ingredientText
-      .split("+")
-      .map((part) => {
-        const words = part.trim().split(/\s+/);
-        if (!words || words.length === 0 || !words[0]) return "";
-        const clean = words[0].replace(/[^a-zA-Z]/g, "");
-        return clean.slice(0, 4).toUpperCase();
-      })
-      .filter(Boolean);
-    genericCode = parts.join("+");
-  } else {
-    const words = ingredientText.trim().split(/\s+/);
-    const firstWord =
-      words && words.length > 0 && words[0] ? words[0] : ingredientText;
-    const clean = firstWord.replace(/[^a-zA-Z]/g, "");
-    genericCode = clean.slice(0, 4).toUpperCase();
-  }
-
-  // 3. Extract dosage numbers (handles combinations like "225 mg + 200 mg/5 mL" -> "225+200")
-  let dosageDigits = "";
-  if (effectiveDosage) {
-    if (String(effectiveDosage).includes("+")) {
-      const doseParts = String(effectiveDosage)
-        .split("+")
-        .map((part) => {
-          const m = part.match(/\d+(?:\.\d+)?/);
-          return m ? m[0] : "";
-        })
-        .filter(Boolean);
-      dosageDigits = doseParts.join("+");
+  // 5-letter generic code
+  let genericPart = "MEDIC";
+  if (generic) {
+    let cleaned = generic.replace(/^\s*\d+(?:\.\d+)?%?\s*/, "").trim();
+    if (cleaned.includes("+")) {
+      const parts = cleaned.split("+").map((p) => {
+        const words = p.trim().split(/\s+/);
+        const w = words[0].replace(/[^a-zA-Z]/g, "").toUpperCase();
+        return w.length >= 5 ? w.slice(0, 5) : w;
+      }).filter(Boolean);
+      if (parts.length > 0) genericPart = parts.join("+");
     } else {
-      const nums = String(effectiveDosage).match(/\d+/g);
-      if (nums) {
-        if (String(effectiveDosage).includes("/")) {
-          dosageDigits = nums.slice(0, 2).join("");
-        } else {
-          dosageDigits = nums[0];
+      const words = cleaned.split(/\s+/);
+      for (const w of words) {
+        const wClean = w.replace(/[^a-zA-Z]/g, "").toUpperCase();
+        if (wClean.length >= 3) {
+          genericPart = wClean.length >= 5 ? wClean.slice(0, 5) : wClean;
+          break;
         }
       }
     }
   }
 
-  return `${genericCode}${dosageDigits}`;
-};
+  // Strength digits (combines both for multi-ingredient medicines)
+  let strengthDigits = "";
+  if (dosage) {
+    if (String(dosage).includes("+")) {
+      const parts = String(dosage).split("+");
+      const nums = parts
+        .map((p) => {
+          const m = p.match(/\d+(?:\.\d+)?/);
+          return m ? m[0].replace(".", "") : "";
+        })
+        .filter(Boolean);
+      strengthDigits = nums.join("+");
+    } else {
+      const m = String(dosage).match(/\d+(?:\.\d+)?/);
+      if (m) {
+        strengthDigits = m[0].replace(".", "");
+      }
+    }
+  }
 
-const generateSkuCode = (brand, generic, dosage, form, packagingUnit) => {
-  const brandCode = (brand || "")
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .slice(0, 4)
-    .toUpperCase();
+  // Form code 3 letters
+  let formCode = "TAB";
+  if (form) {
+    const fUpper = form.toUpperCase();
+    if (FORM_CODES[fUpper]) {
+      formCode = FORM_CODES[fUpper];
+    } else if (fUpper.includes("TAB")) formCode = "TAB";
+    else if (fUpper.includes("CAP")) formCode = "CAP";
+    else if (fUpper.includes("SYR")) formCode = "SYR";
+    else if (fUpper.includes("SUS")) formCode = "SUS";
+    else if (fUpper.includes("INJ")) formCode = "INJ";
+    else if (fUpper.includes("SOL")) formCode = "SOL";
+    else if (fUpper.includes("OIN")) formCode = "OIN";
+    else if (fUpper.includes("CRM")) formCode = "CRM";
+    else if (fUpper.includes("DRP")) formCode = "DRP";
+    else if (fUpper.includes("INH")) formCode = "INH";
+    else if (fUpper.includes("SUP")) formCode = "SUP";
+    else if (fUpper.includes("POW")) formCode = "POW";
+    else if (fUpper.includes("SAC")) formCode = "SAC";
+    else if (fUpper.includes("PAT")) formCode = "PAT";
+    else if (fUpper.includes("LOT")) formCode = "LOT";
+    else if (fUpper.includes("GEL")) formCode = "GEL";
+    else {
+      const cleanF = fUpper.replace(/[^A-Z]/g, "");
+      formCode = cleanF.length >= 3 ? cleanF.slice(0, 3) : cleanF.padEnd(3, "X");
+    }
+  }
 
-  const genericStrength = extractSkuIdentifierGeneric(generic, dosage);
-  const formCode =
-    (form && FORM_CODES[form]) || (form ? form.slice(0, 3).toUpperCase() : "");
-  const packSize = packagingUnit ? extractPackSize(packagingUnit) : "";
+  const packPart = packagingUnitCode || "BX100";
 
-  const parts = [];
-  if (brandCode) parts.push(brandCode);
-  if (genericStrength) parts.push(genericStrength);
-  if (formCode) parts.push(formCode);
-  if (packSize) parts.push(packSize);
-
-  return parts.join("-");
+  return `${brandCode}-${genericPart}${strengthDigits}-${formCode}-${packPart}`;
 };
 
 const mapDtoToSku = (dto) => {
@@ -381,6 +304,26 @@ function SkuManagement() {
 
   const [libMedicines, setLibMedicines] = useState([]);
   const [isLoadingMedicines, setIsLoadingMedicines] = useState(false);
+  const [packagingUnits, setPackagingUnits] = useState([]);
+
+  useEffect(() => {
+    const fetchPackagingUnits = async () => {
+      try {
+        const data = await libPackagingUnitService.getAll();
+        setPackagingUnits(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Failed to load packaging units:", err);
+      }
+    };
+    fetchPackagingUnits();
+  }, []);
+
+  const packagingOptions = useMemo(() => {
+    return packagingUnits.map((u) => ({
+      value: u.code,
+      label: `${u.name} (${u.code})`,
+    }));
+  }, [packagingUnits]);
 
   // Fetch SKUs from backend API (all or via searchSku endpoint)
   const fetchSkus = useCallback(
@@ -701,7 +644,7 @@ function SkuManagement() {
       const dosageForm = (
         extractDosageFormFromDescription(genericName, rawPackageCode) ||
         rawPackageCode.slice(0, 3) ||
-        ""
+        "TABLET"
       ).toUpperCase();
       const extractedDosage =
         extractDosageFromDescription(genericName) ||
@@ -709,53 +652,31 @@ function SkuManagement() {
           ? `${selectedMed.strengthCode} ${selectedMed.unitCode || ""}`.trim()
           : "");
 
-      let extractedPackaging = extractPackagingFromDescription(genericName);
-
-      // Refactor for TABLET === null or CAPSULE === null
-      if (
-        extractedPackaging === null ||
-        extractedPackaging === "TABLET" ||
-        extractedPackaging === "CAPSULE" ||
-        extractedPackaging === "TAB" ||
-        extractedPackaging === "CAP"
-      ) {
-        extractedPackaging = null;
-      }
+      const detectedCode = detectPackagingCodeFromDesc(genericName);
+      const matchedUnit = packagingUnits.find((u) => u.code === detectedCode);
+      const packagingUnitName = matchedUnit ? matchedUnit.name : "Box of 100";
 
       setFormData((prev) => {
-        const dosage = (extractedDosage || prev.dosage || "").toUpperCase();
-        const packagingUnit = extractedPackaging
-          ? extractedPackaging.toUpperCase()
-          : null;
         const brandName = (prev.brandName || "").toUpperCase();
-        const finalDosageForm = dosageForm || prev.dosageForm || "";
-        const generatedSku = generateSkuCode(
+        const generatedSku = generateSkuPreview(
           brandName,
           genericName,
-          dosage,
-          finalDosageForm,
-          packagingUnit,
+          extractedDosage,
+          dosageForm,
+          detectedCode,
         );
         return {
           ...prev,
           medicineId: selectedMed.id,
           brandName,
           genericName,
-          dosage,
-          dosageForm: finalDosageForm,
-          packagingUnit,
+          dosage: extractedDosage,
+          dosageForm,
+          packagingUnitCode: detectedCode,
+          packagingUnit: packagingUnitName,
           sku: generatedSku,
         };
       });
-      if (dosageForm) {
-        clearError("dosageForm");
-      }
-      if (extractedDosage) {
-        clearError("dosage");
-      }
-      if (extractedPackaging) {
-        clearError("packagingUnit");
-      }
     } else {
       setFormData((prev) => ({
         ...prev,
@@ -763,7 +684,8 @@ function SkuManagement() {
         genericName: "",
         dosage: "",
         dosageForm: "",
-        packagingUnit: null,
+        packagingUnitCode: "BX100",
+        packagingUnit: "Box of 100",
         sku: "",
       }));
     }
@@ -786,14 +708,22 @@ function SkuManagement() {
 
   const handleOpenEditModal = (skuItem) => {
     setSelectedSku(skuItem);
+    const matchedUnit = packagingUnits.find(
+      (u) =>
+        u.name.toLowerCase() === (skuItem.packagingUnit || "").toLowerCase() ||
+        u.code === skuItem.packagingUnit,
+    );
     setFormData({
       medicineId: skuItem.medicineId,
       sku: skuItem.sku,
-      brandName: skuItem.brandName,
-      genericName: skuItem.genericName,
-      dosage: skuItem.dosage,
-      dosageForm: skuItem.dosageForm,
-      packagingUnit: skuItem.packagingUnit,
+      brandName: skuItem.brandName || "",
+      genericName: skuItem.genericName || "",
+      dosage: skuItem.dosage || "",
+      dosageForm: skuItem.dosageForm || "TABLET",
+      packagingUnitCode: matchedUnit ? matchedUnit.code : "BX100",
+      packagingUnit:
+        skuItem.packagingUnit ||
+        (matchedUnit ? matchedUnit.name : "Box of 100"),
       minimumLevel: skuItem.minimumLevel,
       reorderLevel: skuItem.reorderLevel,
       maximumLevel: skuItem.maximumLevel,
@@ -943,25 +873,26 @@ function SkuManagement() {
     setFormData((prev) => {
       const updated = { ...prev, [name]: finalValue };
 
-      if (
-        (name === "brandName" ||
-          name === "dosage" ||
-          name === "dosageForm" ||
-          name === "packagingUnit") &&
-        modalMode === "add"
-      ) {
-        const brandForSku = name === "brandName" ? finalValue : prev.brandName;
-        const dosageForSku = name === "dosage" ? finalValue : prev.dosage;
-        const formForSku = name === "dosageForm" ? finalValue : prev.dosageForm;
-        const packForSku =
-          name === "packagingUnit" ? finalValue : prev.packagingUnit;
+      if (name === "packagingUnitCode") {
+        const unit = packagingUnits.find((u) => u.code === finalValue);
+        if (unit) {
+          updated.packagingUnit = unit.name;
+        }
+      }
 
-        updated.sku = generateSkuCode(
+      if (name === "brandName" || name === "packagingUnitCode") {
+        const brandForSku = name === "brandName" ? finalValue : prev.brandName;
+        const packCodeForSku =
+          name === "packagingUnitCode"
+            ? finalValue
+            : prev.packagingUnitCode || "BX100";
+
+        updated.sku = generateSkuPreview(
           brandForSku,
           prev.genericName,
-          dosageForSku,
-          formForSku,
-          packForSku,
+          prev.dosage,
+          prev.dosageForm,
+          packCodeForSku,
         );
       }
 
@@ -1000,10 +931,13 @@ function SkuManagement() {
         const payload = {
           facilityId: Number(targetFacilityIdToSave),
           medicineId: Number(formData.medicineId),
-          name: formData.sku.trim().toUpperCase(),
+          name: formData.sku ? formData.sku.trim().toUpperCase() : undefined,
           brandName: formData.brandName.trim().toUpperCase(),
-          dosageForm: formData.dosageForm.trim().toUpperCase(),
-          packagingUnit: (formData.packagingUnit || "").trim().toUpperCase(),
+          packagingUnitCode: formData.packagingUnitCode || undefined,
+          packagingUnit: formData.packagingUnit || undefined,
+          dosageForm: formData.dosageForm
+            ? formData.dosageForm.trim().toUpperCase()
+            : undefined,
           units: 0,
           minimumLevel: Number(formData.minimumLevel),
           reorderLevel: Number(formData.reorderLevel),
@@ -1036,10 +970,12 @@ function SkuManagement() {
         const payload = {
           facilityId: Number(editFacilityId),
           medicineId: Number(editMedicineId),
-          name: formData.sku.trim().toUpperCase(),
           brandName: formData.brandName.trim().toUpperCase(),
-          dosageForm: formData.dosageForm.trim().toUpperCase(),
-          packagingUnit: (formData.packagingUnit || "").trim().toUpperCase(),
+          packagingUnitCode: formData.packagingUnitCode || undefined,
+          packagingUnit: formData.packagingUnit || undefined,
+          dosageForm: formData.dosageForm
+            ? formData.dosageForm.trim().toUpperCase()
+            : undefined,
           minimumLevel: Number(formData.minimumLevel),
           reorderLevel: Number(formData.reorderLevel),
           maximumLevel: Number(formData.maximumLevel),
@@ -1822,7 +1758,7 @@ function SkuManagement() {
             ? "Create New SKU from Medicine Library"
             : "Edit SKU & Inventory Thresholds"
         }
-        size="lg"
+        size="2xl"
       >
         <form onSubmit={handleSaveSku} className="space-y-4">
           {/* Facility Assignment Badge */}
@@ -1869,17 +1805,37 @@ function SkuManagement() {
             </div>
           )}
 
-          {modalMode === "edit" && (
-            <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-700">
-              <span className="font-semibold text-gray-900">
-                Generic Formula:
-              </span>{" "}
-              {formData.genericName} — {formData.dosage}
+          {/* Selected Medicine Clinical Details Card */}
+          {formData.genericName && (
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-slate-500 uppercase tracking-wider text-[11px]">
+                  Clinical Formulation
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  Auto-extracted from Drug Library
+                </span>
+              </div>
+              <div className="font-bold text-gray-900 text-sm">
+                {formData.genericName}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {formData.dosage && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold">
+                    Strength: {formData.dosage}
+                  </span>
+                )}
+                {formData.dosageForm && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 text-xs font-semibold">
+                    Form: {formData.dosageForm}
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Brand Name Input */}
+            {/* Brand Name Input - The ONLY text input required */}
             <div>
               <label
                 htmlFor="sku-brandName"
@@ -1899,125 +1855,64 @@ function SkuManagement() {
                     ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
                     : ""
                 }`}
+                autoFocus={modalMode === "add"}
               />
               {formErrors.brandName && (
                 <p className="text-xs text-red-500 mt-1">
                   {formErrors.brandName}
                 </p>
               )}
+              <span className="text-[11px] text-gray-400 block mt-1">
+                Enter proprietary brand name or "GENERIC"
+              </span>
             </div>
 
-            {/* Dosage / Strength Input */}
+            {/* Packaging Unit Dropdown */}
             <div>
-              <label
-                htmlFor="sku-dosage"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Dosage / Strength <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="sku-dosage"
-                type="text"
-                name="dosage"
-                value={formData.dosage}
-                onChange={handleInputChange}
-                placeholder="e.g. 500MG, 250MG/5ML, 10MCG"
-                className={`input uppercase ${
-                  formErrors.dosage
-                    ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
-                    : ""
-                }`}
+              <Dropdown
+                id="sku-packaging-unit"
+                name="packagingUnitCode"
+                label="Packaging Unit"
+                required
+                options={packagingOptions}
+                value={formData.packagingUnitCode || "BX100"}
+                onChange={(e) => {
+                  handleInputChange({
+                    target: {
+                      name: "packagingUnitCode",
+                      value: e?.target?.value ?? e,
+                    },
+                  });
+                }}
+                placeholder="Select packaging unit"
+                error={formErrors.packagingUnit}
+                helperText="Standardized packaging code used in SKU"
               />
-              {formErrors.dosage && (
-                <p className="text-xs text-red-500 mt-1">{formErrors.dosage}</p>
-              )}
             </div>
 
-            {/* Dosage Form Input */}
-            <div>
-              <label
-                htmlFor="sku-dosageForm"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Dosage Form <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="sku-dosageForm"
-                type="text"
-                name="dosageForm"
-                value={formData.dosageForm}
-                onChange={handleInputChange}
-                placeholder="e.g. TAB, CAP, SYR, SOL, OIN"
-                className={`input uppercase ${
-                  formErrors.dosageForm
-                    ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
-                    : ""
-                }`}
-              />
-              {formErrors.dosageForm && (
-                <p className="text-xs text-red-500 mt-1">
-                  {formErrors.dosageForm}
-                </p>
-              )}
-            </div>
-
-            {/* Packaging Unit */}
-            <div>
-              <label
-                htmlFor="sku-packaging"
-                className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5"
-              >
-                Packaging Unit <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="sku-packaging"
-                type="text"
-                name="packagingUnit"
-                value={formData.packagingUnit ?? ""}
-                onChange={handleInputChange}
-                placeholder="e.g. 500 ML BOTTLE, 10 G TUBE, BOX OF 100"
-                className={`input uppercase ${
-                  formErrors.packagingUnit
-                    ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
-                    : ""
-                }`}
-              />
-              {formErrors.packagingUnit && (
-                <p className="text-xs text-red-500 mt-1">
-                  {formErrors.packagingUnit}
-                </p>
-              )}
-            </div>
-
-            {/* SKU Code */}
-            <div className="sm:col-span-2">
+            {/* Live Generated SKU Identifier Card */}
+            <div className="sm:col-span-2 p-3.5 rounded-xl bg-gradient-to-r from-slate-50 to-blue-50/40 border border-blue-100">
               <div className="flex items-center justify-between mb-1.5">
-                <label
-                  htmlFor="sku-code"
-                  className="block text-xs font-semibold text-gray-700 uppercase tracking-wider"
-                >
-                  SKU Identifier <span className="text-red-500">*</span>
-                </label>
-                <span className="text-[11px] text-gray-400 font-mono">
-                  Format: [BRAND]-[GENERIC][STRENGTH]-[FORM]-[PACK]
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Package className="w-3.5 h-3.5 text-blue-600" />
+                  Automated SKU Identifier Preview
+                </span>
+                <span className="text-[11px] text-slate-400 font-mono">
+                  [BRAND]-[GENERIC][STRENGTH]-[FORM]-[PACK]
                 </span>
               </div>
-              <input
-                id="sku-code"
-                type="text"
-                name="sku"
-                value={formData.sku}
-                onChange={handleInputChange}
-                placeholder="BIOG-PARA500-TAB-010"
-                className={`input uppercase font-mono ${
-                  formErrors.sku
-                    ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
-                    : ""
-                }`}
-                disabled
-              />
+              <div className="flex items-center gap-3">
+                <div className="px-3 py-1.5 rounded-lg bg-white border border-blue-200 text-blue-900 font-mono font-bold text-sm tracking-wide shadow-sm">
+                  {formData.sku || "PROV-MEDIC-TAB-BX100"}
+                </div>
+                <span className="text-xs text-slate-500">
+                  Deterministically generated upon saving
+                </span>
+              </div>
               {formErrors.sku && (
-                <p className="text-xs text-red-500 mt-1">{formErrors.sku}</p>
+                <p className="text-xs text-red-500 mt-2 font-medium">
+                  {formErrors.sku}
+                </p>
               )}
             </div>
 

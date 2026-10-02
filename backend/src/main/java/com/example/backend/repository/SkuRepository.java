@@ -12,6 +12,8 @@ import java.util.List;
 public interface SkuRepository extends JpaRepository<Sku, Long> {
     List<Sku> findByFacilityId(Long facilityId);
     List<Sku> findByLibMedicineId(Long medicineId);
+    boolean existsByFacilityIdAndName(Long facilityId, String name);
+    boolean existsByFacilityIdAndNameAndIdNot(Long facilityId, String name, Long id);
 
     @Query("SELECT s FROM Sku s LEFT JOIN s.libMedicine m WHERE " +
            "s.facility.id = :facilityId AND " +

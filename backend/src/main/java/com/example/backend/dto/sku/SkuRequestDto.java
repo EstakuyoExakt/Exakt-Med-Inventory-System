@@ -19,17 +19,16 @@ public class SkuRequestDto {
     @NotNull(message = "Medicine ID is required")
     private Long medicineId;
 
-    @NotBlank(message = "Name is required")
     private String name;
 
     @NotBlank(message = "Brand name is required")
     private String brandName;
 
-    @NotBlank(message = "Dosage form is required")
     private String dosageForm;
 
-    @NotBlank(message = "Packaging unit is required")
     private String packagingUnit;
+
+    private String packagingUnitCode;
 
     @NotNull(message = "Minimum level is required")
     private Long minimumLevel;

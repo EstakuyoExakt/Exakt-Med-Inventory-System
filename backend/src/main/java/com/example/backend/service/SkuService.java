@@ -17,6 +17,8 @@ import com.example.backend.entity.OrderedItem;
 import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.LibMedicineRepository;
 import com.example.backend.repository.OrderedItemRepository;
+import com.example.backend.entity.LibPackagingUnit;
+import com.example.backend.repository.LibPackagingUnitRepository;
 import com.example.backend.repository.RestockRequestRepository;
 import com.example.backend.repository.SkuRepository;
 import com.example.backend.repository.StockAdjustmentLogRepository;
@@ -32,6 +34,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -46,6 +49,7 @@ public class SkuService {
     private final UserRepository userRepository;
     private final RestockRequestRepository restockRequestRepository;
     private final OrderedItemRepository orderedItemRepository;
+    private final LibPackagingUnitRepository libPackagingUnitRepository;
 
     public SkuService(SkuRepository skuRepository,
                       FacilityRepository facilityRepository,
@@ -55,7 +59,8 @@ public class SkuService {
                       AuditLogService auditLogService,
                       UserRepository userRepository,
                       RestockRequestRepository restockRequestRepository,
-                      OrderedItemRepository orderedItemRepository) {
+                      OrderedItemRepository orderedItemRepository,
+                      LibPackagingUnitRepository libPackagingUnitRepository) {
         this.skuRepository = skuRepository;
         this.facilityRepository = facilityRepository;
         this.libMedicineRepository = libMedicineRepository;
@@ -65,6 +70,238 @@ public class SkuService {
         this.userRepository = userRepository;
         this.restockRequestRepository = restockRequestRepository;
         this.orderedItemRepository = orderedItemRepository;
+        this.libPackagingUnitRepository = libPackagingUnitRepository;
+    }
+
+    // --- AUTOMATED ATTRIBUTE EXTRACTION & SKU GENERATION ---
+
+    public String extractDosageForm(LibMedicine med) {
+        if (med == null) return "TABLET";
+        String formCode = med.getFormCode();
+        if (formCode != null && !formCode.trim().isEmpty()) {
+            String upper = formCode.trim().toUpperCase();
+            if (upper.startsWith("TAB")) return "TABLET";
+            if (upper.startsWith("CAP")) return "CAPSULE";
+            if (upper.startsWith("SYR")) return "SYRUP";
+            if (upper.startsWith("SUS")) return "SUSPENSION";
+            if (upper.startsWith("INJ")) return "INJECTION";
+            if (upper.startsWith("SOL")) return "SOLUTION";
+            if (upper.startsWith("OIN") || upper.startsWith("EYO")) return "OINTMENT";
+            if (upper.startsWith("CRM")) return "CREAM";
+            if (upper.startsWith("DRP")) return "DROPS";
+            if (upper.startsWith("INH")) return "INHALER";
+            if (upper.startsWith("SUP")) return "SUPPOSITORY";
+            if (upper.startsWith("POW")) return "POWDER";
+            if (upper.startsWith("SAC")) return "SACHET";
+            if (upper.startsWith("PAT")) return "PATCH";
+        }
+
+        String desc = med.getDrugDescription() != null ? med.getDrugDescription().toUpperCase() : "";
+        if (desc.contains("TABLET")) return "TABLET";
+        if (desc.contains("CAPSULE")) return "CAPSULE";
+        if (desc.contains("SYRUP")) return "SYRUP";
+        if (desc.contains("SUSPENSION")) return "SUSPENSION";
+        if (desc.contains("SOLUTION")) return "SOLUTION";
+        if (desc.contains("INJECTION") || desc.contains("INJECTABLE")) return "INJECTION";
+        if (desc.contains("OINTMENT")) return "OINTMENT";
+        if (desc.contains("CREAM")) return "CREAM";
+        if (desc.contains("DROPS")) return "DROPS";
+        if (desc.contains("INHALER")) return "INHALER";
+        if (desc.contains("SUPPOSITORY")) return "SUPPOSITORY";
+        if (desc.contains("POWDER")) return "POWDER";
+        if (desc.contains("SACHET")) return "SACHET";
+        if (desc.contains("PATCH")) return "PATCH";
+        if (desc.contains("LOTION")) return "LOTION";
+        if (desc.contains("GEL")) return "GEL";
+
+        return "TABLET";
+    }
+
+    public String getDosageFormCode(String dosageForm) {
+        if (dosageForm == null || dosageForm.trim().isEmpty()) return "TAB";
+        String upper = dosageForm.trim().toUpperCase();
+        if (upper.contains("TABLET") || upper.equals("TAB")) return "TAB";
+        if (upper.contains("CAPSULE") || upper.equals("CAP")) return "CAP";
+        if (upper.contains("SYRUP") || upper.equals("SYR")) return "SYR";
+        if (upper.contains("SUSPENSION") || upper.equals("SUS")) return "SUS";
+        if (upper.contains("INJECTION") || upper.contains("INJECTABLE") || upper.equals("INJ")) return "INJ";
+        if (upper.contains("SOLUTION") || upper.equals("SOL")) return "SOL";
+        if (upper.contains("OINTMENT") || upper.equals("OIN")) return "OIN";
+        if (upper.contains("CREAM") || upper.equals("CRM")) return "CRM";
+        if (upper.contains("DROPS") || upper.equals("DRP")) return "DRP";
+        if (upper.contains("INHALER") || upper.equals("INH")) return "INH";
+        if (upper.contains("SUPPOSITORY") || upper.equals("SUP")) return "SUP";
+        if (upper.contains("POWDER") || upper.equals("POW")) return "POW";
+        if (upper.contains("SACHET") || upper.equals("SAC")) return "SAC";
+        if (upper.contains("PATCH") || upper.equals("PAT")) return "PAT";
+        if (upper.contains("LOTION") || upper.equals("LOT")) return "LOT";
+        if (upper.contains("GEL")) return "GEL";
+
+        String clean = upper.replaceAll("[^A-Z]", "");
+        return clean.length() >= 3 ? clean.substring(0, 3) : String.format("%-3s", clean).replace(' ', 'X');
+    }
+
+    public String extractStrength(LibMedicine med) {
+        if (med == null) return "";
+
+        // 1. Primary: Extract clinical dosage from drugDescription (e.g. "10 mg/mL", "500 mg", "250 mg/5 mL")
+        String desc = med.getDrugDescription() != null ? med.getDrugDescription() : "";
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                "\\b\\d+(?:\\.\\d+)?%|\\b\\d+(?:\\.\\d+)?\\s*(?:mg|mcg|µg|g|iu|units?|u|meq|mmol)(?:\\s*/\\s*\\d*(?:\\.\\d+)?\\s*(?:ml|l|g|dose|drop|actuation))?(?:\\s*\\+\\s*\\d+(?:\\.\\d+)?\\s*(?:mg|mcg|µg|g|iu|units?|u|meq|mmol)(?:\\s*/\\s*\\d*(?:\\.\\d+)?\\s*(?:ml|l|g))?)*",
+                java.util.regex.Pattern.CASE_INSENSITIVE
+        );
+        java.util.regex.Matcher matcher = pattern.matcher(desc);
+        if (matcher.find()) {
+            return matcher.group().trim();
+        }
+
+        // 2. Fallback: Check if strengthCode is non-zero
+        if (med.getStrengthCode() != null && !med.getStrengthCode().trim().isEmpty() && !med.getStrengthCode().equals("00000")) {
+            String str = med.getStrengthCode().trim().replaceFirst("^0+(?!$)", "");
+            String unit = med.getUnitCode() != null ? med.getUnitCode().trim() : "";
+            if (!str.isEmpty()) {
+                return (str + " " + unit).trim();
+            }
+        }
+
+        return "";
+    }
+
+    public String getStrengthDigits(String strength) {
+        if (strength == null || strength.trim().isEmpty()) return "";
+        if (strength.contains("+")) {
+            String[] parts = strength.split("\\+");
+            StringBuilder sb = new StringBuilder();
+            for (String p : parts) {
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\d+(?:\\.\\d+)?").matcher(p);
+                if (m.find()) {
+                    if (sb.length() > 0) sb.append("+");
+                    sb.append(m.group().replace(".", ""));
+                }
+            }
+            return sb.toString();
+        } else {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\d+(?:\\.\\d+)?").matcher(strength);
+            if (m.find()) {
+                return m.group().replace(".", "");
+            }
+        }
+        return "";
+    }
+
+    public String extractGenericCode(LibMedicine med) {
+        if (med == null) return "MEDIC";
+        String desc = med.getDrugDescription() != null ? med.getDrugDescription().trim() : "";
+
+        // Remove parenthetical salt notes like "( as TRIHYDRATE)"
+        String cleaned = desc.replaceAll("(?i)\\(\\s*as\\s+[^)]+\\)", "").trim();
+
+        // Check combination with "+"
+        if (cleaned.contains("+")) {
+            String insideParens = "";
+            java.util.regex.Matcher pm = java.util.regex.Pattern.compile("\\(([^)]+\\+[^)]+)\\)").matcher(cleaned);
+            if (pm.find()) {
+                insideParens = pm.group(1);
+            }
+            String sourceToUse = !insideParens.isEmpty() ? insideParens : cleaned;
+            String[] parts = sourceToUse.split("\\+");
+            List<String> codes = new ArrayList<>();
+            for (String part : parts) {
+                String word = part.trim().split("\\s+")[0].replaceAll("[^A-Za-z]", "").toUpperCase();
+                if (!word.isEmpty()) {
+                    codes.add(word.length() >= 5 ? word.substring(0, 5) : word);
+                }
+            }
+            if (!codes.isEmpty()) {
+                return String.join("+", codes);
+            }
+        }
+
+        // Single active ingredient: extract the first clinical word (5 letters)
+        String textNoLeadingNums = cleaned.replaceFirst("^\\s*\\d+(?:\\.\\d+)?%?\\s*", "");
+        String[] words = textNoLeadingNums.split("\\s+");
+        for (String w : words) {
+            String wordClean = w.replaceAll("[^A-Za-z]", "").toUpperCase();
+            if (wordClean.length() >= 3) {
+                return wordClean.length() >= 5 ? wordClean.substring(0, 5) : wordClean;
+            }
+        }
+
+        return "MEDIC";
+    }
+
+    public static class PackagingInfo {
+        public final String name;
+        public final String code;
+        public PackagingInfo(String name, String code) {
+            this.name = name;
+            this.code = code;
+        }
+    }
+
+    public PackagingInfo resolvePackaging(SkuRequestDto request, LibMedicine med) {
+        // 1. If packagingUnitCode provided, look up in lib_packaging_unit
+        if (request.getPackagingUnitCode() != null && !request.getPackagingUnitCode().trim().isEmpty()) {
+            Optional<LibPackagingUnit> opt = libPackagingUnitRepository.findByCode(request.getPackagingUnitCode().trim().toUpperCase());
+            if (opt.isPresent()) {
+                return new PackagingInfo(opt.get().getName(), opt.get().getCode());
+            }
+        }
+
+        // 2. If packagingUnit name provided, look up in lib_packaging_unit
+        if (request.getPackagingUnit() != null && !request.getPackagingUnit().trim().isEmpty()) {
+            Optional<LibPackagingUnit> opt = libPackagingUnitRepository.findByNameIgnoreCase(request.getPackagingUnit().trim());
+            if (opt.isPresent()) {
+                return new PackagingInfo(opt.get().getName(), opt.get().getCode());
+            }
+            String customName = request.getPackagingUnit().trim();
+            String digits = customName.replaceAll("\\D", "");
+            String letters = customName.replaceAll("[^A-Za-z]", "").toUpperCase();
+            String prefix = letters.length() >= 2 ? letters.substring(0, 2) : "PK";
+            String code = prefix + (digits.length() >= 2 ? digits.substring(0, 2) : (digits.isEmpty() ? "01" : String.format("%02d", Integer.parseInt(digits))));
+            return new PackagingInfo(customName, code);
+        }
+
+        // 3. Fallback: Parse from drugDescription in libMedicine
+        String desc = (med != null && med.getDrugDescription() != null) ? med.getDrugDescription().toUpperCase() : "";
+        if (desc.contains("60 ML BOTTLE")) return new PackagingInfo("Bottle of 60 mL", "BL60");
+        if (desc.contains("120 ML BOTTLE")) return new PackagingInfo("Bottle of 120 mL", "BL120");
+        if (desc.contains("100 ML BOTTLE")) return new PackagingInfo("Bottle of 100 mL", "BL100");
+        if (desc.contains("250 ML BOTTLE")) return new PackagingInfo("Bottle of 250 mL", "BL250");
+        if (desc.contains("500 ML BOTTLE")) return new PackagingInfo("Bottle of 500 mL", "BL500");
+        if (desc.contains("1 L BOTTLE")) return new PackagingInfo("Bottle of 1 L", "BL1L");
+        if (desc.contains("1 L BAG")) return new PackagingInfo("IV Bag of 1 L", "BG1L");
+        if (desc.contains("500 ML BAG")) return new PackagingInfo("IV Bag of 500 mL", "BG500");
+        if (desc.contains("100 ML VIAL")) return new PackagingInfo("Vial of 100 mL", "VL100");
+        if (desc.contains("50 ML VIAL")) return new PackagingInfo("Vial of 50 mL", "VL50");
+        if (desc.contains("10 ML VIAL")) return new PackagingInfo("Vial of 10 mL", "VL10");
+        if (desc.contains("5 ML VIAL")) return new PackagingInfo("Vial of 5 mL", "VL05");
+        if (desc.contains("2 ML VIAL") || desc.contains("2 mL VIAL")) return new PackagingInfo("Vial of 1 (Single Dose)", "VL01");
+        if (desc.contains("10 ML AMPULE") || desc.contains("10 ML AMP")) return new PackagingInfo("Ampoule of 1 (10 mL)", "AM10");
+        if (desc.contains("5 ML AMPULE") || desc.contains("5 ML AMP")) return new PackagingInfo("Ampoule of 1 (5 mL)", "AM05");
+        if (desc.contains("2 ML AMPULE") || desc.contains("2 ML AMP")) return new PackagingInfo("Ampoule of 1 (2 mL)", "AM02");
+        if (desc.contains("15 G TUBE") || desc.contains("15g TUBE")) return new PackagingInfo("Tube of 15g", "TB15");
+        if (desc.contains("10 G TUBE") || desc.contains("10g TUBE")) return new PackagingInfo("Tube of 10g", "TB10");
+        if (desc.contains("5 G TUBE") || desc.contains("5g TUBE") || desc.contains("4.5 G TUBE")) return new PackagingInfo("Tube of 5g", "TB05");
+        if (desc.contains("SACHET")) return new PackagingInfo("Sachet of 1", "SC01");
+
+        // 4. Default for solids
+        return new PackagingInfo("Box of 100", "BX100");
+    }
+
+    public String generateSkuCode(String brandName, LibMedicine med, String formCode, String packCode) {
+        String cleanBrand = (brandName != null ? brandName.replaceAll("[^A-Za-z0-9]", "").toUpperCase() : "");
+        if (cleanBrand.isEmpty() || cleanBrand.equalsIgnoreCase("GENERIC")) {
+            cleanBrand = "GENE";
+        } else {
+            cleanBrand = cleanBrand.length() >= 4 ? cleanBrand.substring(0, 4) : String.format("%-4s", cleanBrand).replace(' ', 'X');
+        }
+
+        String genericPart = extractGenericCode(med);
+        String strengthStr = extractStrength(med);
+        String strengthDigits = getStrengthDigits(strengthStr);
+
+        return cleanBrand + "-" + genericPart + strengthDigits + "-" + formCode + "-" + packCode;
     }
 
     // 1. CREATE SKU (Units field is automatically defaulted to 0 by @PrePersist in Sku entity)
@@ -85,13 +322,32 @@ public class SkuService {
             throw new RuntimeException("Maximum capacity must be greater than reorder level threshold");
         }
 
+        // 1. Resolve Dosage Form
+        String dosageForm = (request.getDosageForm() != null && !request.getDosageForm().trim().isEmpty())
+                ? request.getDosageForm().trim()
+                : extractDosageForm(libMedicine);
+        String formCode = getDosageFormCode(dosageForm);
+
+        // 2. Resolve Packaging Unit
+        PackagingInfo packagingInfo = resolvePackaging(request, libMedicine);
+
+        // 3. Generate Clean Deterministic 5-Letter SKU Identifier (or use requested name if provided)
+        String skuName = (request.getName() != null && !request.getName().trim().isEmpty())
+                ? request.getName().trim().toUpperCase()
+                : generateSkuCode(request.getBrandName(), libMedicine, formCode, packagingInfo.code);
+
+        // Check uniqueness in facility
+        if (skuRepository.existsByFacilityIdAndName(facility.getId(), skuName)) {
+            throw new RuntimeException("SKU code '" + skuName + "' already exists in this facility.");
+        }
+
         Sku sku = new Sku();
         sku.setFacility(facility);
         sku.setLibMedicine(libMedicine);
-        sku.setName(request.getName().trim());
+        sku.setName(skuName);
         sku.setBrandName(request.getBrandName().trim());
-        sku.setDosageForm(request.getDosageForm().trim());
-        sku.setPackagingUnit(request.getPackagingUnit().trim());
+        sku.setDosageForm(dosageForm);
+        sku.setPackagingUnit(packagingInfo.name);
         sku.setMinimumLevel(request.getMinimumLevel());
         sku.setReorderLevel(request.getReorderLevel());
         sku.setMaximumLevel(request.getMaximumLevel());
@@ -173,10 +429,32 @@ public class SkuService {
             throw new RuntimeException("Maximum capacity must be greater than reorder level threshold");
         }
 
-        existingSku.setName(request.getName().trim());
-        existingSku.setBrandName(request.getBrandName().trim());
-        existingSku.setDosageForm(request.getDosageForm().trim());
-        existingSku.setPackagingUnit(request.getPackagingUnit().trim());
+        // Dosage Form
+        if (request.getDosageForm() != null && !request.getDosageForm().trim().isEmpty()) {
+            existingSku.setDosageForm(request.getDosageForm().trim());
+        }
+
+        // Packaging Unit
+        if ((request.getPackagingUnitCode() != null && !request.getPackagingUnitCode().trim().isEmpty())
+                || (request.getPackagingUnit() != null && !request.getPackagingUnit().trim().isEmpty())) {
+            PackagingInfo packInfo = resolvePackaging(request, existingSku.getLibMedicine());
+            existingSku.setPackagingUnit(packInfo.name);
+        }
+
+        if (request.getBrandName() != null && !request.getBrandName().trim().isEmpty()) {
+            existingSku.setBrandName(request.getBrandName().trim());
+        }
+
+        // SKU Name
+        String newName = existingSku.getName();
+        if (request.getName() != null && !request.getName().trim().isEmpty()) {
+            newName = request.getName().trim().toUpperCase();
+        }
+        if (skuRepository.existsByFacilityIdAndNameAndIdNot(existingSku.getFacility().getId(), newName, existingSku.getId())) {
+            throw new RuntimeException("SKU code '" + newName + "' already exists in this facility.");
+        }
+        existingSku.setName(newName);
+
         existingSku.setMinimumLevel(request.getMinimumLevel());
         existingSku.setReorderLevel(request.getReorderLevel());
         existingSku.setMaximumLevel(request.getMaximumLevel());
