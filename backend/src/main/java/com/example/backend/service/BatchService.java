@@ -387,6 +387,40 @@ public class BatchService {
         return batchRepository.save(batch);
     }
 
+    // 10. DEDUCT UNITS FROM SPECIFIC BATCH (When adjustment reason is not Dispensed)
+    @Transactional
+    public Batch deductUnitsFromBatch(Long batchId, Long skuId, long unitsToDeduct) {
+        if (batchId == null || unitsToDeduct <= 0) {
+            return null;
+        }
+        Batch batch = batchRepository.findById(batchId)
+                .orElseThrow(() -> new RuntimeException("Target batch not found with id: " + batchId));
+
+        if (skuId != null && batch.getOrderedItem() != null && batch.getOrderedItem().getSku() != null) {
+            if (!batch.getOrderedItem().getSku().getId().equals(skuId)) {
+                throw new RuntimeException("Selected batch does not belong to this SKU.");
+            }
+        }
+
+        long currentBatchUnits = batch.getUnits() != null ? batch.getUnits() : 0L;
+        if (unitsToDeduct > currentBatchUnits) {
+            throw new RuntimeException("Cannot deduct " + unitsToDeduct + " units from Batch #" + batch.getBatchNum() +
+                    " (only " + currentBatchUnits + " units available in this batch).");
+        }
+
+        batch.setUnits(currentBatchUnits - unitsToDeduct);
+        return batchRepository.save(batch);
+    }
+
+    // 11. CHECK IF FACILITY HAS BATCHES FOR SKU
+    @Transactional(readOnly = true)
+    public boolean hasBatchesForSku(Long facilityId, Long skuId) {
+        if (facilityId == null || skuId == null) {
+            return false;
+        }
+        return !batchRepository.findBatchesForSkuOrderByReceivedAtAsc(facilityId, skuId).isEmpty();
+    }
+
     // HELPER: ADJUST ACTIVE SKU UNITS
     private void adjustSkuUnits(Batch batch, long delta) {
         OrderedItem item = batch.getOrderedItem();

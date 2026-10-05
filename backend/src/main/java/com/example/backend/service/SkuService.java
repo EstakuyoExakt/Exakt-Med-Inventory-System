@@ -626,9 +626,25 @@ public class SkuService {
         Sku savedSku = skuRepository.save(sku);
 
         List<Batch> deductedBatches = new ArrayList<>();
-        // FEFO: Deduct from the nearest expiring available batches
         if (unitsToDeduct > 0 && savedSku.getFacility() != null) {
-            deductedBatches = batchService.deductBatchesFEFO(savedSku.getId(), savedSku.getFacility().getId(), unitsToDeduct);
+            boolean isDispensed = request.getReason() != null && "DISPENSED".equalsIgnoreCase(request.getReason().trim());
+            if (isDispensed) {
+                // FEFO: Deduct automatically from the nearest expiring available batches
+                deductedBatches = batchService.deductBatchesFEFO(savedSku.getId(), savedSku.getFacility().getId(), unitsToDeduct);
+            } else {
+                // When reason is other than Dispensed, require and deduct from the specific target batch
+                boolean hasBatches = batchService.hasBatchesForSku(savedSku.getFacility().getId(), savedSku.getId());
+                if (hasBatches && request.getBatchId() == null) {
+                    throw new RuntimeException("Target batch is required when adjustment reason is not 'Dispensed'. Please select which batch to deduct from.");
+                }
+                if (request.getBatchId() != null) {
+                    Batch deducted = batchService.deductUnitsFromBatch(request.getBatchId(), savedSku.getId(), unitsToDeduct);
+                    if (deducted != null) {
+                        deductedBatches.add(deducted);
+                        targetBatch = deducted;
+                    }
+                }
+            }
         }
 
         // Build batch metadata string for both additions and deductions

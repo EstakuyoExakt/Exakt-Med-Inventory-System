@@ -1144,6 +1144,9 @@ function SkuManagement() {
       errors.amount = `Cannot deduct more than available current stock (${selectedSku.currentStock}).`;
     }
 
+    const isDispensed =
+      String(adjustFormData.reason || "").trim().toUpperCase() === "DISPENSED";
+
     if (
       adjustFormData.type === "ADD" &&
       skuBatches.length > 0 &&
@@ -1151,6 +1154,14 @@ function SkuManagement() {
     ) {
       errors.batchId =
         "Please select a target batch to receive the added stock.";
+    } else if (
+      adjustFormData.type === "SUBTRACT" &&
+      !isDispensed &&
+      skuBatches.length > 0 &&
+      !adjustFormData.batchId
+    ) {
+      errors.batchId =
+        "Please select which batch to deduct stock from.";
     }
 
     if (adjustFormData.type === "ADD" && adjustFormData.batchId) {
@@ -1164,6 +1175,17 @@ function SkuManagement() {
           (chosen.expiryDate && chosen.expiryDate <= todayStr))
       ) {
         errors.batchId = "Cannot add stock to an expired batch.";
+      }
+    } else if (
+      adjustFormData.type === "SUBTRACT" &&
+      !isDispensed &&
+      adjustFormData.batchId
+    ) {
+      const chosen = skuBatches.find(
+        (b) => String(b.id) === String(adjustFormData.batchId),
+      );
+      if (chosen && amt > (Number(chosen.units) || 0)) {
+        errors.amount = `Cannot deduct ${amt} units from Batch #${chosen.batchNum} (only ${chosen.units} units available in this batch).`;
       }
     }
 
@@ -1181,7 +1203,9 @@ function SkuManagement() {
         reason: adjustFormData.reason,
         notes: adjustFormData.notes ? adjustFormData.notes.trim() : null,
         batchId:
-          adjustFormData.type === "ADD" && adjustFormData.batchId
+          (adjustFormData.type === "ADD" ||
+            (adjustFormData.type === "SUBTRACT" && !isDispensed)) &&
+          adjustFormData.batchId
             ? Number(adjustFormData.batchId)
             : null,
       });
@@ -1977,7 +2001,7 @@ function SkuManagement() {
             </div>
 
             {/* Live Generated SKU Identifier Card */}
-            <div className="sm:col-span-2 p-3.5 rounded-xl bg-gradient-to-r from-slate-50 to-blue-50/40 border border-blue-100">
+            <div className="sm:col-span-2 p-3.5 rounded-xl bg-linear-to-r from-slate-50 to-blue-50/40 border border-blue-100">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                   <Package className="w-3.5 h-3.5 text-blue-600" />
@@ -2235,15 +2259,69 @@ function SkuManagement() {
                 </div>
               )}
 
-            {/* Target Batch Selector & Expiry Date Display (Only when Add Stock is active) */}
-            {adjustFormData.type === "ADD" && (
-              <div className="space-y-2.5 p-3.5 rounded-xl bg-blue-50/50 border border-blue-200/80">
+            {/* Adjustment Reason */}
+            <div>
+              <Dropdown
+                id="sku-adjust-reason"
+                name="reason"
+                label="Reason for Adjustment"
+                required
+                value={adjustFormData.reason}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setAdjustFormData((prev) => ({
+                    ...prev,
+                    reason: val,
+                  }));
+                  clearError("batchId");
+                }}
+                options={ADJUSTMENT_REASONS.map((r) => ({
+                  value: r,
+                  label: r,
+                }))}
+              />
+            </div>
+
+            {/* If Reason is Dispensed & Deduct Stock: Automated FEFO Notice */}
+            {adjustFormData.type === "SUBTRACT" &&
+              adjustFormData.reason?.toUpperCase() === "DISPENSED" && (
+                <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/80 flex items-start gap-2.5">
+                  <div className="p-1 rounded-md bg-blue-100 text-blue-700 shrink-0 mt-0.5">
+                    <Package className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-blue-950">
+                      Automated FEFO (First-Expired, First-Out) Deduction
+                    </p>
+                    <p className="text-[11px] text-blue-800 mt-0.5 leading-relaxed">
+                      Because the adjustment reason is <strong>Dispensed</strong>, the system will automatically deduct units sequentially starting from your nearest-expiring available batch(es).
+                    </p>
+                  </div>
+                </div>
+              )}
+
+            {/* Target Batch Selector:
+                - Shown when ADD is active
+                - OR when SUBTRACT is active AND reason is NOT "Dispensed"
+            */}
+            {(adjustFormData.type === "ADD" ||
+              (adjustFormData.type === "SUBTRACT" &&
+                adjustFormData.reason?.toUpperCase() !== "DISPENSED")) && (
+              <div
+                className={`space-y-2.5 p-3.5 rounded-xl border ${
+                  adjustFormData.type === "ADD"
+                    ? "bg-blue-50/50 border-blue-200/80"
+                    : "bg-amber-50/40 border-amber-200/80"
+                }`}
+              >
                 <div className="flex items-center justify-between">
                   <label
                     htmlFor="sku-adjust-batch"
                     className="block text-xs font-semibold text-gray-800 uppercase tracking-wider"
                   >
-                    Target Batch to Add Stock{" "}
+                    {adjustFormData.type === "ADD"
+                      ? "Target Batch to Add Stock"
+                      : "Target Batch to Deduct Stock From"}{" "}
                     {skuBatches.length > 0 && (
                       <span className="text-red-500">*</span>
                     )}
@@ -2255,7 +2333,11 @@ function SkuManagement() {
                     <Dropdown
                       id="sku-adjust-batch"
                       value={adjustFormData.batchId}
-                      placeholder="-- Select Target Batch --"
+                      placeholder={
+                        adjustFormData.type === "ADD"
+                          ? "-- Select Target Batch to Add --"
+                          : "-- Select Batch to Deduct From --"
+                      }
                       error={formErrors.batchId}
                       size="sm"
                       onChange={(e) => {
@@ -2270,7 +2352,7 @@ function SkuManagement() {
                         const exp = getExpiryStatus(b.expiryDate);
                         return {
                           value: b.id,
-                          label: `Batch #${b.batchNum} • Exp: ${b.expiryDate} (${exp.label}) • Current: ${b.units} units`,
+                          label: `Batch #${b.batchNum} • Exp: ${b.expiryDate} (${exp.label}) • Available: ${b.units} units`,
                         };
                       })}
                     />
@@ -2288,20 +2370,30 @@ function SkuManagement() {
                         const currentBatchUnits = Number(
                           selectedBatch.units || 0,
                         );
-                        const additionalUnits = Number(
+                        const deltaAmount = Number(
                           adjustFormData.amount || 0,
                         );
-                        const projectedTotal =
-                          currentBatchUnits +
-                          (isNaN(additionalUnits) || additionalUnits < 0
+                        const validDelta =
+                          isNaN(deltaAmount) || deltaAmount < 0
                             ? 0
-                            : additionalUnits);
+                            : deltaAmount;
+
+                        const projectedTotal =
+                          adjustFormData.type === "ADD"
+                            ? currentBatchUnits + validDelta
+                            : Math.max(0, currentBatchUnits - validDelta);
 
                         return (
-                          <div className="p-3 rounded-lg bg-white border border-blue-200 shadow-xs space-y-2.5">
+                          <div className="p-3 rounded-lg bg-white border border-gray-200 shadow-xs space-y-2.5">
                             <div className="flex items-center justify-between gap-2 flex-wrap">
                               <div className="flex items-center gap-2">
-                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 border border-blue-100">
+                                <div
+                                  className={`flex h-8 w-8 items-center justify-center rounded-lg border ${
+                                    adjustFormData.type === "ADD"
+                                      ? "bg-blue-50 text-blue-600 border-blue-100"
+                                      : "bg-amber-50 text-amber-700 border-amber-200"
+                                  }`}
+                                >
                                   <Package className="w-4 h-4" />
                                 </div>
                                 <div>
@@ -2347,9 +2439,18 @@ function SkuManagement() {
                                   {currentBatchUnits.toLocaleString()} units
                                 </strong>
                               </span>
-                              <span className="text-emerald-700 font-bold">
-                                Projected: {projectedTotal.toLocaleString()}{" "}
-                                units
+                              <span
+                                className={`font-bold ${
+                                  adjustFormData.type === "ADD"
+                                    ? "text-emerald-700"
+                                    : validDelta > currentBatchUnits
+                                      ? "text-red-600"
+                                      : "text-amber-700"
+                                }`}
+                              >
+                                {adjustFormData.type === "ADD"
+                                  ? `Projected: ${projectedTotal.toLocaleString()} units`
+                                  : `Remaining: ${projectedTotal.toLocaleString()} units`}
                               </span>
                             </div>
                           </div>
@@ -2397,27 +2498,6 @@ function SkuManagement() {
               {formErrors.amount && (
                 <p className="text-xs text-red-500 mt-1">{formErrors.amount}</p>
               )}
-            </div>
-
-            {/* Adjustment Reason */}
-            <div>
-              <Dropdown
-                id="sku-adjust-reason"
-                name="reason"
-                label="Reason for Adjustment"
-                required
-                value={adjustFormData.reason}
-                onChange={(e) =>
-                  setAdjustFormData((prev) => ({
-                    ...prev,
-                    reason: e.target.value,
-                  }))
-                }
-                options={ADJUSTMENT_REASONS.map((r) => ({
-                  value: r,
-                  label: r,
-                }))}
-              />
             </div>
 
             {/* Notes */}
