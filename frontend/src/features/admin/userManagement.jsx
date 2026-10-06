@@ -38,7 +38,7 @@ import { validateUserForm } from "../../validators/user.validator";
 import {
   canEditUser as checkCanEditUser,
   canDeleteUser as checkCanDeleteUser,
-} from "../../utils/helpers";
+} from "../../helpers/user";
 import { DEFAULT_USER_FORM } from "../../utils/constants";
 import userService from "../../services/user";
 import assignFacilityService from "../../services/assignFacility";

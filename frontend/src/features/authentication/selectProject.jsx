@@ -35,7 +35,7 @@ import { validateProjectForm } from "../../validators/project.validator";
 import {
   getUserAssignedProjects,
   filterProjectsByQuery,
-} from "../../utils/helpers";
+} from "../../helpers/project";
 
 function SelectProject() {
   const navigate = useNavigate();

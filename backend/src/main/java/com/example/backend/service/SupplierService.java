@@ -31,7 +31,7 @@ public class SupplierService {
 
     // 1. CREATE SUPPLIER (SuperAdmin only)
     @Transactional
-    @PreAuthorize("hasRole('SuperAdmin')")
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
     public SupplierResponseDto createSupplier(SupplierRequestDto request) {
         Facility facility = facilityRepository.findById(request.getFacilityId())
                 .orElseThrow(() -> new RuntimeException("Facility not found with id: " + request.getFacilityId()));

@@ -43,7 +43,7 @@ import {
 
 function SupplierManagement() {
   const { facility } = useAuth();
-  const { isSuperAdmin } = useRole();
+  const { isSuperAdmin, isAdmin } = useRole();
 
   // Active facility from auth context (no mock fallback)
   const currentFacilityName = useMemo(() => {
@@ -153,7 +153,7 @@ function SupplierManagement() {
 
   // Modal Open Handlers
   const handleOpenAddModal = () => {
-    if (!isSuperAdmin) return;
+    if (!isAdmin) return;
     setFormData({
       ...DEFAULT_SUPPLIER_FORM,
     });
@@ -326,7 +326,7 @@ function SupplierManagement() {
               className={`w-4 h-4 ${loading ? "animate-spin text-blue-600" : ""}`}
             />
           </button>
-          <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN]}>
+          <RoleGuard allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]}>
             <button
               type="button"
               onClick={handleOpenAddModal}

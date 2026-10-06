@@ -1,6 +1,6 @@
 import { createContext, useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { getRedirectPathForRole } from "../utils/helpers";
+import { getRedirectPathForRole } from "../helpers/auth";
 import { ROLE_DETAILS } from "../config/roles";
 import authService from "../services/auth";
 

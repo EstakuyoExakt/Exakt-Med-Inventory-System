@@ -27,7 +27,7 @@ import Modal from "../../components/common/modal";
 import Dropdown from "../../components/common/dropdown";
 import ComboBox from "./components/comboBox";
 import Skeleton from "../../components/common/skeleton";
-import { getExpiryStatus } from "../../utils/helpers";
+import { getExpiryStatus } from "../../helpers/inventory";
 import useAuth from "../../hooks/useAuth";
 import useError from "../../hooks/useError";
 import { validateBatchForm } from "../../validators/batch.validator";

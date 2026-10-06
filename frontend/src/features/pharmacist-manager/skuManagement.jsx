@@ -46,7 +46,7 @@ import {
   ADJUSTMENT_REASONS,
   DEFAULT_STOCK_ADJUSTMENT,
 } from "../../utils/constants";
-import { getStockStatus, getExpiryStatus } from "../../utils/helpers";
+import { getStockStatus, getExpiryStatus } from "../../helpers/inventory";
 import useAuth from "../../hooks/useAuth";
 import useError from "../../hooks/useError";
 import { validateSkuForm } from "../../validators/sku.validator";

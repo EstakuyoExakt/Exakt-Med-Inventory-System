@@ -34,7 +34,7 @@ import Dropdown from "../../components/common/dropdown";
 import Skeleton from "../../components/common/skeleton";
 
 // Constants & Helper Imports
-import { getStockStatus } from "../../utils/helpers";
+import { getStockStatus } from "../../helpers/inventory";
 import { DEFAULT_ORDER_FORM } from "../../utils/constants";
 import useAuth from "../../hooks/useAuth";
 import skuService from "../../services/sku";
