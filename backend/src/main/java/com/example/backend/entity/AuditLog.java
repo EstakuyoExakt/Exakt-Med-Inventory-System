@@ -68,7 +68,7 @@ public class AuditLog {
     private LocalDateTime createdAt;
 
     @PrePersist
-    public void onCreate() {
+    private void onCreate() {
         if (this.createdAt == null) {
             this.createdAt = LocalDateTime.now();
         }

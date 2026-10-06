@@ -18,6 +18,7 @@ import PharmacistDashboard from "./features/pharmacist-manager/pharmacistDashboa
 import SkuManagement from "./features/pharmacist-manager/skuManagement";
 import BatchManagement from "./features/pharmacist-manager/batchManagement";
 import StockAdjustmentLogs from "./features/pharmacist-manager/stockAdjustmentLogs";
+import DispenseLogs from "./features/pharmacist-manager/dispenseLogs";
 
 // Procurement Officer Pages
 import ProcurementDashboard from "./features/procurement-officer/procurementDashboard";
@@ -115,6 +116,10 @@ function App() {
             <Route
               path="/pharmacist/stock-adjustments"
               element={<StockAdjustmentLogs />}
+            />
+            <Route
+              path="/pharmacist/dispense-logs"
+              element={<DispenseLogs />}
             />
             <Route path="/pharmacist/audit-logs" element={<AuditLogs />} />
           </Route>

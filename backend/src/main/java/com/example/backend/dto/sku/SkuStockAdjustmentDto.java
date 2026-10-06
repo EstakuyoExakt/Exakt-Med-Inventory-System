@@ -32,4 +32,8 @@ public class SkuStockAdjustmentDto {
     private String notes;
 
     private Long batchId;
+
+    private String patientName;
+
+    private String contactNumber;
 }

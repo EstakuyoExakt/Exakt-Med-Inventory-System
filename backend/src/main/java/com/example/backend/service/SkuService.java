@@ -14,6 +14,8 @@ import com.example.backend.entity.User;
 import com.example.backend.entity.RestockRequest;
 import com.example.backend.entity.Order;
 import com.example.backend.entity.OrderedItem;
+import com.example.backend.entity.DispensedLog;
+import com.example.backend.repository.DispensedLogRepository;
 import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.LibMedicineRepository;
 import com.example.backend.repository.OrderedItemRepository;
@@ -50,6 +52,7 @@ public class SkuService {
     private final RestockRequestRepository restockRequestRepository;
     private final OrderedItemRepository orderedItemRepository;
     private final LibPackagingUnitRepository libPackagingUnitRepository;
+    private final DispensedLogRepository dispensedLogRepository;
 
     public SkuService(SkuRepository skuRepository,
                       FacilityRepository facilityRepository,
@@ -60,7 +63,8 @@ public class SkuService {
                       UserRepository userRepository,
                       RestockRequestRepository restockRequestRepository,
                       OrderedItemRepository orderedItemRepository,
-                      LibPackagingUnitRepository libPackagingUnitRepository) {
+                      LibPackagingUnitRepository libPackagingUnitRepository,
+                      DispensedLogRepository dispensedLogRepository) {
         this.skuRepository = skuRepository;
         this.facilityRepository = facilityRepository;
         this.libMedicineRepository = libMedicineRepository;
@@ -71,6 +75,7 @@ public class SkuService {
         this.restockRequestRepository = restockRequestRepository;
         this.orderedItemRepository = orderedItemRepository;
         this.libPackagingUnitRepository = libPackagingUnitRepository;
+        this.dispensedLogRepository = dispensedLogRepository;
     }
 
     // --- AUTOMATED ATTRIBUTE EXTRACTION & SKU GENERATION ---
@@ -629,8 +634,25 @@ public class SkuService {
         if (unitsToDeduct > 0 && savedSku.getFacility() != null) {
             boolean isDispensed = request.getReason() != null && "DISPENSED".equalsIgnoreCase(request.getReason().trim());
             if (isDispensed) {
+                // When reason is Dispensed, patient name and contact number are required
+                if (request.getPatientName() == null || request.getPatientName().trim().isEmpty()) {
+                    throw new RuntimeException("Patient name is required when adjustment reason is 'Dispensed'.");
+                }
+                if (request.getContactNumber() == null || request.getContactNumber().trim().isEmpty()) {
+                    throw new RuntimeException("Contact number is required when adjustment reason is 'Dispensed'.");
+                }
+
                 // FEFO: Deduct automatically from the nearest expiring available batches
                 deductedBatches = batchService.deductBatchesFEFO(savedSku.getId(), savedSku.getFacility().getId(), unitsToDeduct);
+
+                // Create DispensedLog with status PENDING
+                DispensedLog dispensedLog = new DispensedLog();
+                dispensedLog.setSku(savedSku);
+                dispensedLog.setPatientName(request.getPatientName().trim());
+                dispensedLog.setContactNumber(request.getContactNumber().trim());
+                dispensedLog.setUnitsDispensed(unitsToDeduct);
+                dispensedLog.setStatus(DispensedLog.Status.Pending);
+                dispensedLogRepository.save(dispensedLog);
             } else {
                 // When reason is other than Dispensed, require and deduct from the specific target batch
                 boolean hasBatches = batchService.hasBatchesForSku(savedSku.getFacility().getId(), savedSku.getId());
@@ -683,6 +705,11 @@ public class SkuService {
         } else {
             logNotes = userNotes;
         }
+        if (request.getPatientName() != null && !request.getPatientName().isBlank()) {
+            String patientInfo = String.format("[Patient: %s, Contact: %s]", request.getPatientName().trim(),
+                    request.getContactNumber() != null ? request.getContactNumber().trim() : "N/A");
+            logNotes = logNotes != null ? logNotes + " " + patientInfo : patientInfo;
+        }
         log.setNotes(logNotes);
         stockAdjustmentLogRepository.save(log);
 
@@ -708,14 +735,19 @@ public class SkuService {
                     .collect(Collectors.joining(", ")) + "]";
         }
 
+        String patientLog = (request.getPatientName() != null && !request.getPatientName().isBlank())
+                ? String.format(" Dispensed to: %s (Tel: %s).", request.getPatientName().trim(), request.getContactNumber() != null ? request.getContactNumber().trim() : "")
+                : "";
+
         String description = String.format(
-                "Stock adjusted for SKU '%s' (%s). Previous: %d units, Change: %+d units, New Stock: %d units. Reason: %s.%s%s",
+                "Stock adjusted for SKU '%s' (%s). Previous: %d units, Change: %+d units, New Stock: %d units. Reason: %s.%s%s%s",
                 savedSku.getName(),
                 savedSku.getBrandName() != null ? savedSku.getBrandName() : "",
                 currentUnits,
                 delta,
                 newUnits,
                 request.getReason(),
+                patientLog,
                 (request.getNotes() != null && !request.getNotes().isBlank()) ? " Notes: " + request.getNotes().trim() : "",
                 batchInfo
         );

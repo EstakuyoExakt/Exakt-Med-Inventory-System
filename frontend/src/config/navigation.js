@@ -77,6 +77,12 @@ export const NAVIGATION_ITEMS = [
     roles: [ROLES.PHARMACIST],
   },
   {
+    title: "Dispense Logs",
+    path: "/pharmacist/dispense-logs",
+    icon: ClipboardCheck,
+    roles: [ROLES.PHARMACIST],
+  },
+  {
     title: "Audit Logs",
     path: "/pharmacist/audit-logs",
     icon: History,

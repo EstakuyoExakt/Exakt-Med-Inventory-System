@@ -127,6 +127,8 @@ export const DEFAULT_STOCK_ADJUSTMENT = {
   reason: ADJUSTMENT_REASONS[0],
   notes: "",
   batchId: "",
+  patientName: "",
+  contactNumber: "",
 };
 
 // ==========================================

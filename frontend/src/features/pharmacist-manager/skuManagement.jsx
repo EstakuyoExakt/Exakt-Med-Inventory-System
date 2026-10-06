@@ -17,6 +17,8 @@ import {
   Calendar,
   Loader2,
   RefreshCw,
+  User,
+  Phone,
 } from "lucide-react";
 
 // Common Components
@@ -29,6 +31,8 @@ import SuccessModal from "../../components/common/successModal";
 import Dropdown from "../../components/common/dropdown";
 import ComboBox from "./components/comboBox";
 import Skeleton from "../../components/common/skeleton";
+
+// Services
 import libMedicineService from "../../services/libMedicine";
 import skuService from "../../services/sku";
 import restockRequestService from "../../services/restockRequest";
@@ -1189,6 +1193,15 @@ function SkuManagement() {
       }
     }
 
+    if (isDispensed) {
+      if (!adjustFormData.patientName || !adjustFormData.patientName.trim()) {
+        errors.patientName = "Patient name is required when dispensing medicine.";
+      }
+      if (!adjustFormData.contactNumber || !adjustFormData.contactNumber.trim()) {
+        errors.contactNumber = "Patient contact number is required.";
+      }
+    }
+
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
@@ -1202,6 +1215,8 @@ function SkuManagement() {
         amount: amt,
         reason: adjustFormData.reason,
         notes: adjustFormData.notes ? adjustFormData.notes.trim() : null,
+        patientName: isDispensed ? adjustFormData.patientName?.trim() : null,
+        contactNumber: isDispensed ? adjustFormData.contactNumber?.trim() : null,
         batchId:
           (adjustFormData.type === "ADD" ||
             (adjustFormData.type === "SUBTRACT" && !isDispensed)) &&
@@ -2156,7 +2171,7 @@ function SkuManagement() {
         isOpen={modalMode === "adjust" && Boolean(selectedSku)}
         onClose={handleCloseModal}
         title="Stock Adjustment Module"
-        size="md"
+        size="xl"
       >
         {selectedSku && (
           <form onSubmit={handleSaveStockAdjustment} className="space-y-4">
@@ -2282,20 +2297,90 @@ function SkuManagement() {
               />
             </div>
 
-            {/* If Reason is Dispensed & Deduct Stock: Automated FEFO Notice */}
+            {/* If Reason is Dispensed & Deduct Stock: Automated FEFO Notice & Patient Recipient Details */}
             {adjustFormData.type === "SUBTRACT" &&
               adjustFormData.reason?.toUpperCase() === "DISPENSED" && (
-                <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/80 flex items-start gap-2.5">
-                  <div className="p-1 rounded-md bg-blue-100 text-blue-700 shrink-0 mt-0.5">
-                    <Package className="w-4 h-4" />
+                <div className="space-y-3">
+                  <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/80 flex items-start gap-2.5">
+                    <div className="p-1 rounded-md bg-blue-100 text-blue-700 shrink-0 mt-0.5">
+                      <Package className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-blue-950">
+                        Automated FEFO (First-Expired, First-Out) Deduction
+                      </p>
+                      <p className="text-[11px] text-blue-800 mt-0.5 leading-relaxed">
+                        Because the adjustment reason is <strong>Dispensed</strong>, the system will automatically deduct units sequentially starting from your nearest-expiring available batch(es).
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs font-bold text-blue-950">
-                      Automated FEFO (First-Expired, First-Out) Deduction
-                    </p>
-                    <p className="text-[11px] text-blue-800 mt-0.5 leading-relaxed">
-                      Because the adjustment reason is <strong>Dispensed</strong>, the system will automatically deduct units sequentially starting from your nearest-expiring available batch(es).
-                    </p>
+
+                  {/* Patient Information Required Fields */}
+                  <div className="p-3.5 rounded-xl bg-emerald-50/50 border border-emerald-200 space-y-3">
+                    <div className="flex items-center gap-2 text-emerald-950 font-bold text-xs uppercase tracking-wider">
+                      <User className="w-4 h-4 text-emerald-700" />
+                      <span>Dispense Recipient Details</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label
+                          htmlFor="sku-dispense-patient"
+                          className="block text-xs font-semibold text-gray-700 mb-1"
+                        >
+                          Patient Full Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          id="sku-dispense-patient"
+                          type="text"
+                          required
+                          value={adjustFormData.patientName || ""}
+                          onChange={(e) => {
+                            setAdjustFormData((prev) => ({
+                              ...prev,
+                              patientName: e.target.value,
+                            }));
+                            clearError("patientName");
+                          }}
+                          placeholder="e.g. Juan Dela Cruz"
+                          className={`input ${formErrors.patientName ? "border-red-500 ring-1 ring-red-500" : ""}`}
+                        />
+                        {formErrors.patientName && (
+                          <p className="text-xs text-red-500 mt-1 font-medium">
+                            {formErrors.patientName}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="sku-dispense-contact"
+                          className="block text-xs font-semibold text-gray-700 mb-1"
+                        >
+                          Contact Number <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          id="sku-dispense-contact"
+                          type="text"
+                          required
+                          value={adjustFormData.contactNumber || ""}
+                          onChange={(e) => {
+                            setAdjustFormData((prev) => ({
+                              ...prev,
+                              contactNumber: e.target.value,
+                            }));
+                            clearError("contactNumber");
+                          }}
+                          placeholder="e.g. 0917-123-4567"
+                          className={`input ${formErrors.contactNumber ? "border-red-500 ring-1 ring-red-500" : ""}`}
+                        />
+                        {formErrors.contactNumber && (
+                          <p className="text-xs text-red-500 mt-1 font-medium">
+                            {formErrors.contactNumber}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
