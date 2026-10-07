@@ -20,7 +20,7 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
 
     boolean existsByBatchNumAndFacilityId(String batchNum, Long facilityId);
 
-    Optional<Batch> findByOrderedItemId(Long orderedItemId);
+    List<Batch> findByOrderedItemId(Long orderedItemId);
 
     boolean existsByOrderedItemId(Long orderedItemId);
 

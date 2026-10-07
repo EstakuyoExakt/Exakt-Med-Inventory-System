@@ -27,7 +27,7 @@ public class Batch {
     @JoinColumn(name = "facilityId", nullable = false)
     private Facility facility;
 
-    @OneToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "orderedItemId")
     private OrderedItem orderedItem;
 

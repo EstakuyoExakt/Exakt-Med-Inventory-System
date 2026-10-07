@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -101,7 +102,10 @@ public class BatchService {
         batch.setFacility(facility);
         batch.setOrderedItem(orderedItem);
         batch.setBatchNum(trimmedBatchNum);
-        batch.setUnits(orderedItem.getOrderedUnits() != null ? orderedItem.getOrderedUnits() : 0L);
+        long units = (request.getUnits() != null && request.getUnits() > 0)
+                ? request.getUnits()
+                : (orderedItem.getOrderedUnits() != null ? orderedItem.getOrderedUnits() : 0L);
+        batch.setUnits(units);
         batch.setManufactureDate(request.getManufactureDate());
         batch.setExpiryDate(request.getExpiryDate());
         batch.setStatus(request.getStatus() != null ? request.getStatus() : Batch.Status.Available);
@@ -198,26 +202,91 @@ public class BatchService {
 
         Batch.Status oldStatus = batch.getStatus();
         if (status != null && status != oldStatus) {
-            batch.setStatus(status);
-
-            // 1. Quarantined -> Available: add units to active SKU inventory
+            // 1. Quarantined -> Available: check for split batch auto-merge
             if (oldStatus == Batch.Status.Quarantined && status == Batch.Status.Available) {
-                adjustSkuUnits(batch, batch.getUnits());
+                String currentBatchNum = batch.getBatchNum() != null ? batch.getBatchNum().trim() : "";
+                String baseBatchNum = null;
+                if (currentBatchNum.toUpperCase().endsWith("-Q")) {
+                    baseBatchNum = currentBatchNum.substring(0, currentBatchNum.length() - 2).trim();
+                }
+
+                Long facilityId = batch.getFacility() != null ? batch.getFacility().getId() : null;
+                Optional<Batch> parentBatchOpt = (facilityId != null && baseBatchNum != null && !baseBatchNum.isBlank())
+                        ? batchRepository.findByBatchNumAndFacilityId(baseBatchNum, facilityId)
+                        : Optional.empty();
+
+                if (parentBatchOpt.isPresent()) {
+                    Batch parentBatch = parentBatchOpt.get();
+                    long releasedUnits = batch.getUnits() != null ? batch.getUnits() : 0L;
+
+                    // Add units to parent batch
+                    long currentParentUnits = parentBatch.getUnits() != null ? parentBatch.getUnits() : 0L;
+                    parentBatch.setUnits(currentParentUnits + releasedUnits);
+
+                    // Add released units to active SKU inventory if parent is Available
+                    if (parentBatch.getStatus() == Batch.Status.Available) {
+                        adjustSkuUnits(parentBatch, releasedUnits);
+                    }
+
+                    // Append release & merge audit notes to parent batch
+                    String mergeNote = "Merged " + releasedUnits + " units released from quarantine (" + currentBatchNum + ").";
+                    if (notes != null && !notes.isBlank()) {
+                        mergeNote += " Notes: " + notes.trim();
+                    }
+                    if (parentBatch.getNotes() == null || parentBatch.getNotes().isBlank()) {
+                        parentBatch.setNotes(mergeNote);
+                    } else {
+                        parentBatch.setNotes(parentBatch.getNotes() + " | " + mergeNote);
+                    }
+
+                    Batch savedParent = batchRepository.save(parentBatch);
+
+                    // Remove the temporary split quarantined batch
+                    batchRepository.delete(batch);
+
+                    auditLogService.logAction(
+                            savedParent.getFacility(),
+                            "Inventory",
+                            "BATCH_RELEASE_MERGED",
+                            "Batch Released & Merged (" + currentBatchNum + " -> " + baseBatchNum + ")",
+                            AuditLog.Severity.INFO,
+                            savedParent.getBatchNum(),
+                            savedParent.getId(),
+                            "Released " + releasedUnits + " units from quarantine batch '" + currentBatchNum + "' and merged into parent batch '" + baseBatchNum + "'. Active SKU stock incremented.",
+                            "Admin,Pharmacist"
+                    );
+
+                    return mapToResponseDto(savedParent);
+                }
+
+                // If no separate parent batch exists, strip the -Q suffix back to physical lot if unique
+                if (baseBatchNum != null && !baseBatchNum.isBlank() && facilityId != null) {
+                    if (!batchRepository.existsByBatchNumAndFacilityId(baseBatchNum, facilityId)) {
+                        batch.setBatchNum(baseBatchNum);
+                    }
+                }
+
+                batch.setStatus(status);
+                adjustSkuUnits(batch, batch.getUnits() != null ? batch.getUnits() : 0L);
             }
             // 2. Available -> Quarantined: deduct units from active SKU inventory
             else if (oldStatus == Batch.Status.Available && status == Batch.Status.Quarantined) {
-                adjustSkuUnits(batch, -batch.getUnits());
+                batch.setStatus(status);
+                adjustSkuUnits(batch, -(batch.getUnits() != null ? batch.getUnits() : 0L));
             }
             // 3. Available -> Expired: deduct units from active SKU inventory
             else if (oldStatus == Batch.Status.Available && status == Batch.Status.Expired) {
-                adjustSkuUnits(batch, -batch.getUnits());
+                batch.setStatus(status);
+                adjustSkuUnits(batch, -(batch.getUnits() != null ? batch.getUnits() : 0L));
             }
             // 4. Expired -> Available: add units back if mistakenly marked expired
             else if (oldStatus == Batch.Status.Expired && status == Batch.Status.Available) {
-                adjustSkuUnits(batch, batch.getUnits());
+                batch.setStatus(status);
+                adjustSkuUnits(batch, batch.getUnits() != null ? batch.getUnits() : 0L);
             }
-            // Note: transitions between Quarantined and Expired do not affect active SKU inventory,
-            // as neither state's units are counted toward active Sku.units.
+            else {
+                batch.setStatus(status);
+            }
         }
 
         if (notes != null) {

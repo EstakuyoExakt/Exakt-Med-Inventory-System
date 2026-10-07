@@ -24,6 +24,8 @@ public class BatchRequestDto {
     @NotBlank(message = "Batch number is required")
     private String batchNum;
 
+    private Long units;
+
     @NotNull(message = "Manufacture date is required")
     private LocalDate manufactureDate;
 

@@ -38,13 +38,27 @@ export const validateBatchItem = (
   }
 
   let quantityErr = null;
-  if (Number(item.quantity) <= 0) {
+  const totalQty = Number(item.quantity || 0);
+  if (totalQty <= 0) {
     quantityErr = "Received quantity must be greater than 0.";
   }
 
+  let allocationErr = null;
   let quarantineNotesErr = null;
-  if (item.isQuarantined && !item.quarantineNotes?.trim()) {
-    quarantineNotesErr = "QA remarks are required when medicine is quarantined.";
+
+  if (item.isQuarantined) {
+    const accepted = item.acceptedUnits !== undefined ? Number(item.acceptedUnits) : (totalQty - (Number(item.quarantinedUnits) || 0));
+    const quarantined = item.quarantinedUnits !== undefined ? Number(item.quarantinedUnits) : totalQty;
+
+    if (isNaN(accepted) || isNaN(quarantined) || accepted < 0 || quarantined < 0) {
+      allocationErr = "Allocated units must be valid non-negative numbers.";
+    } else if (accepted + quarantined !== totalQty) {
+      allocationErr = `Sum of accepted (${accepted}) and quarantined (${quarantined}) units must equal total ordered (${totalQty}).`;
+    }
+
+    if (quarantined > 0 && !item.quarantineNotes?.trim()) {
+      quarantineNotesErr = "QA remarks are required when units are quarantined.";
+    }
   }
 
   const errors = {
@@ -55,6 +69,7 @@ export const validateBatchItem = (
     ),
     expiryDate: expiryErr,
     quantity: quantityErr,
+    quarantineAllocation: allocationErr,
     quarantineNotes: quarantineNotesErr,
   };
 
