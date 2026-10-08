@@ -24,6 +24,35 @@ const batchService = {
     return response.data;
   },
 
+  getBatchesPaginated: async (params, config = {}) => {
+    if (!params?.facilityId) {
+      throw new Error("Facility ID is required to fetch batches.");
+    }
+    const response = await axios.get(batchApi.getBatchesPaginated(params), {
+      ...config,
+      headers: getAuthHeaders(config),
+    });
+    return response.data;
+  },
+
+  getBatchSummary: async (facilityId, config = {}) => {
+    if (!facilityId) return null;
+    const response = await axios.get(batchApi.getBatchSummary(facilityId), {
+      ...config,
+      headers: getAuthHeaders(config),
+    });
+    return response.data;
+  },
+
+  getDistinctBatchSkus: async (facilityId, config = {}) => {
+    if (!facilityId) return [];
+    const response = await axios.get(batchApi.getDistinctBatchSkus(facilityId), {
+      ...config,
+      headers: getAuthHeaders(config),
+    });
+    return response.data;
+  },
+
   getBatchById: async (id, config = {}) => {
     const response = await axios.get(batchApi.getBatchById(id), {
       ...config,

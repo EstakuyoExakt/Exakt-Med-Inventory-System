@@ -1,6 +1,8 @@
 package com.example.backend.repository;
 
 import com.example.backend.entity.Batch;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -57,6 +59,97 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
     List<Batch> findBatchesForSkuOrderByReceivedAtAsc(
             @Param("facilityId") Long facilityId,
             @Param("skuId") Long skuId);
+
+    /**
+     * PAGINATED BATCH SEARCH & MULTI-FILTER QUERY
+     *
+     * Why this query has both 'value' and 'countQuery':
+     * - Spring Data JPA requires both when using Pageable with JOINs:
+     *   1. 'value': Queries the exact slice of batch records for the current page (e.g. LIMIT 6 OFFSET 0).
+     *   2. 'countQuery': Counts the total number of matching records so the frontend can calculate total pages.
+     *
+     * Filters handled in the WHERE clause:
+     * - facilityId: Scopes results strictly to the active facility.
+     * - search: Case-insensitive search matching batchNum, SKU name, or SKU brand name (ignored if null/blank).
+     * - sku: Exact match against SKU name (ignored if null/blank/'ALL').
+     * - status: Maps UI filter values to database states:
+     *     * 'ACTIVE': Status is Available AND units > 0 (in-stock stock).
+     *     * 'QUARANTINED': Status is Quarantined.
+     *     * 'EXPIRED': Status is Expired.
+     *     * 'DEPLETED': Units is 0.
+     * - expiryFilter: Evaluates expiration dates dynamically against current date:
+     *     * 'EXPIRED': expiryDate <= today.
+     *     * 'NEAR_EXPIRY': today < expiryDate <= (today + 90 days).
+     *     * 'HEALTHY': expiryDate > (today + 90 days).
+     */
+    @Query(value = "SELECT b FROM Batch b " +
+           "LEFT JOIN b.orderedItem oi " +
+           "LEFT JOIN oi.sku s " +
+           "WHERE b.facility.id = :facilityId " +
+           "AND (:search IS NULL OR :search = '' OR " +
+           "     LOWER(b.batchNum) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "     LOWER(s.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "     LOWER(s.brandName) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           "AND (:sku IS NULL OR :sku = '' OR :sku = 'ALL' OR s.name = :sku) " +
+           "AND (:status IS NULL OR :status = '' OR :status = 'ALL' OR " +
+           "     (:status = 'ACTIVE' AND b.status = com.example.backend.entity.Batch.Status.Available AND b.units > 0) OR " +
+           "     (:status = 'QUARANTINED' AND b.status = com.example.backend.entity.Batch.Status.Quarantined) OR " +
+           "     (:status = 'EXPIRED' AND b.status = com.example.backend.entity.Batch.Status.Expired) OR " +
+           "     (:status = 'DEPLETED' AND b.units = 0)) " +
+           "AND (:expiryFilter IS NULL OR :expiryFilter = '' OR :expiryFilter = 'ALL' OR " +
+           "     (:expiryFilter = 'EXPIRED' AND b.expiryDate <= :today) OR " +
+           "     (:expiryFilter = 'NEAR_EXPIRY' AND b.expiryDate > :today AND b.expiryDate <= :nearExpiryDate) OR " +
+           "     (:expiryFilter = 'HEALTHY' AND b.expiryDate > :nearExpiryDate))",
+           countQuery = "SELECT COUNT(b) FROM Batch b " +
+           "LEFT JOIN b.orderedItem oi " +
+           "LEFT JOIN oi.sku s " +
+           "WHERE b.facility.id = :facilityId " +
+           "AND (:search IS NULL OR :search = '' OR " +
+           "     LOWER(b.batchNum) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "     LOWER(s.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "     LOWER(s.brandName) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           "AND (:sku IS NULL OR :sku = '' OR :sku = 'ALL' OR s.name = :sku) " +
+           "AND (:status IS NULL OR :status = '' OR :status = 'ALL' OR " +
+           "     (:status = 'ACTIVE' AND b.status = com.example.backend.entity.Batch.Status.Available AND b.units > 0) OR " +
+           "     (:status = 'QUARANTINED' AND b.status = com.example.backend.entity.Batch.Status.Quarantined) OR " +
+           "     (:status = 'EXPIRED' AND b.status = com.example.backend.entity.Batch.Status.Expired) OR " +
+           "     (:status = 'DEPLETED' AND b.units = 0)) " +
+           "AND (:expiryFilter IS NULL OR :expiryFilter = '' OR :expiryFilter = 'ALL' OR " +
+           "     (:expiryFilter = 'EXPIRED' AND b.expiryDate <= :today) OR " +
+           "     (:expiryFilter = 'NEAR_EXPIRY' AND b.expiryDate > :today AND b.expiryDate <= :nearExpiryDate) OR " +
+           "     (:expiryFilter = 'HEALTHY' AND b.expiryDate > :nearExpiryDate))")
+    Page<Batch> findBatchesPaginated(
+            @Param("facilityId") Long facilityId,
+            @Param("search") String search,
+            @Param("status") String status,
+            @Param("sku") String sku,
+            @Param("expiryFilter") String expiryFilter,
+            @Param("today") java.time.LocalDate today,
+            @Param("nearExpiryDate") java.time.LocalDate nearExpiryDate,
+            Pageable pageable);
+
+    // 2. Aggregate KPI counts
+    long countByFacilityId(Long facilityId);
+
+    @Query("SELECT COALESCE(SUM(b.units), 0) FROM Batch b " +
+           "WHERE b.facility.id = :facilityId AND b.status = com.example.backend.entity.Batch.Status.Available")
+    long sumActiveStockByFacilityId(@Param("facilityId") Long facilityId);
+
+    @Query("SELECT COUNT(b) FROM Batch b " +
+           "WHERE b.facility.id = :facilityId AND b.units > 0 AND b.expiryDate <= :nearExpiryDate")
+    long countExpiryAlertsByFacilityId(@Param("facilityId") Long facilityId, @Param("nearExpiryDate") java.time.LocalDate nearExpiryDate);
+
+    @Query("SELECT COUNT(b) FROM Batch b " +
+           "WHERE b.facility.id = :facilityId AND b.status = com.example.backend.entity.Batch.Status.Quarantined")
+    long countQuarantinedByFacilityId(@Param("facilityId") Long facilityId);
+
+    // 3. Distinct SKU names for filter dropdown
+    @Query("SELECT DISTINCT s.name FROM Batch b " +
+           "JOIN b.orderedItem oi " +
+           "JOIN oi.sku s " +
+           "WHERE b.facility.id = :facilityId " +
+           "ORDER BY s.name ASC")
+    List<String> findDistinctSkuNamesByFacilityId(@Param("facilityId") Long facilityId);
 }
 
 

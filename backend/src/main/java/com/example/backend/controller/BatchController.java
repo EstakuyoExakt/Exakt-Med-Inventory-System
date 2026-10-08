@@ -2,6 +2,8 @@ package com.example.backend.controller;
 
 import com.example.backend.dto.batch.BatchRequestDto;
 import com.example.backend.dto.batch.BatchResponseDto;
+import com.example.backend.dto.batch.BatchSummaryDto;
+import com.example.backend.dto.common.PageResponseDto;
 import com.example.backend.entity.Batch;
 import com.example.backend.service.BatchService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -51,6 +53,50 @@ public class BatchController {
             @Parameter(description = "Optional batch status filter")
             @RequestParam(required = false) Batch.Status status) {
         return ResponseEntity.ok(batchService.getBatchesByFacility(facilityId, status));
+    }
+
+    // 3b. GET BATCHES PAGINATED (Search strictly by batchNum)
+    @GetMapping("/paginated")
+    @Operation(summary = "Get Batches Paginated", description = "Retrieves paginated batches by facility with optional batchNumber search and status/sku filter.")
+    public ResponseEntity<PageResponseDto<BatchResponseDto>> getBatchesPaginated(
+            @Parameter(description = "Facility ID", required = true)
+            @RequestParam Long facilityId,
+            @Parameter(description = "Search keyword (searches batchNumber or SKU)")
+            @RequestParam(required = false) String search,
+            @Parameter(description = "Optional batch status filter (ALL, ACTIVE, QUARANTINED, EXPIRED, DEPLETED)")
+            @RequestParam(required = false) String status,
+            @Parameter(description = "Optional SKU name filter")
+            @RequestParam(required = false) String sku,
+            @Parameter(description = "Optional expiry filter (ALL, NEAR_EXPIRY, EXPIRED, HEALTHY)")
+            @RequestParam(required = false) String expiryFilter,
+            @Parameter(description = "Page index (0-based)")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size")
+            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Sort property (receivedAt, batchNumber, etc.)")
+            @RequestParam(defaultValue = "receivedAt") String sortBy,
+            @Parameter(description = "Sort direction (ASC, DESC)")
+            @RequestParam(defaultValue = "DESC") String sortDir) {
+        return ResponseEntity.ok(batchService.getBatchesPaginated(
+                facilityId, search, status, sku, expiryFilter, page, size, sortBy, sortDir));
+    }
+
+    // 3c. GET BATCH SUMMARY KPIS
+    @GetMapping("/summary")
+    @Operation(summary = "Get Batch Summary KPIs", description = "Returns aggregated counts for total batches, active stock, expiry alerts, and quarantined batches.")
+    public ResponseEntity<BatchSummaryDto> getBatchSummary(
+            @Parameter(description = "Facility ID", required = true)
+            @RequestParam Long facilityId) {
+        return ResponseEntity.ok(batchService.getBatchSummary(facilityId));
+    }
+
+    // 3d. GET DISTINCT SKUS IN BATCHES
+    @GetMapping("/skus")
+    @Operation(summary = "Get Distinct Batch SKUs", description = "Returns distinct SKU names present in batches for filter dropdown.")
+    public ResponseEntity<List<String>> getDistinctBatchSkus(
+            @Parameter(description = "Facility ID", required = true)
+            @RequestParam Long facilityId) {
+        return ResponseEntity.ok(batchService.getDistinctBatchSkus(facilityId));
     }
 
     // 4. GET BATCH BY ID

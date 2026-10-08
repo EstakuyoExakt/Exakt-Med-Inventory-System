@@ -48,8 +48,17 @@ function BatchManagement() {
     return facility?.id || null;
   }, [facility]);
 
-  // Real batches loaded directly from backend API (no mock data fallback)
+  // Real batches loaded directly from backend API (server-side paginated)
   const [batchList, setBatchList] = useState([]);
+  const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [batchSummary, setBatchSummary] = useState({
+    totalBatches: 0,
+    totalActiveStock: 0,
+    expiryAlertCount: 0,
+    quarantinedCount: 0,
+  });
+  const [distinctSkus, setDistinctSkus] = useState([]);
 
   const [isBatchesLoading, setIsBatchesLoading] = useState(true);
   const [batchesError, setBatchesError] = useState(null);
@@ -68,12 +77,6 @@ function BatchManagement() {
   // Modal State: Only 'receive' and 'view'
   const [modalMode, setModalMode] = useState(null);
   const [selectedBatch, setSelectedBatch] = useState(null);
-
-  // Filter batches to display only those belonging to the current facility
-  const currentFacilityBatches = useMemo(() => {
-    if (!activeFacilityId) return [];
-    return batchList.filter((b) => b.facilityId === activeFacilityId);
-  }, [batchList, activeFacilityId]);
 
   // Form State for Receive Stock via PO (Individual batch per SKU)
   const getInitialReceiveFormData = () => ({
@@ -104,21 +107,13 @@ function BatchManagement() {
   const [isOrdersLoading, setIsOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState(null);
 
-  // Dynamically extract unique SKUs from real batches for filtering
+  // Dynamically extract unique SKUs from server for filtering
   const availableSkus = useMemo(() => {
-    const skuMap = new Map();
-    currentFacilityBatches.forEach((b) => {
-      if (b.sku && !skuMap.has(b.sku)) {
-        skuMap.set(b.sku, {
-          sku: b.sku,
-          brandName: b.brandName || b.sku,
-        });
-      }
-    });
-    return Array.from(skuMap.values()).sort((a, b) =>
-      a.sku.localeCompare(b.sku),
-    );
-  }, [currentFacilityBatches]);
+    return distinctSkus.map((skuName) => ({
+      sku: skuName,
+      brandName: "",
+    }));
+  }, [distinctSkus]);
 
   const normalizeApprovedOrder = useCallback(
     (po) => {
@@ -242,20 +237,54 @@ function BatchManagement() {
     [currentFacilityName],
   );
 
-  // Fetch batches for current active facility from backend
+  // Fetch aggregate KPIs and distinct SKUs for active facility
+  const fetchSummaryAndSkus = useCallback(async () => {
+    if (!activeFacilityId) return;
+    try {
+      const [summaryData, skusData] = await Promise.all([
+        batchService.getBatchSummary(activeFacilityId),
+        batchService.getDistinctBatchSkus(activeFacilityId),
+      ]);
+      if (summaryData) {
+        setBatchSummary(summaryData);
+      }
+      if (Array.isArray(skusData)) {
+        setDistinctSkus(skusData);
+      }
+    } catch (err) {
+      console.error("Failed to load batch summary or distinct SKUs:", err);
+    }
+  }, [activeFacilityId]);
+
+  // Fetch paginated batches for active facility from backend
   const fetchBatches = useCallback(async () => {
     if (!activeFacilityId) {
       setBatchList([]);
+      setTotalElements(0);
+      setTotalPages(1);
       return;
     }
     try {
       setIsBatchesLoading(true);
       setBatchesError(null);
-      const data = await batchService.getBatchesByFacility(activeFacilityId);
-      if (Array.isArray(data)) {
-        setBatchList(data.map(mapBatchDtoToItem));
+      const pageData = await batchService.getBatchesPaginated({
+        facilityId: activeFacilityId,
+        search: searchQuery.trim(),
+        sku: selectedSkuFilter,
+        status: selectedStatusFilter,
+        expiryFilter: selectedExpiryFilter,
+        page: currentPage - 1,
+        size: itemsPerPage,
+      });
+
+      if (pageData && Array.isArray(pageData.content)) {
+        setBatchList(pageData.content.map(mapBatchDtoToItem));
+        setTotalElements(pageData.totalElements ?? pageData.content.length);
+        setTotalPages(pageData.totalPages ?? 1);
       } else {
         setBatchList([]);
+        setTotalElements(0);
+        setTotalPages(1);
       }
     } catch (err) {
       console.error("Failed to load batches from server:", err);
@@ -265,13 +294,31 @@ function BatchManagement() {
           "Failed to load batches from server.",
       );
       setBatchList([]);
+      setTotalElements(0);
+      setTotalPages(1);
     } finally {
       setIsBatchesLoading(false);
     }
-  }, [activeFacilityId, mapBatchDtoToItem]);
+  }, [
+    activeFacilityId,
+    searchQuery,
+    selectedSkuFilter,
+    selectedStatusFilter,
+    selectedExpiryFilter,
+    currentPage,
+    itemsPerPage,
+    mapBatchDtoToItem,
+  ]);
 
   useEffect(() => {
-    fetchBatches();
+    fetchSummaryAndSkus();
+  }, [fetchSummaryAndSkus]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchBatches();
+    }, 250);
+    return () => clearTimeout(timer);
   }, [fetchBatches]);
 
   // Selected PO Details lookup from real approved orders
@@ -281,81 +328,14 @@ function BatchManagement() {
     );
   }, [approvedOrders, receiveFormData.poNumber]);
 
-  // Summary KPI Calculations for Current Facility
-  const totalBatches = currentFacilityBatches.length;
+  // Summary KPI Calculations for Current Facility (Server Aggregated)
+  const totalBatches = batchSummary.totalBatches;
+  const totalActiveStock = batchSummary.totalActiveStock;
+  const expiryAlertCount = batchSummary.expiryAlertCount;
+  const quarantinedCount = batchSummary.quarantinedCount;
 
-  const totalActiveStock = useMemo(() => {
-    return currentFacilityBatches
-      .filter((b) => !b.isQuarantined && b.status !== "Expired")
-      .reduce((sum, b) => sum + (Number(b.quantity) || 0), 0);
-  }, [currentFacilityBatches]);
-
-  const expiryAlertCount = useMemo(() => {
-    return currentFacilityBatches.filter((b) => {
-      const exp = getExpiryStatus(b.expiryDate);
-      return exp.status === "NEAR_EXPIRY" || exp.status === "EXPIRED";
-    }).length;
-  }, [currentFacilityBatches]);
-
-  const quarantinedCount = useMemo(() => {
-    return currentFacilityBatches.filter((b) => b.isQuarantined).length;
-  }, [currentFacilityBatches]);
-
-  // Filtered Batches for Current Facility
-  const filteredBatches = useMemo(() => {
-    return currentFacilityBatches.filter((batch) => {
-      const brandName = batch.brandName || "";
-      const genericName = batch.genericName || "";
-
-      const matchesSearch =
-        batch.batchNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        batch.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        brandName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        genericName.toLowerCase().includes(searchQuery.toLowerCase());
-
-      const matchesSku =
-        selectedSkuFilter === "ALL" || batch.sku === selectedSkuFilter;
-
-      const exp = getExpiryStatus(batch.expiryDate);
-      let matchesExpiry = true;
-      if (selectedExpiryFilter === "NEAR_EXPIRY") {
-        matchesExpiry = exp.status === "NEAR_EXPIRY";
-      } else if (selectedExpiryFilter === "EXPIRED") {
-        matchesExpiry = exp.status === "EXPIRED";
-      } else if (selectedExpiryFilter === "HEALTHY") {
-        matchesExpiry = exp.status === "HEALTHY";
-      }
-
-      let matchesStatus = true;
-      if (selectedStatusFilter === "ACTIVE") {
-        matchesStatus =
-          !batch.isQuarantined &&
-          batch.status !== "Expired" &&
-          batch.quantity > 0;
-      } else if (selectedStatusFilter === "QUARANTINED") {
-        matchesStatus = batch.isQuarantined;
-      } else if (selectedStatusFilter === "EXPIRED") {
-        matchesStatus = batch.status === "Expired";
-      } else if (selectedStatusFilter === "DEPLETED") {
-        matchesStatus = batch.quantity === 0;
-      }
-
-      return matchesSearch && matchesSku && matchesExpiry && matchesStatus;
-    });
-  }, [
-    currentFacilityBatches,
-    searchQuery,
-    selectedSkuFilter,
-    selectedExpiryFilter,
-    selectedStatusFilter,
-  ]);
-
-  // Pagination calculation
-  const totalPages = Math.ceil(filteredBatches.length / itemsPerPage) || 1;
-  const paginatedBatches = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredBatches.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredBatches, currentPage, itemsPerPage]);
+  // Server-paginated batches displayed on active page
+  const paginatedBatches = batchList;
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
@@ -418,7 +398,7 @@ function BatchManagement() {
       );
 
       const mapped = mapBatchDtoToItem(updatedDto);
-      await fetchBatches();
+      await Promise.all([fetchBatches(), fetchSummaryAndSkus()]);
       setSelectedBatch(mapped);
       if (mapped.id !== batchId || mapped.batchNumber !== selectedBatch?.batchNumber) {
         setUpdateStatusSuccess(
@@ -620,8 +600,8 @@ function BatchManagement() {
         setBatchList((prev) => [...newlyCreated, ...prev]);
       }
 
-      // Re-fetch batches and orders to synchronize frontend state
-      await Promise.all([fetchBatches(), fetchApprovedOrders()]);
+      // Re-fetch batches, summary, and orders to synchronize frontend state
+      await Promise.all([fetchBatches(), fetchApprovedOrders(), fetchSummaryAndSkus()]);
 
       handleCloseModal();
     } catch (err) {
@@ -663,6 +643,7 @@ function BatchManagement() {
             onClick={() => {
               fetchBatches();
               fetchApprovedOrders();
+              fetchSummaryAndSkus();
             }}
             disabled={isBatchesLoading}
             className="btn-secondary p-2.5 text-gray-600 hover:text-blue-600"
@@ -823,7 +804,7 @@ function BatchManagement() {
                 setSearchQuery("");
                 setCurrentPage(1);
               }}
-              placeholder="Search batch, SKU, drug name..."
+              placeholder="Search batch number or SKU..."
             />
           </div>
 
@@ -1078,12 +1059,12 @@ function BatchManagement() {
         </div>
 
         {/* Pagination Section */}
-        {filteredBatches.length > 0 && (
+        {totalElements > 0 && (
           <div className="p-4 border-t border-gray-100 bg-gray-50/40">
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
-              totalItems={filteredBatches.length}
+              totalItems={totalElements}
               itemsPerPage={itemsPerPage}
               onPageChange={setCurrentPage}
             />

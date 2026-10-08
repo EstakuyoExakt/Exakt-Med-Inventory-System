@@ -8,7 +8,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "batches")
+@Table(name = "batches", indexes = {
+    @Index(name = "idx_batch_facility_received", columnList = "facilityId, receivedAt"),
+    @Index(name = "idx_batch_facility_num", columnList = "facilityId, batchNum"),
+    @Index(name = "idx_batch_facility_status", columnList = "facilityId, status")
+})
 @Getter
 @Setter
 public class Batch {

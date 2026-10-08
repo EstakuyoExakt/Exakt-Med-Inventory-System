@@ -13,6 +13,12 @@ import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.OrderRepository;
 import com.example.backend.repository.OrderedItemRepository;
 import com.example.backend.repository.SkuRepository;
+import com.example.backend.dto.common.PageResponseDto;
+import com.example.backend.dto.batch.BatchSummaryDto;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -20,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -182,6 +189,93 @@ public class BatchService {
         return batches.stream()
                 .map(this::mapToResponseDto)
                 .collect(Collectors.toList());
+    }
+
+    // 3b. GET BATCHES PAGINATED (Search strictly by batchNum as requested)
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Pharmacist', 'Procurement')")
+    public PageResponseDto<BatchResponseDto> getBatchesPaginated(
+            Long facilityId,
+            String search,
+            String status,
+            String sku,
+            String expiryFilter,
+            int page,
+            int size,
+            String sortBy,
+            String sortDir) {
+
+        if (facilityId == null) {
+            throw new IllegalArgumentException("Facility ID is required.");
+        }
+
+        int pageIndex = Math.max(0, page);
+        int pageSize = size > 0 ? size : 10;
+
+        Sort.Direction direction = "ASC".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        String sortProperty = (sortBy != null && !sortBy.isBlank()) ? sortBy.trim() : "receivedAt";
+
+        if ("batchNumber".equalsIgnoreCase(sortProperty)) sortProperty = "batchNum";
+        else if ("quantity".equalsIgnoreCase(sortProperty)) sortProperty = "units";
+        else if ("expiryDate".equalsIgnoreCase(sortProperty)) sortProperty = "expiryDate";
+        else if ("manufacturingDate".equalsIgnoreCase(sortProperty)) sortProperty = "manufactureDate";
+        else if ("status".equalsIgnoreCase(sortProperty)) sortProperty = "status";
+        else sortProperty = "receivedAt";
+
+        Pageable pageable = PageRequest.of(pageIndex, pageSize, Sort.by(direction, sortProperty));
+
+        LocalDate today = LocalDate.now();
+        LocalDate nearExpiryDate = today.plusDays(90);
+
+        String trimmedSearch = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+        String trimmedStatus = (status != null && !status.trim().isEmpty()) ? status.trim() : null;
+        String trimmedSku = (sku != null && !sku.trim().isEmpty()) ? sku.trim() : null;
+        String trimmedExpiry = (expiryFilter != null && !expiryFilter.trim().isEmpty()) ? expiryFilter.trim() : null;
+
+        Page<Batch> batchPage = batchRepository.findBatchesPaginated(
+                facilityId,
+                trimmedSearch,
+                trimmedStatus,
+                trimmedSku,
+                trimmedExpiry,
+                today,
+                nearExpiryDate,
+                pageable);
+
+        Page<BatchResponseDto> dtoPage = batchPage.map(this::mapToResponseDto);
+        return PageResponseDto.from(dtoPage);
+    }
+
+    // 3c. GET BATCH SUMMARY KPIS
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Pharmacist', 'Procurement')")
+    public BatchSummaryDto getBatchSummary(Long facilityId) {
+        if (facilityId == null) {
+            throw new IllegalArgumentException("Facility ID is required.");
+        }
+        LocalDate nearExpiryDate = LocalDate.now().plusDays(90);
+
+        long totalBatches = batchRepository.countByFacilityId(facilityId);
+        long totalActiveStock = batchRepository.sumActiveStockByFacilityId(facilityId);
+        long expiryAlertCount = batchRepository.countExpiryAlertsByFacilityId(facilityId, nearExpiryDate);
+        long quarantinedCount = batchRepository.countQuarantinedByFacilityId(facilityId);
+
+        return BatchSummaryDto.builder()
+                .totalBatches(totalBatches)
+                .totalActiveStock(totalActiveStock)
+                .expiryAlertCount(expiryAlertCount)
+                .quarantinedCount(quarantinedCount)
+                .build();
+    }
+
+    // 3d. GET DISTINCT SKUS IN BATCHES
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Pharmacist', 'Procurement')")
+    public List<String> getDistinctBatchSkus(Long facilityId) {
+        if (facilityId == null) {
+            return Collections.emptyList();
+        }
+        return batchRepository.findDistinctSkuNamesByFacilityId(facilityId);
     }
 
     // 4. GET BATCH BY ID
