@@ -366,7 +366,22 @@ function SkuManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStockFilter, setSelectedStockFilter] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalElements, setTotalElements] = useState(0);
   const itemsPerPage = 6;
+
+  // KPI Summary Metric State
+  const [summaryData, setSummaryData] = useState({
+    totalSkus: 0,
+    optimalCount: 0,
+    reorderCount: 0,
+    criticalCount: 0,
+  });
+  const [isLoadingSummary, setIsLoadingSummary] = useState(false);
+
+  // Dropdown SKUs for Restock Modal
+  const [dropdownSkus, setDropdownSkus] = useState([]);
+  const [isLoadingDropdownSkus, setIsLoadingDropdownSkus] = useState(false);
 
   // Modal State: 'add' | 'view' | 'edit' | 'delete' | 'adjust' | 'restock' | null
   const [modalMode, setModalMode] = useState(null);
@@ -411,27 +426,83 @@ function SkuManagement() {
     }));
   }, [packagingUnits]);
 
-  // Fetch SKUs from backend API (all or via searchSku endpoint)
+  // Fetch KPI Summary metrics
+  const fetchSummary = useCallback(async () => {
+    if (!targetFacilityId) {
+      setSummaryData({
+        totalSkus: 0,
+        optimalCount: 0,
+        reorderCount: 0,
+        criticalCount: 0,
+      });
+      return;
+    }
+    try {
+      setIsLoadingSummary(true);
+      const summary = await skuService.getSkuSummary(targetFacilityId);
+      if (summary) {
+        setSummaryData({
+          totalSkus: Number(summary.totalSkus || 0),
+          optimalCount: Number(summary.optimalCount || 0),
+          reorderCount: Number(summary.reorderCount || 0),
+          criticalCount: Number(summary.criticalCount || 0),
+        });
+      }
+    } catch (err) {
+      console.error("Failed to load SKU summary metrics:", err);
+    } finally {
+      setIsLoadingSummary(false);
+    }
+  }, [targetFacilityId]);
+
+  // Fetch dropdown SKUs for Restock modal
+  const fetchDropdownSkus = useCallback(async () => {
+    if (!targetFacilityId) {
+      setDropdownSkus([]);
+      return;
+    }
+    try {
+      setIsLoadingDropdownSkus(true);
+      const data = await skuService.getDropdownSkus(targetFacilityId);
+      setDropdownSkus(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load dropdown SKUs:", err);
+      setDropdownSkus([]);
+    } finally {
+      setIsLoadingDropdownSkus(false);
+    }
+  }, [targetFacilityId]);
+
+  // Fetch paginated SKUs from backend API
   const fetchSkus = useCallback(
-    async (query = "") => {
+    async (pageToFetch = 1, query = "", filter = "ALL") => {
       try {
         setIsLoadingSkus(true);
         setSkuError(null);
 
         if (!targetFacilityId) {
           setSkuList([]);
+          setTotalPages(1);
+          setTotalElements(0);
           return;
         }
 
-        let data;
-        if (query && query.trim()) {
-          data = await skuService.searchSku(query.trim(), targetFacilityId);
-        } else {
-          data = await skuService.getAllSkus(targetFacilityId);
-        }
+        const data = await skuService.getSkusPaginated({
+          facilityId: targetFacilityId,
+          search: query ? query.trim() : "",
+          status: filter || "ALL",
+          page: Math.max(0, pageToFetch - 1),
+          size: itemsPerPage,
+        });
 
-        if (Array.isArray(data)) {
-          setSkuList(data.map(mapDtoToSku));
+        if (data && Array.isArray(data.content)) {
+          setSkuList(data.content.map(mapDtoToSku));
+          setTotalPages(data.totalPages || 1);
+          setTotalElements(data.totalElements || 0);
+        } else {
+          setSkuList([]);
+          setTotalPages(1);
+          setTotalElements(0);
         }
       } catch (err) {
         console.error("Failed to load SKUs from backend:", err);
@@ -440,28 +511,27 @@ function SkuManagement() {
             err?.message ||
             "Failed to load SKUs from server.",
         );
+        setSkuList([]);
       } finally {
         setIsLoadingSkus(false);
       }
     },
-    [targetFacilityId],
+    [targetFacilityId, itemsPerPage],
   );
 
-  const isFirstRender = useRef(true);
-
+  // Fetch summary when facility changes
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      fetchSkus(searchQuery);
-      return;
-    }
+    fetchSummary();
+  }, [fetchSummary]);
 
+  // Debounced fetch SKUs when page, query, or stock filter changes
+  useEffect(() => {
     const timer = setTimeout(() => {
-      fetchSkus(searchQuery);
-    }, 300);
+      fetchSkus(currentPage, searchQuery, selectedStockFilter);
+    }, 250);
 
     return () => clearTimeout(timer);
-  }, [searchQuery, fetchSkus]);
+  }, [fetchSkus, currentPage, searchQuery, selectedStockFilter]);
 
   // Search Medicine Library from backend API
   const handleSearchMedicines = async (searchQuery = "") => {
@@ -571,8 +641,9 @@ function SkuManagement() {
         message: msg,
       });
 
-      // Refresh SKUs from backend
-      await fetchSkus(searchQuery);
+      // Refresh SKUs and summary from backend
+      await fetchSkus(currentPage, searchQuery, selectedStockFilter);
+      await fetchSummary();
     } catch (err) {
       console.error("Failed to process expired batches:", err);
       setSkuError(
@@ -587,75 +658,11 @@ function SkuManagement() {
     }
   };
 
-
-  // Filter SKUs that reference the current active facility
-  const currentFacilitySkus = useMemo(() => {
-    if (!targetFacilityId) return [];
-    return skuList.filter((s) => s.facilityId === targetFacilityId);
-  }, [skuList, targetFacilityId]);
-
-  // Calculate Metrics for Current Facility
-  const totalSkus = currentFacilitySkus.length;
-
-  const optimalCount = useMemo(
-    () =>
-      currentFacilitySkus.filter((s) => s.currentStock > s.reorderLevel).length,
-    [currentFacilitySkus],
-  );
-
-  const reorderCount = useMemo(
-    () =>
-      currentFacilitySkus.filter(
-        (s) =>
-          s.currentStock <= s.reorderLevel && s.currentStock > s.minimumLevel,
-      ).length,
-    [currentFacilitySkus],
-  );
-
-  const criticalCount = useMemo(
-    () =>
-      currentFacilitySkus.filter((s) => s.currentStock <= s.minimumLevel)
-        .length,
-    [currentFacilitySkus],
-  );
-
-  // Filtered SKUs for Current Facility
-  const filteredSkus = useMemo(() => {
-    return currentFacilitySkus.filter((item) => {
-      const matchesSearch =
-        !searchQuery.trim() ||
-        (item.sku || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.brandName || "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
-        (item.genericName || "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
-        (item.dosage || "").toLowerCase().includes(searchQuery.toLowerCase());
-
-      let matchesStock = true;
-      if (selectedStockFilter === "OPTIMAL") {
-        matchesStock = item.currentStock > item.reorderLevel;
-      } else if (selectedStockFilter === "REORDER") {
-        matchesStock =
-          item.currentStock <= item.reorderLevel &&
-          item.currentStock > item.minimumLevel;
-      } else if (selectedStockFilter === "CRITICAL") {
-        matchesStock = item.currentStock <= item.minimumLevel;
-      } else if (selectedStockFilter === "OUT_OF_STOCK") {
-        matchesStock = item.currentStock === 0;
-      }
-
-      return matchesSearch && matchesStock;
-    });
-  }, [currentFacilitySkus, searchQuery, selectedStockFilter]);
-
-  // Pagination calculation
-  const totalPages = Math.ceil(filteredSkus.length / itemsPerPage) || 1;
-  const paginatedSkus = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredSkus.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredSkus, currentPage, itemsPerPage]);
+  // KPI Metrics for Current Facility from backend summary
+  const totalSkus = summaryData.totalSkus;
+  const optimalCount = summaryData.optimalCount;
+  const reorderCount = summaryData.reorderCount;
+  const criticalCount = summaryData.criticalCount;
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
@@ -814,6 +821,7 @@ function SkuManagement() {
   };
 
   const handleOpenRestockModal = (skuItem = null) => {
+    fetchDropdownSkus();
     if (skuItem && skuItem.id) {
       setSelectedSku(skuItem);
       const suggestedUnits =
@@ -861,7 +869,7 @@ function SkuManagement() {
 
     const targetSku =
       selectedSku ||
-      currentFacilitySkus.find(
+      dropdownSkus.find(
         (s) => String(s.id) === String(restockFormData.skuId),
       );
     if (targetSku?.hasPendingRestock) {
@@ -902,7 +910,8 @@ function SkuManagement() {
       });
       setIsRestockSuccessModalOpen(true);
       handleCloseModal();
-      await fetchSkus(searchQuery);
+      await fetchSkus(currentPage, searchQuery, selectedStockFilter);
+      fetchDropdownSkus();
     } catch (err) {
       console.error("Failed to submit restock request:", err);
       const serverMessage =
@@ -963,7 +972,6 @@ function SkuManagement() {
   const handleSaveSku = async (e) => {
     e.preventDefault();
     const { isValid, errors: validationErrors } = validateSkuForm(formData, {
-      currentFacilitySkus,
       excludeId: selectedSku?.id,
       currentFacilityName,
     });
@@ -1011,10 +1019,12 @@ function SkuManagement() {
         if (!newSkuItem.dosage) newSkuItem.dosage = formData.dosage;
         if (!newSkuItem.facility) newSkuItem.facility = currentFacilityName;
 
-        setSkuList((prev) => [newSkuItem, ...prev]);
         handleCloseModal();
         setCreatedSkuInfo(newSkuItem);
         setIsSuccessModalOpen(true);
+        setCurrentPage(1);
+        await fetchSkus(1, searchQuery, selectedStockFilter);
+        await fetchSummary();
         return;
       } else if (modalMode === "edit" && selectedSku) {
         const editFacilityId = selectedSku.facilityId || targetFacilityIdToSave;
@@ -1044,20 +1054,10 @@ function SkuManagement() {
           maximumLevel: Number(formData.maximumLevel),
         };
 
-        const responseDto = await skuService.updateSku(selectedSku.id, payload);
-        const updatedItem = mapDtoToSku(responseDto);
-        if (!updatedItem.genericName)
-          updatedItem.genericName =
-            formData.genericName || selectedSku.genericName;
-        if (!updatedItem.dosage)
-          updatedItem.dosage = formData.dosage || selectedSku.dosage;
-        if (!updatedItem.facility)
-          updatedItem.facility = selectedSku.facility || currentFacilityName;
-
-        setSkuList((prev) =>
-          prev.map((s) => (s.id === selectedSku.id ? updatedItem : s)),
-        );
+        await skuService.updateSku(selectedSku.id, payload);
         handleCloseModal();
+        await fetchSkus(currentPage, searchQuery, selectedStockFilter);
+        await fetchSummary();
       }
     } catch (err) {
       console.error("Failed to save SKU:", err);
@@ -1079,13 +1079,14 @@ function SkuManagement() {
     setIsSubmitting(true);
     try {
       await skuService.deleteSku(selectedSku.id);
-      setSkuList((prev) => prev.filter((s) => s.id !== selectedSku.id));
-
-      if (paginatedSkus.length === 1 && currentPage > 1) {
-        setCurrentPage((prev) => prev - 1);
-      }
-
       handleCloseModal();
+      const targetPage =
+        skuList.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
+      if (targetPage !== currentPage) {
+        setCurrentPage(targetPage);
+      }
+      await fetchSkus(targetPage, searchQuery, selectedStockFilter);
+      await fetchSummary();
     } catch (err) {
       console.error("Failed to delete SKU from server:", err);
       const errorMsg =
@@ -1198,7 +1199,8 @@ function SkuManagement() {
             : null,
       });
 
-      await fetchSkus(searchQuery);
+      await fetchSkus(currentPage, searchQuery, selectedStockFilter);
+      await fetchSummary();
       handleCloseModal();
     } catch (err) {
       console.error("Failed to adjust stock:", err);
@@ -1236,14 +1238,17 @@ function SkuManagement() {
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
           <button
             type="button"
-            onClick={fetchSkus}
-            disabled={isLoadingSkus}
+            onClick={() => {
+              fetchSkus(currentPage, searchQuery, selectedStockFilter);
+              fetchSummary();
+            }}
+            disabled={isLoadingSkus || isLoadingSummary}
             className="btn-secondary p-2.5 text-gray-600 hover:text-blue-600"
             title="Refresh SKUs"
             aria-label="Refresh SKUs"
           >
             <RefreshCw
-              className={`w-4 h-4 ${isLoadingSkus ? "animate-spin text-blue-600" : ""}`}
+              className={`w-4 h-4 ${(isLoadingSkus || isLoadingSummary) ? "animate-spin text-blue-600" : ""}`}
             />
           </button>
           <button
@@ -1270,7 +1275,7 @@ function SkuManagement() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up-1">
         {/* Total SKUs */}
         <Card className="p-5">
-          {isLoadingSkus ? (
+          {isLoadingSummary ? (
             <div className="flex items-center justify-between">
               <div className="space-y-2 flex-1">
                 <Skeleton className="h-3.5 w-24" />
@@ -1301,7 +1306,7 @@ function SkuManagement() {
 
         {/* Optimal Stock */}
         <Card className="p-5">
-          {isLoadingSkus ? (
+          {isLoadingSummary ? (
             <div className="flex items-center justify-between">
               <div className="space-y-2 flex-1">
                 <Skeleton className="h-3.5 w-24" />
@@ -1332,7 +1337,7 @@ function SkuManagement() {
 
         {/* Reorder Needed */}
         <Card className="p-5">
-          {isLoadingSkus ? (
+          {isLoadingSummary ? (
             <div className="flex items-center justify-between">
               <div className="space-y-2 flex-1">
                 <Skeleton className="h-3.5 w-28" />
@@ -1363,7 +1368,7 @@ function SkuManagement() {
 
         {/* Critical / Out of Stock */}
         <Card className="p-5">
-          {isLoadingSkus ? (
+          {isLoadingSummary ? (
             <div className="flex items-center justify-between">
               <div className="space-y-2 flex-1">
                 <Skeleton className="h-3.5 w-24" />
@@ -1517,8 +1522,8 @@ function SkuManagement() {
                     </td>
                   </tr>
                 ))
-              ) : paginatedSkus.length > 0 ? (
-                paginatedSkus.map((item, index) => {
+              ) : skuList.length > 0 ? (
+                skuList.map((item, index) => {
                   const status = getStockStatus(item);
                   const fillPercent = Math.min(
                     Math.round((item.currentStock / item.maximumLevel) * 100),
@@ -1827,12 +1832,12 @@ function SkuManagement() {
         </div>
 
         {/* Pagination Section */}
-        {filteredSkus.length > 0 && (
+        {totalElements > 0 && (
           <div className="p-4 border-t border-gray-100 bg-gray-50/40">
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
-              totalItems={filteredSkus.length}
+              totalItems={totalElements}
               itemsPerPage={itemsPerPage}
               onPageChange={setCurrentPage}
             />
@@ -2907,14 +2912,21 @@ function SkuManagement() {
               name="skuId"
               label="Select Target SKU"
               required
-              placeholder="-- Select SKU to Replenish --"
+              placeholder={
+                isLoadingDropdownSkus
+                  ? "Loading SKUs for facility..."
+                  : "-- Select SKU to Replenish --"
+              }
               value={restockFormData.skuId}
               error={formErrors.skuId}
+              disabled={isLoadingDropdownSkus}
               onChange={(e) => {
                 const id = e.target.value;
-                const found = currentFacilitySkus.find(
-                  (s) => String(s.id) === String(id),
-                );
+                const found =
+                  dropdownSkus.find((s) => String(s.id) === String(id)) ||
+                  (selectedSku && String(selectedSku.id) === String(id)
+                    ? selectedSku
+                    : null);
                 setSelectedSku(found || null);
                 setRestockFormData((prev) => ({
                   ...prev,
@@ -2927,7 +2939,7 @@ function SkuManagement() {
                 }));
                 clearError("skuId");
               }}
-              options={currentFacilitySkus.map((s) => ({
+              options={dropdownSkus.map((s) => ({
                 value: s.id,
                 label: `${s.hasPendingRestock ? `[ACTIVE RESTOCK: ${s.pendingRestockUnits} units (${s.pendingRestockStatus || "Requested"})] ` : ""}${s.sku} — ${s.brandName} (${s.genericName}) [Current: ${s.currentStock}, Max: ${s.maximumLevel}]`,
               }))}

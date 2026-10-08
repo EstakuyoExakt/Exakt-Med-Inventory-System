@@ -18,33 +18,50 @@ const skuService = {
     return response.data;
   },
 
-  getAllSkus: async (facilityId, config = {}) => {
-    if (!facilityId) {
-      throw new Error("Facility ID is strictly required to fetch SKUs.");
+  getSkusPaginated: async (
+    paramsOrFacilityId,
+    maybeSearch = "",
+    maybeStatus = "ALL",
+    maybePage = 0,
+    maybeSize = 10,
+    config = {},
+  ) => {
+    let params;
+    if (typeof paramsOrFacilityId === "object" && paramsOrFacilityId !== null) {
+      params = paramsOrFacilityId;
+    } else {
+      params = {
+        facilityId: paramsOrFacilityId,
+        search: maybeSearch,
+        status: maybeStatus,
+        page: maybePage,
+        size: maybeSize,
+      };
     }
-    const response = await axios.get(skuApi.getAllSkus(facilityId), {
+
+    if (!params?.facilityId) {
+      return { content: [], totalPages: 1, totalElements: 0, currentPage: 1 };
+    }
+
+    const response = await axios.get(skuApi.getSkusPaginated(params), {
       ...config,
       headers: getAuthHeaders(config),
     });
     return response.data;
   },
 
-  searchSku: async (search = "", facilityId, config = {}) => {
-    if (!facilityId) {
-      throw new Error("Facility ID is strictly required to search SKUs.");
-    }
-    const response = await axios.get(skuApi.searchSku(search, facilityId), {
+  getSkuSummary: async (facilityId, config = {}) => {
+    if (!facilityId) return null;
+    const response = await axios.get(skuApi.getSkuSummary(facilityId), {
       ...config,
       headers: getAuthHeaders(config),
     });
     return response.data;
   },
 
-  searchSkus: async (search = "", facilityId, config = {}) => {
-    if (!facilityId) {
-      throw new Error("Facility ID is strictly required to search SKUs.");
-    }
-    const response = await axios.get(skuApi.searchSkus(search, facilityId), {
+  getDropdownSkus: async (facilityId, config = {}) => {
+    if (!facilityId) return [];
+    const response = await axios.get(skuApi.getDropdownSkus(facilityId), {
       ...config,
       headers: getAuthHeaders(config),
     });

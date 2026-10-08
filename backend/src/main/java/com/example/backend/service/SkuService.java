@@ -25,6 +25,13 @@ import com.example.backend.repository.RestockRequestRepository;
 import com.example.backend.repository.SkuRepository;
 import com.example.backend.repository.StockAdjustmentLogRepository;
 import com.example.backend.repository.UserRepository;
+import com.example.backend.dto.common.PageResponseDto;
+import com.example.backend.dto.sku.SkuDropdownDto;
+import com.example.backend.dto.sku.SkuSummaryDto;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -458,10 +465,18 @@ public class SkuService {
         return mapToResponseDto(savedSku, "SKU created successfully");
     }
 
-    // 2. GET ALL SKUS (Strictly required facilityId)
+    // 2. GET SKUS PAGINATED (with debounced search & stock status filter)
     @Transactional
     @PreAuthorize("isAuthenticated()")
-    public List<SkuResponseDto> getAllSkus(Long facilityId) {
+    public PageResponseDto<SkuResponseDto> getSkusPaginated(
+            Long facilityId,
+            String search,
+            String status,
+            int page,
+            int size,
+            String sortBy,
+            String sortDir) {
+
         if (facilityId == null) {
             throw new RuntimeException("Facility ID is strictly required.");
         }
@@ -469,15 +484,90 @@ public class SkuService {
             throw new RuntimeException("Facility not found with id: " + facilityId);
         }
 
-        // Ensure past-due batches have their status marked Expired (no automatic SKU deduction)
+        // Ensure past-due batches have their status marked Expired
         batchService.markPastDueBatchesAsExpired(facilityId);
 
-        List<Sku> skus = skuRepository.findByFacilityId(facilityId);
+        int pageIndex = Math.max(0, page);
+        int pageSize = size > 0 ? size : 10;
+
+        Sort.Direction direction = "DESC".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        String sortProperty = (sortBy != null && !sortBy.isBlank()) ? sortBy.trim() : "brandName";
+
+        if ("brandName".equalsIgnoreCase(sortProperty)) sortProperty = "brandName";
+        else if ("sku".equalsIgnoreCase(sortProperty) || "name".equalsIgnoreCase(sortProperty)) sortProperty = "name";
+        else if ("currentStock".equalsIgnoreCase(sortProperty) || "units".equalsIgnoreCase(sortProperty)) sortProperty = "units";
+        else if ("minimumLevel".equalsIgnoreCase(sortProperty)) sortProperty = "minimumLevel";
+        else if ("reorderLevel".equalsIgnoreCase(sortProperty)) sortProperty = "reorderLevel";
+        else if ("maximumLevel".equalsIgnoreCase(sortProperty)) sortProperty = "maximumLevel";
+        else if ("createdAt".equalsIgnoreCase(sortProperty)) sortProperty = "createdAt";
+        else sortProperty = "brandName";
+
+        Pageable pageable = PageRequest.of(pageIndex, pageSize, Sort.by(direction, sortProperty));
+
+        String trimmedSearch = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+        String trimmedStatus = (status != null && !status.trim().isEmpty()) ? status.trim().toUpperCase() : "ALL";
+
+        Page<Sku> skuPage = skuRepository.findSkusPaginated(facilityId, trimmedSearch, trimmedStatus, pageable);
         Map<Long, SkuOrderMetrics> activeMetricsMap = getActiveOrderMetricsMap(facilityId);
 
-        return skus.stream()
-                .map(sku -> mapToResponseDto(sku, null, activeMetricsMap.get(sku.getId())))
-                .collect(Collectors.toList());
+        Page<SkuResponseDto> dtoPage = skuPage.map(sku -> mapToResponseDto(sku, null, activeMetricsMap.get(sku.getId())));
+        return PageResponseDto.from(dtoPage);
+    }
+
+    // 2b. GET SKU SUMMARY KPIS
+    @Transactional(readOnly = true)
+    @PreAuthorize("isAuthenticated()")
+    public SkuSummaryDto getSkuSummary(Long facilityId) {
+        if (facilityId == null) {
+            throw new RuntimeException("Facility ID is strictly required.");
+        }
+
+        long totalSkus = skuRepository.countByFacilityId(facilityId);
+        long optimalCount = skuRepository.countOptimalByFacilityId(facilityId);
+        long reorderCount = skuRepository.countReorderNeededByFacilityId(facilityId);
+        long criticalCount = skuRepository.countCriticalByFacilityId(facilityId);
+
+        return SkuSummaryDto.builder()
+                .totalSkus(totalSkus)
+                .optimalCount(optimalCount)
+                .reorderCount(reorderCount)
+                .criticalCount(criticalCount)
+                .build();
+    }
+
+    // 2c. GET LIGHTWEIGHT SKU DROPDOWN LIST (For modal selectors)
+    @Transactional(readOnly = true)
+    @PreAuthorize("isAuthenticated()")
+    public List<SkuDropdownDto> getDropdownSkus(Long facilityId) {
+        if (facilityId == null) {
+            return Collections.emptyList();
+        }
+
+        List<Sku> skus = skuRepository.findDropdownSkusByFacilityId(facilityId);
+        Map<Long, SkuOrderMetrics> activeMetricsMap = getActiveOrderMetricsMap(facilityId);
+
+        return skus.stream().map(sku -> {
+            SkuOrderMetrics metrics = activeMetricsMap.get(sku.getId());
+            boolean hasActiveRestock = metrics != null && metrics.hasActiveRestockRequest;
+            String restockStatus = null;
+            if (hasActiveRestock && metrics.latestRestockRequest != null) {
+                restockStatus = metrics.latestRestockRequest.getOrder() == null
+                        ? "Requested"
+                        : metrics.latestRestockRequest.getOrder().getStatus().name();
+            }
+            return SkuDropdownDto.builder()
+                    .id(sku.getId())
+                    .sku(sku.getName())
+                    .brandName(sku.getBrandName())
+                    .genericName(sku.getLibMedicine() != null ? sku.getLibMedicine().getDrugDescription() : "")
+                    .dosage(sku.getDosageStrength())
+                    .currentStock(sku.getUnits() != null ? sku.getUnits() : 0L)
+                    .maximumLevel(sku.getMaximumLevel())
+                    .hasPendingRestock(hasActiveRestock)
+                    .pendingRestockUnits(hasActiveRestock ? metrics.activeRestockUnits : 0L)
+                    .pendingRestockStatus(restockStatus)
+                    .build();
+        }).collect(Collectors.toList());
     }
 
     // 3. GET SKU BY ID
@@ -791,26 +881,6 @@ public class SkuService {
         return stockAdjustmentLogRepository.findByFacilityIdOrderByCreatedAtDesc(facilityId)
                 .stream()
                 .map(this::mapAdjustmentLogToDto)
-                .collect(Collectors.toList());
-    }
-
-    // 6. SEARCH SKUS (by brandName, sku name, and medicine name)
-    @Transactional
-    @PreAuthorize("isAuthenticated()")
-    public List<SkuResponseDto> searchSkus(String search, Long facilityId) {
-        if (facilityId == null) {
-            throw new RuntimeException("Facility ID is strictly required.");
-        }
-        if (!facilityRepository.existsById(facilityId)) {
-            throw new RuntimeException("Facility not found with id: " + facilityId);
-        }
-
-        batchService.markPastDueBatchesAsExpired(facilityId);
-        String query = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
-        List<Sku> skus = skuRepository.searchSkus(query, facilityId);
-        Map<Long, SkuOrderMetrics> activeMetricsMap = getActiveOrderMetricsMap(facilityId);
-        return skus.stream()
-                .map(sku -> mapToResponseDto(sku, null, activeMetricsMap.get(sku.getId())))
                 .collect(Collectors.toList());
     }
 

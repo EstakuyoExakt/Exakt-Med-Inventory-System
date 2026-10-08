@@ -9,9 +9,17 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "sku", uniqueConstraints = {
-    @UniqueConstraint(name = "uk_facility_sku_name", columnNames = {"facilityId", "name"})
-})
+@Table(
+    name = "sku",
+    uniqueConstraints = {
+        @UniqueConstraint(name = "uk_facility_sku_name", columnNames = {"facilityId", "name"})
+    },
+    indexes = {
+        @Index(name = "idx_sku_facility_brand", columnList = "facilityId, brandName"),
+        @Index(name = "idx_sku_facility_units", columnList = "facilityId, units"),
+        @Index(name = "idx_sku_facility_name", columnList = "facilityId, name")
+    }
+)
 @Getter
 @Setter
 @NoArgsConstructor

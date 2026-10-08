@@ -1,8 +1,11 @@
 package com.example.backend.controller;
 
+import com.example.backend.dto.common.PageResponseDto;
+import com.example.backend.dto.sku.SkuDropdownDto;
 import com.example.backend.dto.sku.SkuRequestDto;
 import com.example.backend.dto.sku.SkuResponseDto;
 import com.example.backend.dto.sku.SkuStockAdjustmentDto;
+import com.example.backend.dto.sku.SkuSummaryDto;
 import com.example.backend.dto.sku.StockAdjustmentLogResponseDto;
 import com.example.backend.service.SkuService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,18 +37,47 @@ public class SkuController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-    // 2. SEARCH SKUS
-    @GetMapping("/search")
-    @Operation(summary = "Search SKUs", description = "Searches SKUs in a facility by medicine name, brand name, SKU code, barcode, or category.")
-    public ResponseEntity<List<SkuResponseDto>> searchSkus(
-            @Parameter(description = "Search keyword (medicine name, brand, SKU code, barcode)")
-            @RequestParam(required = false) String search,
+    // 2. GET SKUS PAGINATED (Server-side paginated search & status filtering)
+    @GetMapping("/paginated")
+    @Operation(summary = "Get SKUs Paginated", description = "Retrieves paginated SKUs by facility with optional keyword search, stock level filter, and sorting.")
+    public ResponseEntity<PageResponseDto<SkuResponseDto>> getSkusPaginated(
             @Parameter(description = "ID of the facility", required = true)
-            @RequestParam Long facilityId) {
-        return ResponseEntity.ok(skuService.searchSkus(search, facilityId));
+            @RequestParam Long facilityId,
+            @Parameter(description = "Optional search keyword (brandName, SKU code, generic description)")
+            @RequestParam(required = false) String search,
+            @Parameter(description = "Optional stock status filter (ALL, OPTIMAL, REORDER, CRITICAL)")
+            @RequestParam(required = false) String status,
+            @Parameter(description = "Page index (0-based)")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size")
+            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Sort property (brandName, name, units, etc.)")
+            @RequestParam(defaultValue = "brandName") String sortBy,
+            @Parameter(description = "Sort direction (ASC, DESC)")
+            @RequestParam(defaultValue = "ASC") String sortDir) {
+        return ResponseEntity.ok(skuService.getSkusPaginated(
+                facilityId, search, status, page, size, sortBy, sortDir));
     }
 
-    // 2b. GET SKUS THAT NEED REORDERING
+    // 2b. GET SKU SUMMARY KPIS
+    @GetMapping("/summary")
+    @Operation(summary = "Get SKU Summary KPIs", description = "Returns aggregated facility-level SKU counts for Total SKUs, Optimal, Reorder Needed, and Critical stock.")
+    public ResponseEntity<SkuSummaryDto> getSkuSummary(
+            @Parameter(description = "ID of the facility", required = true)
+            @RequestParam Long facilityId) {
+        return ResponseEntity.ok(skuService.getSkuSummary(facilityId));
+    }
+
+    // 2c. GET LIGHTWEIGHT DROPDOWN SKUS
+    @GetMapping("/dropdown")
+    @Operation(summary = "Get Dropdown SKUs", description = "Returns lightweight list of SKUs for restock selection and modal dropdowns.")
+    public ResponseEntity<List<SkuDropdownDto>> getDropdownSkus(
+            @Parameter(description = "ID of the facility", required = true)
+            @RequestParam Long facilityId) {
+        return ResponseEntity.ok(skuService.getDropdownSkus(facilityId));
+    }
+
+    // 2d. GET SKUS THAT NEED REORDERING (For Procurement Purchase Orders)
     @GetMapping("/reorder-needed")
     @Operation(summary = "Get SKUs Needing Reorder", description = "Returns SKUs whose current stock has dropped below minimum stock level and does not already have an active pending/approved purchase order.")
     public ResponseEntity<List<SkuResponseDto>> getReorderNeededSkus(
@@ -54,20 +86,6 @@ public class SkuController {
             @Parameter(description = "Optional search query filter")
             @RequestParam(required = false) String search) {
         return ResponseEntity.ok(skuService.getReorderNeededSkus(facilityId, search));
-    }
-
-    // 3. GET ALL SKUS
-    @GetMapping
-    @Operation(summary = "Get All SKUs by Facility", description = "Retrieves all SKUs for a specific facility with optional keyword filtering.")
-    public ResponseEntity<List<SkuResponseDto>> getAllSkus(
-            @Parameter(description = "ID of the facility", required = true)
-            @RequestParam Long facilityId,
-            @Parameter(description = "Optional search keyword")
-            @RequestParam(required = false) String search) {
-        if (search != null && !search.trim().isEmpty()) {
-            return ResponseEntity.ok(skuService.searchSkus(search, facilityId));
-        }
-        return ResponseEntity.ok(skuService.getAllSkus(facilityId));
     }
 
     // 4. GET SKU BY ID
