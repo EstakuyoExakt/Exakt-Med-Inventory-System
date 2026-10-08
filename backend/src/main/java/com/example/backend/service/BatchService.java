@@ -27,7 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -168,30 +170,7 @@ public class BatchService {
         return responses;
     }
 
-    // 3. GET ALL BATCHES BY FACILITY (with optional Status filter)
-    @Transactional
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Pharmacist', 'Procurement')")
-    public List<BatchResponseDto> getBatchesByFacility(Long facilityId, Batch.Status status) {
-        if (facilityId == null) {
-            throw new RuntimeException("Facility ID is required.");
-        }
-
-        // Automatically update any past-due batches to Expired status (without deducting active SKU units)
-        markPastDueBatchesAsExpired(facilityId);
-
-        List<Batch> batches;
-        if (status != null) {
-            batches = batchRepository.findByFacilityIdAndStatusOrderByReceivedAtDesc(facilityId, status);
-        } else {
-            batches = batchRepository.findByFacilityIdOrderByReceivedAtDesc(facilityId);
-        }
-
-        return batches.stream()
-                .map(this::mapToResponseDto)
-                .collect(Collectors.toList());
-    }
-
-    // 3b. GET BATCHES PAGINATED (Search strictly by batchNum as requested)
+    // 3. GET BATCHES PAGINATED (Search strictly by batchNum as requested)
     @Transactional(readOnly = true)
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Pharmacist', 'Procurement')")
     public PageResponseDto<BatchResponseDto> getBatchesPaginated(
@@ -277,6 +256,39 @@ public class BatchService {
         }
         return batchRepository.findDistinctSkuNamesByFacilityId(facilityId);
     }
+
+    // 3e. GET BATCHES BY SKU (Targeted retrieval for modal adjustments & expired deductions)
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Pharmacist', 'Procurement')")
+    public List<BatchResponseDto> getBatchesBySku(Long facilityId, Long skuId) {
+        if (facilityId == null || skuId == null) {
+            return Collections.emptyList();
+        }
+        return batchRepository.findBatchesForSkuOrderByReceivedAtAsc(facilityId, skuId)
+                .stream()
+                .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
+    }
+
+    // 3f. GET AGGREGATED EXPIRED BATCH METRICS PER SKU FOR A FACILITY
+    @Transactional(readOnly = true)
+    public Map<Long, long[]> getExpiredBatchMetrics(Long facilityId) {
+        if (facilityId == null) {
+            return Collections.emptyMap();
+        }
+        List<Object[]> rows = batchRepository.findExpiredBatchMetricsByFacilityId(facilityId, LocalDate.now());
+        Map<Long, long[]> result = new HashMap<>();
+        for (Object[] row : rows) {
+            Long skuId = (Long) row[0];
+            if (skuId != null) {
+                long count = ((Number) row[1]).longValue();
+                long units = ((Number) row[2]).longValue();
+                result.put(skuId, new long[]{count, units});
+            }
+        }
+        return result;
+    }
+
 
     // 4. GET BATCH BY ID
     @Transactional(readOnly = true)

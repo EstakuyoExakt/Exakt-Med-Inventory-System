@@ -39,4 +39,8 @@ public class SkuResponseDto {
     private Long pendingRestockRequestId;
     private LocalDateTime pendingRestockCreatedAt;
     private String pendingRestockStatus;
+
+    // Expired Batches tracking
+    private Long expiredBatchesCount;
+    private Long expiredUnits;
 }

@@ -10,20 +10,6 @@ const getAuthHeaders = (config = {}) => {
 };
 
 const batchService = {
-  getBatchesByFacility: async (facilityId, status = null, config = {}) => {
-    if (!facilityId) {
-      throw new Error("Facility ID is required to fetch batches.");
-    }
-    const response = await axios.get(
-      batchApi.getBatchesByFacility(facilityId, status),
-      {
-        ...config,
-        headers: getAuthHeaders(config),
-      },
-    );
-    return response.data;
-  },
-
   getBatchesPaginated: async (params, config = {}) => {
     if (!params?.facilityId) {
       throw new Error("Facility ID is required to fetch batches.");
@@ -91,6 +77,18 @@ const batchService = {
       ...config,
       headers: getAuthHeaders(config),
     });
+    return response.data;
+  },
+
+  getBatchesBySku: async (skuId, facilityId, config = {}) => {
+    if (!skuId || !facilityId) return [];
+    const response = await axios.get(
+      batchApi.getBatchesBySku(skuId, facilityId),
+      {
+        ...config,
+        headers: getAuthHeaders(config),
+      },
+    );
     return response.data;
   },
 

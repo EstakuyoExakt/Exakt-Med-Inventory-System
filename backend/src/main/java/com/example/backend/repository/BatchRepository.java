@@ -150,6 +150,18 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
            "WHERE b.facility.id = :facilityId " +
            "ORDER BY s.name ASC")
     List<String> findDistinctSkuNamesByFacilityId(@Param("facilityId") Long facilityId);
+
+    // 4. Aggregate expired batches needing deduction grouped by SKU
+    @Query("SELECT b.orderedItem.sku.id, COUNT(b), COALESCE(SUM(b.units), 0) FROM Batch b " +
+           "WHERE b.facility.id = :facilityId " +
+           "AND (b.status = com.example.backend.entity.Batch.Status.Expired OR (b.status = com.example.backend.entity.Batch.Status.Available AND b.expiryDate <= :today)) " +
+           "AND (b.skuDeducted IS NULL OR b.skuDeducted = false) " +
+           "AND b.units > 0 " +
+           "GROUP BY b.orderedItem.sku.id")
+    List<Object[]> findExpiredBatchMetricsByFacilityId(
+            @Param("facilityId") Long facilityId,
+            @Param("today") java.time.LocalDate today);
 }
+
 
 

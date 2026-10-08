@@ -44,18 +44,7 @@ public class BatchController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-    // 3. GET ALL BATCHES BY FACILITY
-    @GetMapping
-    @Operation(summary = "Get Batches by Facility", description = "Retrieves all batches for a given facility with optional status filtering (AVAILABLE, QUARANTINED, EXPIRED, DEPLETED).")
-    public ResponseEntity<List<BatchResponseDto>> getBatchesByFacility(
-            @Parameter(description = "Facility ID", required = true)
-            @RequestParam Long facilityId,
-            @Parameter(description = "Optional batch status filter")
-            @RequestParam(required = false) Batch.Status status) {
-        return ResponseEntity.ok(batchService.getBatchesByFacility(facilityId, status));
-    }
-
-    // 3b. GET BATCHES PAGINATED (Search strictly by batchNum)
+    // 3. GET BATCHES PAGINATED (Search strictly by batchNum)
     @GetMapping("/paginated")
     @Operation(summary = "Get Batches Paginated", description = "Retrieves paginated batches by facility with optional batchNumber search and status/sku filter.")
     public ResponseEntity<PageResponseDto<BatchResponseDto>> getBatchesPaginated(
@@ -98,6 +87,18 @@ public class BatchController {
             @RequestParam Long facilityId) {
         return ResponseEntity.ok(batchService.getDistinctBatchSkus(facilityId));
     }
+
+    // 3e. GET BATCHES BY SKU
+    @GetMapping("/sku/{skuId}")
+    @Operation(summary = "Get Batches by SKU", description = "Retrieves all batches for a specific SKU in a facility (ordered by receivedAt ascending).")
+    public ResponseEntity<List<BatchResponseDto>> getBatchesBySku(
+            @Parameter(description = "SKU ID", required = true)
+            @PathVariable Long skuId,
+            @Parameter(description = "Facility ID", required = true)
+            @RequestParam Long facilityId) {
+        return ResponseEntity.ok(batchService.getBatchesBySku(facilityId, skuId));
+    }
+
 
     // 4. GET BATCH BY ID
     @GetMapping("/{id}")

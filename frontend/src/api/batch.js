@@ -4,11 +4,6 @@ const API_URL = `${BASE_URL}/api/batches`;
 const batchApi = {
   receiveBatch: `${API_URL}`,
   receiveBatchesBulk: `${API_URL}/bulk`,
-  getBatchesByFacility: (facilityId, status) => {
-    let url = `${API_URL}?facilityId=${facilityId}`;
-    if (status) url += `&status=${encodeURIComponent(status)}`;
-    return url;
-  },
   getBatchById: (id) => `${API_URL}/${id}`,
   getBatchesPaginated: ({
     facilityId,
@@ -31,6 +26,9 @@ const batchApi = {
   getBatchSummary: (facilityId) => `${API_URL}/summary?facilityId=${facilityId}`,
   getDistinctBatchSkus: (facilityId) => `${API_URL}/skus?facilityId=${facilityId}`,
   updateBatchStatus: (id) => `${API_URL}/${id}/status`,
+  getBatchesBySku: (skuId, facilityId) => {
+    return `${API_URL}/sku/${skuId}?facilityId=${facilityId}`;
+  },
   processExpiredBatches: (facilityId, skuId) => {
     return `${API_URL}/process-expired?facilityId=${facilityId}&skuId=${skuId}`;
   },

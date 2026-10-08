@@ -840,6 +840,8 @@ public class SkuService {
         boolean hasActiveRestockRequest = false;
         long activeRestockUnits = 0L;
         RestockRequest latestRestockRequest = null;
+        long expiredBatchesCount = 0L;
+        long expiredUnits = 0L;
     }
 
     private Map<Long, SkuOrderMetrics> getActiveOrderMetricsMap(Long facilityId) {
@@ -880,6 +882,14 @@ public class SkuService {
             }
         }
 
+        // 3. Expired batches needing deduction
+        Map<Long, long[]> expiredMetrics = batchService.getExpiredBatchMetrics(facilityId);
+        for (Map.Entry<Long, long[]> entry : expiredMetrics.entrySet()) {
+            SkuOrderMetrics m = map.computeIfAbsent(entry.getKey(), k -> new SkuOrderMetrics());
+            m.expiredBatchesCount = entry.getValue()[0];
+            m.expiredUnits = entry.getValue()[1];
+        }
+
         return map;
     }
 
@@ -911,6 +921,14 @@ public class SkuService {
                 }
             }
         }
+
+        Map<Long, long[]> expiredMetrics = batchService.getExpiredBatchMetrics(facilityId);
+        long[] skuExpired = expiredMetrics.get(skuId);
+        if (skuExpired != null) {
+            m.expiredBatchesCount = skuExpired[0];
+            m.expiredUnits = skuExpired[1];
+        }
+
         return m;
     }
 
@@ -966,6 +984,11 @@ public class SkuService {
             dto.setPendingRestockCreatedAt(null);
             dto.setPendingRestockStatus(null);
         }
+
+        long expiredCount = metrics != null ? metrics.expiredBatchesCount : 0L;
+        long expiredUnits = metrics != null ? metrics.expiredUnits : 0L;
+        dto.setExpiredBatchesCount(expiredCount);
+        dto.setExpiredUnits(expiredUnits);
 
         return dto;
     }
