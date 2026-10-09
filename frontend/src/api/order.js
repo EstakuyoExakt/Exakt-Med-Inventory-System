@@ -5,7 +5,13 @@ const orderApi = {
   createOrder: `${API_URL}`,
   getAllOrders: (facilityId, status) => {
     let url = `${API_URL}?facilityId=${facilityId}`;
-    if (status) url += `&status=${encodeURIComponent(status)}`;
+    if (Array.isArray(status)) {
+      status.forEach((s) => {
+        if (s) url += `&status=${encodeURIComponent(s)}`;
+      });
+    } else if (status) {
+      url += `&status=${encodeURIComponent(status)}`;
+    }
     return url;
   },
   getOrderById: (id) => `${API_URL}/${id}`,

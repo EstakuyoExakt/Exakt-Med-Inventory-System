@@ -149,19 +149,34 @@ function BatchManagement() {
         po.poNumberFormatted ||
         `PO-${String(po.id).padStart(5, "0")}`;
 
-      const items = (po.items || []).map((item) => ({
-        id: item.id,
-        skuId: item.skuId,
-        sku: item.skuName || `SKU-${item.skuId}`,
-        brandName: item.brandName || "Medicine",
-        genericName: item.genericName || "—",
-        dosageForm: item.dosageForm || "—",
-        packagingUnit: item.packagingUnit || "—",
-        quantity: Number(item.orderedUnits) || 0,
-        price: Number(item.price) || 0,
-      }));
+      const items = (po.items || []).map((item) => {
+        const orderedUnits = Number(item.orderedUnits) || 0;
+        const receivedUnits = Number(item.receivedUnits) || 0;
+        const remainingUnits = Math.max(0, orderedUnits - receivedUnits);
 
-      const totalQuantity = items.reduce((sum, i) => sum + i.quantity, 0);
+        return {
+          id: item.id,
+          skuId: item.skuId,
+          sku: item.skuName || `SKU-${item.skuId}`,
+          brandName: item.brandName || "Medicine",
+          genericName: item.genericName || "—",
+          dosageForm: item.dosageForm || "—",
+          packagingUnit: item.packagingUnit || "—",
+          quantity: remainingUnits,
+          orderedUnits,
+          receivedUnits,
+          remainingUnits,
+          price: Number(item.price) || 0,
+        };
+      });
+
+      const totalOrdered =
+        po.totalOrderedUnits ??
+        items.reduce((sum, i) => sum + i.orderedUnits, 0);
+      const totalReceived =
+        po.totalReceivedUnits ??
+        items.reduce((sum, i) => sum + i.receivedUnits, 0);
+      const totalRemaining = Math.max(0, totalOrdered - totalReceived);
       const firstItem = items[0] || {};
 
       return {
@@ -171,7 +186,9 @@ function BatchManagement() {
         supplierName: po.supplierName || "Supplier",
         targetFacility: po.facilityName || currentFacilityName,
         facilityId: po.facilityId,
-        totalQuantity: po.totalOrderedUnits ?? totalQuantity,
+        totalQuantity: totalOrdered,
+        totalReceivedUnits: totalReceived,
+        totalRemainingUnits: totalRemaining,
         totalPrice: po.totalPrice || 0,
         items,
         itemCount: items.length,
@@ -199,12 +216,16 @@ function BatchManagement() {
       setOrdersError(null);
       const data = await orderService.getAllOrders(
         activeFacilityId,
-        "Approved",
+        ["Approved", "Partially_Received"],
       );
       if (Array.isArray(data)) {
         setApprovedOrders(
           data
-            .filter((po) => po.status === "Approved")
+            .filter(
+              (po) =>
+                po.status === "Approved" ||
+                po.status === "Partially_Received",
+            )
             .map(normalizeApprovedOrder),
         );
       } else {
@@ -459,30 +480,43 @@ function BatchManagement() {
       setReceiveFormData({
         poNumber: po.orderNumber,
         location: currentFacilityName,
-        items: (po.items || []).map((item) => ({
-          orderedItemId: item.id,
-          skuId: item.skuId,
-          sku: item.sku,
-          brandName: item.brandName,
-          genericName: item.genericName,
-          dosageForm: item.dosageForm,
-          packagingUnit: item.packagingUnit,
-          quantity: item.quantity,
-          batches: [
-            {
-              id:
-                typeof crypto !== "undefined" && crypto.randomUUID
-                  ? crypto.randomUUID()
-                  : `b-${Date.now()}-0`,
-              batchNumber: "",
-              units: item.quantity,
-              manufacturingDate: bulkDates.manufacturingDate || "",
-              expiryDate: bulkDates.expiryDate || "",
-              isQuarantined: false,
-              quarantineNotes: "",
-            },
-          ],
-        })),
+        items: (po.items || []).map((item) => {
+          const remainingUnits =
+            item.remainingUnits !== undefined
+              ? item.remainingUnits
+              : item.quantity;
+
+          return {
+            orderedItemId: item.id,
+            skuId: item.skuId,
+            sku: item.sku,
+            brandName: item.brandName,
+            genericName: item.genericName,
+            dosageForm: item.dosageForm,
+            packagingUnit: item.packagingUnit,
+            quantity: remainingUnits,
+            orderedUnits: item.orderedUnits || item.quantity,
+            receivedUnits: item.receivedUnits || 0,
+            remainingUnits,
+            batches:
+              remainingUnits > 0
+                ? [
+                    {
+                      id:
+                        typeof crypto !== "undefined" && crypto.randomUUID
+                          ? crypto.randomUUID()
+                          : `b-${Date.now()}-0`,
+                      batchNumber: "",
+                      units: remainingUnits,
+                      manufacturingDate: bulkDates.manufacturingDate || "",
+                      expiryDate: bulkDates.expiryDate || "",
+                      isQuarantined: false,
+                      quarantineNotes: "",
+                    },
+                  ]
+                : [],
+          };
+        }),
       });
       setCollapsedSkus({});
     } else {
@@ -503,11 +537,13 @@ function BatchManagement() {
     setReceiveFormData((prev) => {
       const nextItems = [...prev.items];
       const item = nextItems[itemIdx];
+      const maxAllowed =
+        item.remainingUnits !== undefined ? item.remainingUnits : item.quantity;
       const currentAllocated = (item.batches || []).reduce(
         (sum, b) => sum + (Number(b.units) || 0),
         0,
       );
-      const remaining = Math.max(0, item.quantity - currentAllocated);
+      const remaining = Math.max(0, maxAllowed - currentAllocated);
 
       const newBatch = {
         id:
@@ -651,27 +687,34 @@ function BatchManagement() {
       setIsSubmitting(true);
       clearErrors();
 
-      // Flatten all batch rows across all SKUs into the bulk intake payload
+      // Flatten all batch rows across all SKUs into the bulk intake payload (only batches with units > 0)
       const batchPayload = [];
 
       receiveFormData.items.forEach((item) => {
         (item.batches || []).forEach((b) => {
           const units = Number(b.units);
-          const isQuar = Boolean(b.isQuarantined);
-          batchPayload.push({
-            facilityId: activeFacilityId,
-            orderedItemId: item.orderedItemId || item.id,
-            batchNum: b.batchNumber.trim().toUpperCase(),
-            units: units,
-            manufactureDate: b.manufacturingDate,
-            expiryDate: b.expiryDate,
-            status: isQuar ? "Quarantined" : "Available",
-            notes: isQuar
-              ? b.quarantineNotes?.trim() || "Quality inspection hold"
-              : null,
-          });
+          if (units > 0 && b.batchNumber?.trim()) {
+            const isQuar = Boolean(b.isQuarantined);
+            batchPayload.push({
+              facilityId: activeFacilityId,
+              orderedItemId: item.orderedItemId || item.id,
+              batchNum: b.batchNumber.trim().toUpperCase(),
+              units: units,
+              manufactureDate: b.manufacturingDate,
+              expiryDate: b.expiryDate,
+              status: isQuar ? "Quarantined" : "Available",
+              notes: isQuar
+                ? b.quarantineNotes?.trim() || "Quality inspection hold"
+                : null,
+            });
+          }
         });
       });
+
+      if (batchPayload.length === 0) {
+        setFormErrors({ general: "Please enter at least one batch with units to receive." });
+        return;
+      }
 
       // Call backend bulk batch intake API
       const savedBatchDtos =
@@ -1208,9 +1251,12 @@ function BatchManagement() {
                 placeholder="-- Choose or search an Approved Purchase Order --"
                 getOptionValue={(po) => po.orderNumber}
                 getOptionLabel={(po) => `${po.orderNumber}`}
-                getOptionSubtext={(po) =>
-                  `${po.totalQuantity.toLocaleString()} units • ${po.supplierName} [Approved]`
-                }
+                getOptionSubtext={(po) => {
+                  const isPart =
+                    po.status === "Partially_Received" ||
+                    po.status === "Partially Received";
+                  return `${po.totalQuantity.toLocaleString()} units • ${po.supplierName} [${isPart ? "Partially Received" : "Approved"}]`;
+                }}
                 getDisplayValue={(po) =>
                   `${po.orderNumber} — ${po.supplierName}`
                 }
@@ -1232,8 +1278,17 @@ function BatchManagement() {
                       <span className="font-mono font-bold text-blue-900 text-sm">
                         {selectedPoDetails.orderNumber}
                       </span>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        {selectedPoDetails.status}
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
+                          selectedPoDetails.status === "Partially_Received" ||
+                          selectedPoDetails.status === "Partially Received"
+                            ? "bg-amber-50 text-amber-800 border border-amber-200"
+                            : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        }`}
+                      >
+                        {selectedPoDetails.status === "Partially_Received"
+                          ? "Partially Received"
+                          : selectedPoDetails.status}
                       </span>
                     </div>
                     <p className="text-gray-600 text-xs mt-0.5">
@@ -1253,6 +1308,42 @@ function BatchManagement() {
                     </span>
                   </div>
                 </div>
+
+                {/* Progress bar if partially received */}
+                {Number(selectedPoDetails.totalReceivedUnits || 0) > 0 && (
+                  <div className="p-2.5 rounded-lg bg-blue-50/70 border border-blue-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-slate-600 font-medium">
+                        Fulfillment:
+                      </span>
+                      <span className="font-bold text-slate-900">
+                        {(
+                          selectedPoDetails.totalReceivedUnits || 0
+                        ).toLocaleString()}{" "}
+                        /{" "}
+                        {selectedPoDetails.totalQuantity?.toLocaleString()}{" "}
+                        units
+                      </span>
+                      <span className="text-[11px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                        {Math.round(
+                          ((selectedPoDetails.totalReceivedUnits || 0) /
+                            (selectedPoDetails.totalQuantity || 1)) *
+                            100,
+                        )}
+                        %
+                      </span>
+                    </div>
+                    <div className="text-slate-600 font-medium">
+                      Remaining:{" "}
+                      <strong className="text-blue-900">
+                        {(
+                          selectedPoDetails.totalRemainingUnits || 0
+                        ).toLocaleString()}{" "}
+                        units
+                      </strong>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex justify-between gap-2.5 text-[11px]">
                   <div className="flex items-center gap-1.5 text-gray-600">
@@ -1364,10 +1455,19 @@ function BatchManagement() {
                       (sum, b) => sum + (Number(b.units) || 0),
                       0,
                     );
-                    const orderedUnits = Number(item.quantity || 0);
-                    const isAllocatedMatch = totalAllocated === orderedUnits;
-                    const isOverAllocated = totalAllocated > orderedUnits;
-                    const remainingUnits = orderedUnits - totalAllocated;
+                    const orderedUnits = Number(
+                      item.orderedUnits || item.quantity || 0,
+                    );
+                    const receivedUnits = Number(item.receivedUnits || 0);
+                    const remainingUnits =
+                      item.remainingUnits !== undefined
+                        ? Number(item.remainingUnits)
+                        : Math.max(0, orderedUnits - receivedUnits);
+
+                    const isAllocatedMatch =
+                      totalAllocated === remainingUnits && remainingUnits > 0;
+                    const isOverAllocated = totalAllocated > remainingUnits;
+                    const unallocatedForDelivery = remainingUnits - totalAllocated;
 
                     return (
                       <div
@@ -1388,6 +1488,11 @@ function BatchManagement() {
                                 <span className="font-mono text-[11px] text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-bold">
                                   {item.sku}
                                 </span>
+                                {receivedUnits > 0 && (
+                                  <span className="font-mono text-[10px] text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded font-medium">
+                                    Ordered: {orderedUnits.toLocaleString()} • Prev: {receivedUnits.toLocaleString()} • Rem: {remainingUnits.toLocaleString()}
+                                  </span>
+                                )}
                               </div>
                               <p className="text-[11px] text-gray-500 mt-0.5">
                                 {item.genericName} • {item.dosageForm} (
@@ -1398,28 +1503,37 @@ function BatchManagement() {
 
                           {/* Allocation Badges, Add Batch CTA & Collapse Toggle */}
                           <div className="flex items-center gap-2 flex-wrap">
-                            {isAllocatedMatch ? (
+                            {remainingUnits <= 0 ? (
+                              <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                Fully Received ({receivedUnits.toLocaleString()} units)
+                              </span>
+                            ) : isAllocatedMatch ? (
                               <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-lg">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                                 {totalAllocated.toLocaleString()} /{" "}
-                                {orderedUnits.toLocaleString()} units
+                                {remainingUnits.toLocaleString()} units (Fulfills remainder)
                               </span>
                             ) : isOverAllocated ? (
                               <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold bg-red-50 text-red-700 border border-red-200 px-2.5 py-1 rounded-lg">
                                 <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
                                 {totalAllocated.toLocaleString()} /{" "}
-                                {orderedUnits.toLocaleString()} (+
+                                {remainingUnits.toLocaleString()} (+
                                 {(
-                                  totalAllocated - orderedUnits
+                                  totalAllocated - remainingUnits
                                 ).toLocaleString()}{" "}
                                 over)
                               </span>
-                            ) : (
+                            ) : totalAllocated > 0 ? (
                               <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-lg">
                                 <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                                {totalAllocated.toLocaleString()} /{" "}
-                                {orderedUnits.toLocaleString()} (
-                                {remainingUnits.toLocaleString()} remaining)
+                                Partial: {totalAllocated.toLocaleString()} of{" "}
+                                {remainingUnits.toLocaleString()} units (
+                                {unallocatedForDelivery.toLocaleString()} pending)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold bg-slate-50 text-slate-600 border border-slate-200 px-2.5 py-1 rounded-lg">
+                                Not in this delivery (0 / {remainingUnits.toLocaleString()} units)
                               </span>
                             )}
 

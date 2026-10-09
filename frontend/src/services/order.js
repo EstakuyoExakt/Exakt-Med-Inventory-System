@@ -25,7 +25,9 @@ const orderService = {
     let status = null;
     let actualConfig = config;
 
-    if (statusOrConfig && typeof statusOrConfig === "object") {
+    if (Array.isArray(statusOrConfig)) {
+      status = statusOrConfig;
+    } else if (statusOrConfig && typeof statusOrConfig === "object") {
       actualConfig = statusOrConfig;
     } else if (typeof statusOrConfig === "string") {
       status = statusOrConfig;

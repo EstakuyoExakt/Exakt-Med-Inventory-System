@@ -151,48 +151,59 @@ export const validateBatchForm = (
   if (Array.isArray(formData.items) && formData.items.length > 0) {
     const allErrors = {};
     const enteredBatches = new Set();
+    let totalGrandAllocated = 0;
 
     if (!formData.poNumber) {
       allErrors.poNumber = "Please select a Purchase Order (PO).";
     }
 
     formData.items.forEach((item, itemIdx) => {
-      const orderedQty = Number(item.quantity || 0);
-      const batches = Array.isArray(item.batches) && item.batches.length > 0
-        ? item.batches
-        : null;
+      const maxAllowed =
+        item.remainingUnits !== undefined
+          ? Number(item.remainingUnits)
+          : Number(item.quantity || 0);
+
+      const batches =
+        Array.isArray(item.batches) && item.batches.length > 0
+          ? item.batches
+          : null;
 
       if (batches) {
         // Multi-batch per SKU validation
         const totalAllocated = batches.reduce(
           (sum, b) => sum + (Number(b.units) || 0),
-          0
+          0,
         );
-        if (totalAllocated !== orderedQty) {
+        totalGrandAllocated += totalAllocated;
+
+        if (totalAllocated > maxAllowed) {
           allErrors[`item_${itemIdx}_allocation`] =
-            `Allocated units (${totalAllocated.toLocaleString()}) must match total ordered units (${orderedQty.toLocaleString()}).`;
+            `Allocated units (${totalAllocated.toLocaleString()}) cannot exceed remaining units to receive (${maxAllowed.toLocaleString()}).`;
         }
 
-        batches.forEach((b, bIdx) => {
-          const { errors, isValid } = validateBatchRow(b, {
-            batchList,
-            existingEnteredBatches: enteredBatches,
-            excludeId,
-          });
-
-          const trimmed = (b.batchNumber || "").trim().toUpperCase();
-          if (trimmed) {
-            enteredBatches.add(trimmed);
-          }
-
-          if (!isValid) {
-            Object.entries(errors).forEach(([field, msg]) => {
-              if (msg) {
-                allErrors[`item_${itemIdx}_batch_${bIdx}_${field}`] = msg;
-              }
+        // Validate batches only if this SKU is being received in this delivery session
+        if (totalAllocated > 0) {
+          batches.forEach((b, bIdx) => {
+            const { errors, isValid } = validateBatchRow(b, {
+              batchList,
+              existingEnteredBatches: enteredBatches,
+              excludeId,
             });
-          }
-        });
+
+            const trimmed = (b.batchNumber || "").trim().toUpperCase();
+            if (trimmed) {
+              enteredBatches.add(trimmed);
+            }
+
+            if (!isValid) {
+              Object.entries(errors).forEach(([field, msg]) => {
+                if (msg) {
+                  allErrors[`item_${itemIdx}_batch_${bIdx}_${field}`] = msg;
+                }
+              });
+            }
+          });
+        }
       } else {
         // Fallback single-batch per SKU
         const { errors, isValid } = validateBatchItem(item, {
@@ -215,6 +226,11 @@ export const validateBatchForm = (
         }
       }
     });
+
+    if (formData.poNumber && totalGrandAllocated <= 0) {
+      allErrors.general =
+        "Please allocate at least one batch with units to receive.";
+    }
 
     return {
       isValid: Object.keys(allErrors).length === 0,

@@ -24,6 +24,7 @@ public class OrderResponseDto {
     private String supplierName;
     private String priority;
     private Long totalOrderedUnits;
+    private Long totalReceivedUnits;
     private Long totalPrice;
     private String notes;
     private Order.Status status;

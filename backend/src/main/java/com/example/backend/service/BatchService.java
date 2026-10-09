@@ -133,11 +133,14 @@ public class BatchService {
             }
         }
 
-        // UPDATE ORDER STATUS TO RECEIVED
+        // UPDATE ORDERED ITEM RECEIVED UNITS & UPDATE PARENT ORDER STATUS
+        long itemReceived = (orderedItem.getReceivedUnits() != null ? orderedItem.getReceivedUnits() : 0L) + units;
+        orderedItem.setReceivedUnits(itemReceived);
+        orderedItemRepository.save(orderedItem);
+
         Order order = orderedItem.getOrder();
-        if (order != null && order.getStatus() != Order.Status.Received) {
-            order.setStatus(Order.Status.Received);
-            orderRepository.save(order);
+        if (order != null) {
+            updateOrderStatusOnReceipt(order);
         }
 
         auditLogService.logAction(
@@ -591,5 +594,41 @@ public class BatchService {
         dto.setSkuDeducted(batch.getSkuDeducted() != null ? batch.getSkuDeducted() : false);
 
         return dto;
+    }
+
+    private void updateOrderStatusOnReceipt(Order order) {
+        if (order == null || order.getId() == null) return;
+        List<OrderedItem> items = orderedItemRepository.findByOrderId(order.getId());
+        long totalOrdered = order.getTotalOrderedUnits() != null ? order.getTotalOrderedUnits() : 0L;
+        long totalReceived = items.stream()
+                .mapToLong(i -> i.getReceivedUnits() != null ? i.getReceivedUnits() : 0L)
+                .sum();
+
+        Order.Status oldStatus = order.getStatus();
+        Order.Status newStatus;
+        if (totalReceived >= totalOrdered && totalOrdered > 0) {
+            newStatus = Order.Status.Received;
+        } else if (totalReceived > 0) {
+            newStatus = Order.Status.Partially_Received;
+        } else {
+            newStatus = oldStatus != null ? oldStatus : Order.Status.Approved;
+        }
+
+        if (newStatus != oldStatus) {
+            order.setStatus(newStatus);
+            Order savedOrder = orderRepository.save(order);
+
+            auditLogService.logAction(
+                    savedOrder.getFacility(),
+                    "Purchasing",
+                    "ORDER_STATUS_UPDATED",
+                    "Order Status Updated (" + oldStatus + " -> " + newStatus + ")",
+                    AuditLog.Severity.INFO,
+                    savedOrder.getPurchaseOrderNum(),
+                    savedOrder.getId(),
+                    "Order " + savedOrder.getPurchaseOrderNum() + " updated to " + newStatus + ". Received " + totalReceived + " of " + totalOrdered + " units.",
+                    "Admin,Pharmacist"
+            );
+        }
     }
 }

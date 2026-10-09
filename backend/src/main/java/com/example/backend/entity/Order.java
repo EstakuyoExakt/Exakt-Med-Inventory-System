@@ -16,6 +16,7 @@ public class Order {
         Pending,
         Approved,
         Denied,
+        Partially_Received,
         Received
     }
 

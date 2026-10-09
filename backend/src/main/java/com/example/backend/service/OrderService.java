@@ -116,6 +116,7 @@ public class OrderService {
             orderedItem.setOrder(savedOrder);
             orderedItem.setSku(sku);
             orderedItem.setOrderedUnits(itemDto.getOrderedUnits());
+            orderedItem.setReceivedUnits(0L);
             long itemPrice = itemDto.getPrice() != null ? itemDto.getPrice() : 0L;
             long units = itemDto.getOrderedUnits() != null ? itemDto.getOrderedUnits() : 0L;
             orderedItem.setPrice(itemPrice);
@@ -168,17 +169,21 @@ public class OrderService {
         return response;
     }
 
-    // 2. GET ALL ORDERS (facilityId is strictly required, optional status filter)
+    // 2. GET ALL ORDERS (facilityId is strictly required, optional status or list of statuses filter)
     @Transactional(readOnly = true)
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Procurement', 'Pharmacist')")
-    public List<OrderResponseDto> getAllOrders(Long facilityId, Order.Status status) {
+    public List<OrderResponseDto> getAllOrders(Long facilityId, List<Order.Status> statuses) {
         if (facilityId == null) {
             throw new RuntimeException("Facility ID is required");
         }
 
         List<Order> orders;
-        if (status != null) {
-            orders = orderRepository.findByFacilityIdAndStatusOrderByCreatedAtDesc(facilityId, status);
+        if (statuses != null && !statuses.isEmpty()) {
+            if (statuses.size() == 1) {
+                orders = orderRepository.findByFacilityIdAndStatusOrderByCreatedAtDesc(facilityId, statuses.get(0));
+            } else {
+                orders = orderRepository.findByFacilityIdAndStatusInOrderByCreatedAtDesc(facilityId, statuses);
+            }
         } else {
             orders = orderRepository.findByFacilityIdOrderByCreatedAtDesc(facilityId);
         }
@@ -196,8 +201,14 @@ public class OrderService {
 
     @Transactional(readOnly = true)
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Procurement', 'Pharmacist')")
+    public List<OrderResponseDto> getAllOrders(Long facilityId, Order.Status status) {
+        return getAllOrders(facilityId, status != null ? List.of(status) : null);
+    }
+
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Procurement', 'Pharmacist')")
     public List<OrderResponseDto> getAllOrders(Long facilityId) {
-        return getAllOrders(facilityId, null);
+        return getAllOrders(facilityId, (List<Order.Status>) null);
     }
 
     // 3. GET ORDER BY ID
@@ -284,6 +295,7 @@ public class OrderService {
             }
         }
         dto.setOrderedUnits(item.getOrderedUnits());
+        dto.setReceivedUnits(item.getReceivedUnits() != null ? item.getReceivedUnits() : 0L);
         dto.setPrice(item.getPrice());
 
         Double unitPrice = item.getPricePerUnit();
@@ -309,6 +321,10 @@ public class OrderService {
         }
         dto.setPriority(order.getPriority());
         dto.setTotalOrderedUnits(order.getTotalOrderedUnits());
+        long totalReceived = (items != null)
+                ? items.stream().mapToLong(i -> i.getReceivedUnits() != null ? i.getReceivedUnits() : 0L).sum()
+                : 0L;
+        dto.setTotalReceivedUnits(totalReceived);
         dto.setTotalPrice(order.getTotalPrice());
         dto.setNotes(order.getNotes());
         dto.setStatus(order.getStatus());

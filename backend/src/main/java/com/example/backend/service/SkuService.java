@@ -946,8 +946,9 @@ public class SkuService {
                 long units = oi.getOrderedUnits() != null ? oi.getOrderedUnits() : 0L;
                 if (oi.getOrder().getStatus() == Order.Status.Pending) {
                     m.pendingUnits += units;
-                } else if (oi.getOrder().getStatus() == Order.Status.Approved) {
-                    m.toReceiveUnits += units;
+                } else if (oi.getOrder().getStatus() == Order.Status.Approved || oi.getOrder().getStatus() == Order.Status.Partially_Received) {
+                    long remaining = Math.max(0, units - (oi.getReceivedUnits() != null ? oi.getReceivedUnits() : 0L));
+                    m.toReceiveUnits += remaining;
                 }
             }
         }
@@ -986,8 +987,9 @@ public class SkuService {
                 long units = oi.getOrderedUnits() != null ? oi.getOrderedUnits() : 0L;
                 if (oi.getOrder().getStatus() == Order.Status.Pending) {
                     m.pendingUnits += units;
-                } else if (oi.getOrder().getStatus() == Order.Status.Approved) {
-                    m.toReceiveUnits += units;
+                } else if (oi.getOrder().getStatus() == Order.Status.Approved || oi.getOrder().getStatus() == Order.Status.Partially_Received) {
+                    long remaining = Math.max(0, units - (oi.getReceivedUnits() != null ? oi.getReceivedUnits() : 0L));
+                    m.toReceiveUnits += remaining;
                 }
             }
         }

@@ -270,7 +270,9 @@ public class DashboardService {
                     String supplierName = o.getSupplier() != null ? o.getSupplier().getName() : "Unassigned Supplier";
                     String dest = o.getFacility() != null ? o.getFacility().getName() : facilityName;
                     String dateStr = o.getCreatedAt() != null ? o.getCreatedAt().format(dateFormatter) : today.format(dateFormatter);
-                    String statusStr = o.getStatus() == Order.Status.Pending ? "Pending Approval" : o.getStatus().name();
+                    String statusStr = o.getStatus() == Order.Status.Pending
+                            ? "Pending Approval"
+                            : (o.getStatus() == Order.Status.Partially_Received ? "Partially Received" : o.getStatus().name());
 
                     return ProcurementDashboardResponseDto.RecentOrderRequest.builder()
                             .orderId(o.getPurchaseOrderNum())

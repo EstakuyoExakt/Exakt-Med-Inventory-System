@@ -35,12 +35,12 @@ public class OrderController {
 
     // 2. GET ALL ORDERS
     @GetMapping
-    @Operation(summary = "Get All Orders by Facility", description = "Retrieves purchase orders for a facility with optional status filtering (Pending, Approved, Denied).")
+    @Operation(summary = "Get All Orders by Facility", description = "Retrieves purchase orders for a facility with optional status filtering (Pending, Approved, Denied, Partially_Received, Received).")
     public ResponseEntity<List<OrderResponseDto>> getAllOrders(
             @Parameter(description = "Facility ID", required = true)
             @RequestParam Long facilityId,
-            @Parameter(description = "Optional order status filter (Pending, Approved, Denied)")
-            @RequestParam(required = false) Order.Status status) {
+            @Parameter(description = "Optional order status filter (single or multiple, e.g. Approved, Partially_Received)")
+            @RequestParam(required = false) List<Order.Status> status) {
         return ResponseEntity.ok(orderService.getAllOrders(facilityId, status));
     }
 

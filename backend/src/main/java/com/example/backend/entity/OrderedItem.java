@@ -25,6 +25,9 @@ public class OrderedItem {
     @Column(nullable = false)
     private Long orderedUnits;
 
+    @Column(name = "receivedUnits", columnDefinition = "bigint default 0")
+    private Long receivedUnits = 0L;
+
     @Column(nullable = false)
     private Long price;
 

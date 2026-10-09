@@ -39,14 +39,30 @@ import useAuth from "../../hooks/useAuth";
 
 // Helper to normalize backend OrderResponseDto into view model
 const normalizeOrder = (raw) => {
-  const items = raw.items || [];
+  const items = (raw.items || []).map((it) => ({
+    ...it,
+    orderedUnits: Number(it.orderedUnits) || 0,
+    receivedUnits: Number(it.receivedUnits) || 0,
+    remainingUnits: Math.max(
+      0,
+      (Number(it.orderedUnits) || 0) - (Number(it.receivedUnits) || 0),
+    ),
+  }));
   const firstItem = items[0] || {};
+  const totalReceived =
+    raw.totalReceivedUnits ??
+    items.reduce((sum, i) => sum + (Number(i.receivedUnits) || 0), 0);
 
   return {
     id: raw.id,
     orderNumber:
       raw.purchaseOrderNum || raw.poNumberFormatted || `PO-${raw.id}`,
     quantity: raw.totalOrderedUnits ?? raw.quantity ?? 0,
+    receivedQuantity: totalReceived,
+    remainingQuantity: Math.max(
+      0,
+      (raw.totalOrderedUnits ?? raw.quantity ?? 0) - totalReceived,
+    ),
     estimatedCost: raw.totalPrice ?? raw.estimatedCost ?? 0,
     supplierId: raw.supplierId,
     supplierName: raw.supplierName || "Supplier",
@@ -153,12 +169,27 @@ function RequestedOrders() {
       (o) => o.status === "Pending" || o.status === "Pending Approval",
     ).length;
     const approved = currentFacilityOrders.filter(
-      (o) => o.status === "Approved" || o.status === "Received",
+      (o) => o.status === "Approved",
+    ).length;
+    const partiallyReceived = currentFacilityOrders.filter(
+      (o) =>
+        o.status === "Partially_Received" ||
+        o.status === "Partially Received",
+    ).length;
+    const received = currentFacilityOrders.filter(
+      (o) => o.status === "Received",
     ).length;
     const rejected = currentFacilityOrders.filter(
       (o) => o.status === "Rejected" || o.status === "Denied",
     ).length;
-    return { total, pending, approved, rejected };
+    return {
+      total,
+      pending,
+      approved,
+      partiallyReceived,
+      received,
+      rejected,
+    };
   }, [currentFacilityOrders]);
 
   // Filtering Logic
@@ -183,9 +214,14 @@ function RequestedOrders() {
               (item.skuName && item.skuName.toLowerCase().includes(q)),
           ));
 
+      const isPart =
+        order.status === "Partially_Received" ||
+        order.status === "Partially Received";
       const matchesStatus =
         statusFilter === "ALL" ||
         order.status === statusFilter ||
+        (statusFilter === "Partially Received" && isPart) ||
+        (statusFilter === "Received" && order.status === "Received") ||
         (statusFilter === "Pending Approval" &&
           (order.status === "Pending" ||
             order.status === "Pending Approval")) ||
@@ -327,6 +363,19 @@ function RequestedOrders() {
 
   const getStatusBadge = (status) => {
     switch (status) {
+      case "Received":
+        return {
+          label: "Received",
+          color: "bg-blue-50 text-blue-700 border-blue-200",
+          icon: CheckCircle2,
+        };
+      case "Partially_Received":
+      case "Partially Received":
+        return {
+          label: "Partially Received",
+          color: "bg-amber-50 text-amber-800 border-amber-200",
+          icon: Truck,
+        };
       case "Approved":
         return {
           label: "Approved",
@@ -554,7 +603,7 @@ function RequestedOrders() {
               value={statusFilter}
               onChange={handleStatusChange}
               size="sm"
-              className="w-full sm:w-44"
+              className="w-full sm:w-52"
               options={[
                 {
                   value: "ALL",
@@ -567,6 +616,14 @@ function RequestedOrders() {
                 {
                   value: "Approved",
                   label: `Approved (${metrics.approved})`,
+                },
+                {
+                  value: "Partially Received",
+                  label: `Partially Received (${metrics.partiallyReceived})`,
+                },
+                {
+                  value: "Received",
+                  label: `Received (${metrics.received})`,
                 },
                 {
                   value: "Rejected",
@@ -716,6 +773,25 @@ function RequestedOrders() {
                             <StatusIcon className="w-3.5 h-3.5" />
                             {statusInfo.label}
                           </span>
+                          {(order.status === "Partially_Received" ||
+                            order.status === "Partially Received") && (
+                            <div className="flex items-center gap-1.5 text-[11px] text-amber-800 font-mono">
+                              <span>
+                                {(
+                                  order.receivedQuantity || 0
+                                ).toLocaleString()}{" "}
+                                / {order.quantity.toLocaleString()} rcvd
+                              </span>
+                              <span className="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded-full font-bold">
+                                {Math.round(
+                                  ((order.receivedQuantity || 0) /
+                                    (order.quantity || 1)) *
+                                    100,
+                                )}
+                                %
+                              </span>
+                            </div>
+                          )}
                           <div>
                             <span
                               className={`inline-block text-[10px] font-bold px-1.5 py-0.2 rounded border ${
@@ -907,7 +983,12 @@ function RequestedOrders() {
                             </div>
                           </td>
                           <td className="px-3 py-2.5 text-right font-bold text-gray-900 whitespace-nowrap">
-                            {item.orderedUnits?.toLocaleString()} units
+                            <div>{item.orderedUnits?.toLocaleString()} units</div>
+                            {Number(item.receivedUnits || 0) > 0 && (
+                              <div className="text-[10px] text-amber-700 font-mono font-normal">
+                                {Number(item.receivedUnits).toLocaleString()} rcvd • {Number(item.remainingUnits || 0).toLocaleString()} rem
+                              </div>
+                            )}
                           </td>
                           <td className="px-3 py-2.5 text-right font-mono text-gray-700 whitespace-nowrap">
                             ₱
