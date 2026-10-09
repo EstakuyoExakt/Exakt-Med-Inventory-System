@@ -17,6 +17,9 @@ import {
   FileText,
   Loader2,
   RefreshCw,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 // Common Components & Guards
@@ -95,6 +98,29 @@ function BatchManagement() {
     manufacturingDate: "",
     expiryDate: "",
   });
+
+  // Collapsed state for SKU batches in the Receive modal
+  const [collapsedSkus, setCollapsedSkus] = useState({});
+
+  const toggleSkuCollapse = (skuKey) => {
+    setCollapsedSkus((prev) => ({
+      ...prev,
+      [skuKey]: !prev[skuKey],
+    }));
+  };
+
+  const handleCollapseAll = () => {
+    const next = {};
+    (receiveFormData.items || []).forEach((item, idx) => {
+      const k = item.orderedItemId || item.sku || idx;
+      next[k] = true;
+    });
+    setCollapsedSkus(next);
+  };
+
+  const handleExpandAll = () => {
+    setCollapsedSkus({});
+  };
 
   const {
     errors: formErrors,
@@ -370,6 +396,7 @@ function BatchManagement() {
   const handleOpenReceiveModal = () => {
     setReceiveFormData(getInitialReceiveFormData());
     setBulkDates({ manufacturingDate: "", expiryDate: "" });
+    setCollapsedSkus({});
     clearErrors();
     setSelectedBatch(null);
     setModalMode("receive");
@@ -386,6 +413,7 @@ function BatchManagement() {
     setModalMode(null);
     setSelectedBatch(null);
     setBulkDates({ manufacturingDate: "", expiryDate: "" });
+    setCollapsedSkus({});
     setUpdateStatusError(null);
     setUpdateStatusSuccess(null);
     clearErrors();
@@ -407,15 +435,9 @@ function BatchManagement() {
       const mapped = mapBatchDtoToItem(updatedDto);
       await Promise.all([fetchBatches(), fetchSummaryAndSkus()]);
       setSelectedBatch(mapped);
-      if (mapped.id !== batchId || mapped.batchNumber !== selectedBatch?.batchNumber) {
-        setUpdateStatusSuccess(
-          `Batch released and merged into parent batch ${mapped.batchNumber}. Total available units: ${mapped.units?.toLocaleString() || mapped.units}.`,
-        );
-      } else {
-        setUpdateStatusSuccess(
-          `Batch ${mapped.batchNumber} successfully released to Available. Total units: ${mapped.units?.toLocaleString() || mapped.units}.`,
-        );
-      }
+      setUpdateStatusSuccess(
+        `Batch ${mapped.batchNumber} successfully released to Available. Total units: ${mapped.units?.toLocaleString() || mapped.units}.`,
+      );
     } catch (err) {
       console.error("Failed to release batch from quarantine:", err);
       setUpdateStatusError(
@@ -428,7 +450,7 @@ function BatchManagement() {
     }
   };
 
-  // When PO is chosen in dropdown, auto-populate SKU items so each gets its own batch
+  // When PO is chosen in dropdown, auto-populate SKU items, each starting with 1 default batch row
   const handlePoChange = (e) => {
     const poNum = e?.target?.value ?? e;
     const po = approvedOrders.find((p) => p.orderNumber === poNum);
@@ -446,42 +468,116 @@ function BatchManagement() {
           dosageForm: item.dosageForm,
           packagingUnit: item.packagingUnit,
           quantity: item.quantity,
-          acceptedUnits: item.quantity,
-          quarantinedUnits: 0,
-          batchNumber: "",
-          manufacturingDate: "",
-          expiryDate: "",
-          isQuarantined: false,
-          quarantineNotes: "",
+          batches: [
+            {
+              id:
+                typeof crypto !== "undefined" && crypto.randomUUID
+                  ? crypto.randomUUID()
+                  : `b-${Date.now()}-0`,
+              batchNumber: "",
+              units: item.quantity,
+              manufacturingDate: bulkDates.manufacturingDate || "",
+              expiryDate: bulkDates.expiryDate || "",
+              isQuarantined: false,
+              quarantineNotes: "",
+            },
+          ],
         })),
       });
+      setCollapsedSkus({});
     } else {
       setReceiveFormData(getInitialReceiveFormData());
+      setCollapsedSkus({});
     }
     clearErrors();
   };
 
-  // Update batch details for an individual SKU item
-  const handleItemBatchChange = (index, field, value) => {
+  // Add another batch / lot row to an existing SKU
+  const handleAddBatch = (itemIdx) => {
+    const currentItem = receiveFormData.items?.[itemIdx];
+    if (currentItem) {
+      const skuKey = currentItem.orderedItemId || currentItem.sku || itemIdx;
+      setCollapsedSkus((prev) => ({ ...prev, [skuKey]: false }));
+    }
+
     setReceiveFormData((prev) => {
       const nextItems = [...prev.items];
-      nextItems[index] = {
-        ...nextItems[index],
-        [field]: value,
+      const item = nextItems[itemIdx];
+      const currentAllocated = (item.batches || []).reduce(
+        (sum, b) => sum + (Number(b.units) || 0),
+        0,
+      );
+      const remaining = Math.max(0, item.quantity - currentAllocated);
+
+      const newBatch = {
+        id:
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `b-${Date.now()}-${Math.random()}`,
+        batchNumber: "",
+        units: remaining > 0 ? remaining : "",
+        manufacturingDate: bulkDates.manufacturingDate || "",
+        expiryDate: bulkDates.expiryDate || "",
+        isQuarantined: false,
+        quarantineNotes: "",
       };
-      return {
-        ...prev,
-        items: nextItems,
+
+      nextItems[itemIdx] = {
+        ...item,
+        batches: [...(item.batches || []), newBatch],
       };
+      return { ...prev, items: nextItems };
     });
 
-    const errorKey = `item_${index}_${field}`;
-    if (formErrors[errorKey]) {
-      clearError(errorKey);
+    if (formErrors[`item_${itemIdx}_allocation`]) {
+      clearError(`item_${itemIdx}_allocation`);
     }
   };
 
-  // Apply common dates across all SKUs in the current PO
+  // Remove a batch row from an SKU (requires at least 1 batch to remain)
+  const handleRemoveBatch = (itemIdx, batchIdx) => {
+    setReceiveFormData((prev) => {
+      const nextItems = [...prev.items];
+      const item = nextItems[itemIdx];
+      if ((item.batches || []).length <= 1) return prev;
+
+      nextItems[itemIdx] = {
+        ...item,
+        batches: item.batches.filter((_, i) => i !== batchIdx),
+      };
+      return { ...prev, items: nextItems };
+    });
+
+    clearErrors();
+  };
+
+  // Update a field on a specific batch row
+  const handleBatchFieldChange = (itemIdx, batchIdx, field, value) => {
+    setReceiveFormData((prev) => {
+      const nextItems = [...prev.items];
+      const item = nextItems[itemIdx];
+      const nextBatches = [...(item.batches || [])];
+      nextBatches[batchIdx] = {
+        ...nextBatches[batchIdx],
+        [field]: value,
+      };
+      nextItems[itemIdx] = {
+        ...item,
+        batches: nextBatches,
+      };
+      return { ...prev, items: nextItems };
+    });
+
+    const errKey = `item_${itemIdx}_batch_${batchIdx}_${field}`;
+    if (formErrors[errKey]) {
+      clearError(errKey);
+    }
+    if (formErrors[`item_${itemIdx}_allocation`]) {
+      clearError(`item_${itemIdx}_allocation`);
+    }
+  };
+
+  // Apply common dates across all batch rows of all SKUs in the current PO
   const handleApplyBulkDates = () => {
     if (!bulkDates.manufacturingDate && !bulkDates.expiryDate) return;
 
@@ -489,25 +585,18 @@ function BatchManagement() {
       ...prev,
       items: prev.items.map((item) => ({
         ...item,
-        manufacturingDate:
-          bulkDates.manufacturingDate || item.manufacturingDate,
-        expiryDate: bulkDates.expiryDate || item.expiryDate,
+        batches: (item.batches || []).map((b) => ({
+          ...b,
+          manufacturingDate: bulkDates.manufacturingDate || b.manufacturingDate,
+          expiryDate: bulkDates.expiryDate || b.expiryDate,
+        })),
       })),
     }));
 
-    if (bulkDates.manufacturingDate) {
-      receiveFormData.items.forEach((_, idx) => {
-        clearError(`item_${idx}_manufacturingDate`);
-      });
-    }
-    if (bulkDates.expiryDate) {
-      receiveFormData.items.forEach((_, idx) => {
-        clearError(`item_${idx}_expiryDate`);
-      });
-    }
+    clearErrors();
   };
 
-  // Submit Received Batches: creates a distinct batch intake per SKU
+  // Submit Received Batches: creates all individual batch lots per SKU
   const handleSaveReceivedBatch = async (e) => {
     e.preventDefault();
 
@@ -533,6 +622,20 @@ function BatchManagement() {
 
     if (!isValid) {
       setFormErrors(errors);
+      // Auto-expand any items that contain validation errors so user can review immediately
+      setCollapsedSkus((prev) => {
+        const next = { ...prev };
+        receiveFormData.items.forEach((item, itemIdx) => {
+          const hasError = Object.keys(errors).some((key) =>
+            key.startsWith(`item_${itemIdx}_`),
+          );
+          if (hasError) {
+            const skuKey = item.orderedItemId || item.sku || itemIdx;
+            next[skuKey] = false;
+          }
+        });
+        return next;
+      });
       return;
     }
 
@@ -548,57 +651,29 @@ function BatchManagement() {
       setIsSubmitting(true);
       clearErrors();
 
-      // Format payload for backend batch bulk endpoint
-      // Supports full acceptance, full quarantine, and split partial quarantine
+      // Flatten all batch rows across all SKUs into the bulk intake payload
       const batchPayload = [];
 
       receiveFormData.items.forEach((item) => {
-        const totalQty = Number(item.quantity || 0);
-        const isQuar = Boolean(item.isQuarantined);
-        const acceptedUnits = isQuar
-          ? (item.acceptedUnits !== undefined ? Number(item.acceptedUnits) : totalQty)
-          : totalQty;
-        const quarUnits = isQuar
-          ? (item.quarantinedUnits !== undefined ? Number(item.quarantinedUnits) : 0)
-          : 0;
-
-        // 1. Available / Good portion (if acceptedUnits > 0)
-        if (acceptedUnits > 0) {
+        (item.batches || []).forEach((b) => {
+          const units = Number(b.units);
+          const isQuar = Boolean(b.isQuarantined);
           batchPayload.push({
             facilityId: activeFacilityId,
             orderedItemId: item.orderedItemId || item.id,
-            batchNum: item.batchNumber.trim().toUpperCase(),
-            units: acceptedUnits,
-            manufactureDate: item.manufacturingDate,
-            expiryDate: item.expiryDate,
-            status: "Available",
-            notes: isQuar && quarUnits > 0
-              ? `Partial delivery intake (${acceptedUnits} units accepted, ${quarUnits} units quarantined)`
+            batchNum: b.batchNumber.trim().toUpperCase(),
+            units: units,
+            manufactureDate: b.manufacturingDate,
+            expiryDate: b.expiryDate,
+            status: isQuar ? "Quarantined" : "Available",
+            notes: isQuar
+              ? b.quarantineNotes?.trim() || "Quality inspection hold"
               : null,
           });
-        }
-
-        // 2. Quarantined portion (if quarUnits > 0)
-        if (quarUnits > 0) {
-          // If split, append -Q suffix so the batch number is unique and clearly identifies quarantine stock
-          const quarBatchNum = acceptedUnits > 0
-            ? `${item.batchNumber.trim().toUpperCase()}-Q`
-            : item.batchNumber.trim().toUpperCase();
-
-          batchPayload.push({
-            facilityId: activeFacilityId,
-            orderedItemId: item.orderedItemId || item.id,
-            batchNum: quarBatchNum,
-            units: quarUnits,
-            manufactureDate: item.manufacturingDate,
-            expiryDate: item.expiryDate,
-            status: "Quarantined",
-            notes: item.quarantineNotes || "Quality inspection hold",
-          });
-        }
+        });
       });
 
-      // Call backend bulk batch intake API (increments Sku.units by accepted available units)
+      // Call backend bulk batch intake API
       const savedBatchDtos =
         await batchService.receiveBatchesBulk(batchPayload);
 
@@ -608,7 +683,11 @@ function BatchManagement() {
       }
 
       // Re-fetch batches, summary, and orders to synchronize frontend state
-      await Promise.all([fetchBatches(), fetchApprovedOrders(), fetchSummaryAndSkus()]);
+      await Promise.all([
+        fetchBatches(),
+        fetchApprovedOrders(),
+        fetchSummaryAndSkus(),
+      ]);
 
       handleCloseModal();
     } catch (err) {
@@ -658,7 +737,7 @@ function BatchManagement() {
             aria-label="Refresh Batches"
           >
             <RefreshCw
-              className={`w-4 h-4 ${(isBatchesLoading || isSummaryLoading) ? "animate-spin text-blue-600" : ""}`}
+              className={`w-4 h-4 ${isBatchesLoading || isSummaryLoading ? "animate-spin text-blue-600" : ""}`}
             />
           </button>
           <button
@@ -1086,7 +1165,7 @@ function BatchManagement() {
         isOpen={modalMode === "receive"}
         onClose={handleCloseModal}
         title="Receive Stock via Purchase Order"
-        size="4xl"
+        size="5xl"
       >
         <form onSubmit={handleSaveReceivedBatch} className="space-y-4">
           {formErrors.general && (
@@ -1256,328 +1335,491 @@ function BatchManagement() {
                   <span className="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
                     <Package className="w-4 h-4 text-blue-600" />
                     Medicines to Receive ({receiveFormData.items?.length || 0})
-                    — Individual Batch Allocation
+                    — Multi-Batch Allocation
                   </span>
-                  <span className="text-[11px] text-gray-500 font-medium">
-                    Each SKU receives its own lot & expiration data
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCollapseAll}
+                      className="text-[11px] text-blue-600 hover:text-blue-800 font-medium hover:underline cursor-pointer"
+                    >
+                      Collapse All
+                    </button>
+                    <span className="text-gray-300">•</span>
+                    <button
+                      type="button"
+                      onClick={handleExpandAll}
+                      className="text-[11px] text-blue-600 hover:text-blue-800 font-medium hover:underline cursor-pointer"
+                    >
+                      Expand All
+                    </button>
+                  </div>
                 </div>
 
-                <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
-                  {receiveFormData.items?.map((item, idx) => (
-                    <div
-                      key={item.orderedItemId || item.sku || idx}
-                      className="p-4 rounded-xl border border-gray-200 bg-white shadow-xs space-y-3"
-                    >
-                      {/* SKU Header */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0 border border-blue-100">
-                            <Pill className="w-4 h-4" />
+                <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1">
+                  {receiveFormData.items?.map((item, idx) => {
+                    const skuKey = item.orderedItemId || item.sku || idx;
+                    const isCollapsed = Boolean(collapsedSkus[skuKey]);
+                    const totalAllocated = (item.batches || []).reduce(
+                      (sum, b) => sum + (Number(b.units) || 0),
+                      0,
+                    );
+                    const orderedUnits = Number(item.quantity || 0);
+                    const isAllocatedMatch = totalAllocated === orderedUnits;
+                    const isOverAllocated = totalAllocated > orderedUnits;
+                    const remainingUnits = orderedUnits - totalAllocated;
+
+                    return (
+                      <div
+                        key={skuKey}
+                        className="p-4 rounded-xl border border-gray-200 bg-white shadow-xs space-y-3"
+                      >
+                        {/* SKU Header & Allocation Summary */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0 border border-blue-100">
+                              <Pill className="w-4.5 h-4.5" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-gray-900 text-sm">
+                                  {item.brandName}
+                                </span>
+                                <span className="font-mono text-[11px] text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-bold">
+                                  {item.sku}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-gray-500 mt-0.5">
+                                {item.genericName} • {item.dosageForm} (
+                                {item.packagingUnit})
+                              </p>
+                            </div>
                           </div>
-                          <div>
+
+                          {/* Allocation Badges, Add Batch CTA & Collapse Toggle */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {isAllocatedMatch ? (
+                              <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                {totalAllocated.toLocaleString()} /{" "}
+                                {orderedUnits.toLocaleString()} units
+                              </span>
+                            ) : isOverAllocated ? (
+                              <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold bg-red-50 text-red-700 border border-red-200 px-2.5 py-1 rounded-lg">
+                                <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
+                                {totalAllocated.toLocaleString()} /{" "}
+                                {orderedUnits.toLocaleString()} (+
+                                {(
+                                  totalAllocated - orderedUnits
+                                ).toLocaleString()}{" "}
+                                over)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-lg">
+                                <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                                {totalAllocated.toLocaleString()} /{" "}
+                                {orderedUnits.toLocaleString()} (
+                                {remainingUnits.toLocaleString()} remaining)
+                              </span>
+                            )}
+
+                            {/* + Add Batch button */}
+                            <button
+                              type="button"
+                              onClick={() => handleAddBatch(idx)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors cursor-pointer shadow-2xs hover:border-blue-300"
+                              title="Add another batch/lot for this SKU"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add Batch</span>
+                            </button>
+
+                            {/* Collapse / Expand Toggle Button */}
+                            <button
+                              type="button"
+                              onClick={() => toggleSkuCollapse(skuKey)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-gray-200 transition-colors cursor-pointer shadow-2xs"
+                              title={
+                                isCollapsed
+                                  ? "Expand batches for this medicine"
+                                  : "Collapse batches for this medicine"
+                              }
+                            >
+                              <span>{isCollapsed ? "Expand" : "Collapse"}</span>
+                              {isCollapsed ? (
+                                <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                              ) : (
+                                <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Allocation Error notice */}
+                        {formErrors[`item_${idx}_allocation`] && (
+                          <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                            <span className="font-semibold">
+                              {formErrors[`item_${idx}_allocation`]}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Collapsed vs Expanded View */}
+                        {isCollapsed ? (
+                          /* Collapsed Single-Line Batch Summary */
+                          <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200 flex flex-wrap items-center justify-between gap-3 animate-fade-in">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-bold text-gray-900 text-sm">
-                                {item.brandName}
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                                <Boxes className="w-3.5 h-3.5 text-blue-600" />
+                                Batches ({(item.batches || []).length}):
                               </span>
-                              <span className="font-mono text-[11px] text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-bold">
-                                {item.sku}
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {item.batches?.map((b, bIdx) => {
+                                  const batchName = b.batchNumber?.trim()
+                                    ? b.batchNumber.trim().toUpperCase()
+                                    : `Batch #${bIdx + 1} (Unassigned)`;
+                                  const unitsDisplay =
+                                    b.units !== "" && b.units !== undefined
+                                      ? `${Number(b.units).toLocaleString()} units`
+                                      : "0 units";
+
+                                  return (
+                                    <div
+                                      key={b.id || bIdx}
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono border ${
+                                        b.isQuarantined
+                                          ? "bg-amber-50 text-amber-900 border-amber-200"
+                                          : "bg-white text-slate-800 border-slate-200 shadow-2xs"
+                                      }`}
+                                    >
+                                      <span className="font-bold text-slate-900">
+                                        {batchName}
+                                      </span>
+                                      <span className="text-slate-300 font-sans">
+                                        •
+                                      </span>
+                                      <span className="font-semibold text-blue-700 font-sans">
+                                        {unitsDisplay}
+                                      </span>
+                                      {b.isQuarantined && (
+                                        <span className="text-[10px] text-amber-700 bg-amber-100 px-1 py-0.2 rounded font-sans font-bold">
+                                          Hold
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
-                            <p className="text-[11px] text-gray-500 mt-0.5">
-                              {item.genericName} • {item.dosageForm} (
-                              {item.packagingUnit})
-                            </p>
+
+                            <button
+                              type="button"
+                              onClick={() => toggleSkuCollapse(skuKey)}
+                              className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 cursor-pointer ml-auto"
+                            >
+                              <span>Edit Batches</span>
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
                           </div>
-                        </div>
+                        ) : (
+                          /* Batch Rows for this specific SKU */
+                          <div className="space-y-3">
+                            {item.batches?.map((batch, bIdx) => {
+                              const batchErrPrefix = `item_${idx}_batch_${bIdx}`;
+                              return (
+                                <div
+                                  key={batch.id || bIdx}
+                                  className="p-3.5 rounded-xl border border-gray-200/90 bg-gray-50/60 space-y-3 relative"
+                                >
+                                  {/* Batch Row Subheader */}
+                                  <div className="flex items-center justify-between border-b border-gray-200/70 pb-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-[11px] text-slate-700 bg-white border border-gray-200 px-2 py-0.5 rounded-md shadow-2xs">
+                                        Batch #{bIdx + 1}
+                                      </span>
+                                      {batch.isQuarantined && (
+                                        <span className="text-[10px] font-bold text-amber-700 bg-amber-100/90 border border-amber-200 px-2 py-0.5 rounded-md">
+                                          Quarantine Hold Active
+                                        </span>
+                                      )}
+                                    </div>
 
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="text-gray-500">Delivered:</span>
-                          <span className="font-mono font-bold text-gray-900 text-sm bg-gray-50 border border-gray-200 px-2.5 py-0.5 rounded-lg">
-                            {Number(item.quantity || 0).toLocaleString()} units
-                          </span>
-                        </div>
-                      </div>
+                                    {item.batches.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleRemoveBatch(idx, bIdx)
+                                        }
+                                        className="text-gray-400 hover:text-red-600 p-1 rounded-md hover:bg-red-50 transition-colors cursor-pointer text-xs flex items-center gap-1"
+                                        title="Remove this batch"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                                        <span className="text-[11px] font-medium text-red-600">
+                                          Remove
+                                        </span>
+                                      </button>
+                                    )}
+                                  </div>
 
-                      {/* Batch Inputs for this specific SKU */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {/* Batch / Lot Number */}
-                        <div>
-                          <label
-                            htmlFor={`receive-batch-number-${idx}`}
-                            className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1"
-                          >
-                            Lot / Batch Number{" "}
-                            <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            id={`receive-batch-number-${idx}`}
-                            type="text"
-                            value={item.batchNumber || ""}
-                            onChange={(e) =>
-                              handleItemBatchChange(
-                                idx,
-                                "batchNumber",
-                                e.target.value,
-                              )
-                            }
-                            placeholder={`e.g. BAT-${item.sku.replace("SKU-", "")}-01`}
-                            className={`input uppercase font-mono text-xs ${
-                              formErrors[`item_${idx}_batchNumber`]
-                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
-                                : ""
-                            }`}
-                          />
-                          {formErrors[`item_${idx}_batchNumber`] && (
-                            <p className="text-[11px] text-red-500 mt-1">
-                              {formErrors[`item_${idx}_batchNumber`]}
-                            </p>
-                          )}
-                        </div>
+                                  {/* 4 Input Controls: Batch #, Units, Mfg Date, Expiry Date */}
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                    {/* Batch / Lot Number */}
+                                    <div>
+                                      <label
+                                        htmlFor={`receive-batch-number-${idx}-${bIdx}`}
+                                        className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1"
+                                      >
+                                        Lot / Batch Number{" "}
+                                        <span className="text-red-500">*</span>
+                                      </label>
+                                      <input
+                                        id={`receive-batch-number-${idx}-${bIdx}`}
+                                        type="text"
+                                        value={batch.batchNumber || ""}
+                                        onChange={(e) =>
+                                          handleBatchFieldChange(
+                                            idx,
+                                            bIdx,
+                                            "batchNumber",
+                                            e.target.value,
+                                          )
+                                        }
+                                        placeholder={`e.g. BAT-${item.sku.replace("SKU-", "")}-${String(bIdx + 1).padStart(2, "0")}`}
+                                        className={`input uppercase font-mono text-xs bg-white ${
+                                          formErrors[
+                                            `${batchErrPrefix}_batchNumber`
+                                          ]
+                                            ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                                            : ""
+                                        }`}
+                                      />
+                                      {formErrors[
+                                        `${batchErrPrefix}_batchNumber`
+                                      ] && (
+                                        <p className="text-[11px] text-red-500 mt-1">
+                                          {
+                                            formErrors[
+                                              `${batchErrPrefix}_batchNumber`
+                                            ]
+                                          }
+                                        </p>
+                                      )}
+                                    </div>
 
-                        {/* Manufacturing Date */}
-                        <div>
-                          <label
-                            htmlFor={`receive-batch-mfg-${idx}`}
-                            className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1"
-                          >
-                            Manufacturing Date{" "}
-                            <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            id={`receive-batch-mfg-${idx}`}
-                            type="date"
-                            value={item.manufacturingDate || ""}
-                            onChange={(e) =>
-                              handleItemBatchChange(
-                                idx,
-                                "manufacturingDate",
-                                e.target.value,
-                              )
-                            }
-                            className={`input text-xs ${
-                              formErrors[`item_${idx}_manufacturingDate`]
-                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
-                                : ""
-                            }`}
-                          />
-                          {formErrors[`item_${idx}_manufacturingDate`] && (
-                            <p className="text-[11px] text-red-500 mt-1">
-                              {formErrors[`item_${idx}_manufacturingDate`]}
-                            </p>
-                          )}
-                        </div>
+                                    {/* Units Received in this Batch */}
+                                    <div>
+                                      <label
+                                        htmlFor={`receive-batch-units-${idx}-${bIdx}`}
+                                        className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1"
+                                      >
+                                        Received Units{" "}
+                                        <span className="text-red-500">*</span>
+                                      </label>
+                                      <input
+                                        id={`receive-batch-units-${idx}-${bIdx}`}
+                                        type="number"
+                                        min="1"
+                                        max={orderedUnits}
+                                        value={batch.units}
+                                        onChange={(e) =>
+                                          handleBatchFieldChange(
+                                            idx,
+                                            bIdx,
+                                            "units",
+                                            e.target.value === ""
+                                              ? ""
+                                              : Math.max(
+                                                  0,
+                                                  parseInt(
+                                                    e.target.value,
+                                                    10,
+                                                  ) || 0,
+                                                ),
+                                          )
+                                        }
+                                        placeholder="e.g. 100"
+                                        className={`input font-mono text-xs bg-white font-semibold ${
+                                          formErrors[`${batchErrPrefix}_units`]
+                                            ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                                            : ""
+                                        }`}
+                                      />
+                                      {formErrors[
+                                        `${batchErrPrefix}_units`
+                                      ] && (
+                                        <p className="text-[11px] text-red-500 mt-1">
+                                          {
+                                            formErrors[
+                                              `${batchErrPrefix}_units`
+                                            ]
+                                          }
+                                        </p>
+                                      )}
+                                    </div>
 
-                        {/* Expiration Date */}
-                        <div>
-                          <label
-                            htmlFor={`receive-batch-exp-${idx}`}
-                            className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1"
-                          >
-                            Expiration Date{" "}
-                            <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            id={`receive-batch-exp-${idx}`}
-                            type="date"
-                            value={item.expiryDate || ""}
-                            onChange={(e) =>
-                              handleItemBatchChange(
-                                idx,
-                                "expiryDate",
-                                e.target.value,
-                              )
-                            }
-                            className={`input text-xs ${
-                              formErrors[`item_${idx}_expiryDate`]
-                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
-                                : ""
-                            }`}
-                          />
-                          {formErrors[`item_${idx}_expiryDate`] && (
-                            <p className="text-[11px] text-red-500 mt-1">
-                              {formErrors[`item_${idx}_expiryDate`]}
-                            </p>
-                          )}
-                        </div>
-                      </div>
+                                    {/* Manufacturing Date */}
+                                    <div>
+                                      <label
+                                        htmlFor={`receive-batch-mfg-${idx}-${bIdx}`}
+                                        className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1"
+                                      >
+                                        Manufacturing Date{" "}
+                                        <span className="text-red-500">*</span>
+                                      </label>
+                                      <input
+                                        id={`receive-batch-mfg-${idx}-${bIdx}`}
+                                        type="date"
+                                        value={batch.manufacturingDate || ""}
+                                        onChange={(e) =>
+                                          handleBatchFieldChange(
+                                            idx,
+                                            bIdx,
+                                            "manufacturingDate",
+                                            e.target.value,
+                                          )
+                                        }
+                                        className={`input text-xs bg-white ${
+                                          formErrors[
+                                            `${batchErrPrefix}_manufacturingDate`
+                                          ]
+                                            ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                                            : ""
+                                        }`}
+                                      />
+                                      {formErrors[
+                                        `${batchErrPrefix}_manufacturingDate`
+                                      ] && (
+                                        <p className="text-[11px] text-red-500 mt-1">
+                                          {
+                                            formErrors[
+                                              `${batchErrPrefix}_manufacturingDate`
+                                            ]
+                                          }
+                                        </p>
+                                      )}
+                                    </div>
 
-                      {/* Quarantine / Inspection Section for this SKU */}
-                      <div className="pt-2 border-t border-gray-100 space-y-2">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(item.isQuarantined)}
-                              onChange={(e) => {
-                                const checked = e.target.checked;
-                                handleItemBatchChange(
-                                  idx,
-                                  "isQuarantined",
-                                  checked,
-                                );
-                                if (checked && (item.quarantinedUnits == null || item.quarantinedUnits === 0)) {
-                                  // Default to 0 quarantined, full accepted so user can enter split
-                                  handleItemBatchChange(idx, "acceptedUnits", item.quantity);
-                                  handleItemBatchChange(idx, "quarantinedUnits", 0);
-                                }
-                              }}
-                              className="rounded border-gray-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
-                            />
-                            <span className="text-xs font-semibold text-gray-700 flex items-center gap-1">
-                              <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
-                              Has Damaged / Quarantined Units (Partial or Full Hold)
-                            </span>
-                          </label>
+                                    {/* Expiration Date */}
+                                    <div>
+                                      <label
+                                        htmlFor={`receive-batch-exp-${idx}-${bIdx}`}
+                                        className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1"
+                                      >
+                                        Expiration Date{" "}
+                                        <span className="text-red-500">*</span>
+                                      </label>
+                                      <input
+                                        id={`receive-batch-exp-${idx}-${bIdx}`}
+                                        type="date"
+                                        value={batch.expiryDate || ""}
+                                        onChange={(e) =>
+                                          handleBatchFieldChange(
+                                            idx,
+                                            bIdx,
+                                            "expiryDate",
+                                            e.target.value,
+                                          )
+                                        }
+                                        className={`input text-xs bg-white ${
+                                          formErrors[
+                                            `${batchErrPrefix}_expiryDate`
+                                          ]
+                                            ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                                            : ""
+                                        }`}
+                                      />
+                                      {formErrors[
+                                        `${batchErrPrefix}_expiryDate`
+                                      ] && (
+                                        <p className="text-[11px] text-red-500 mt-1">
+                                          {
+                                            formErrors[
+                                              `${batchErrPrefix}_expiryDate`
+                                            ]
+                                          }
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
 
-                          {item.isQuarantined && (
-                            <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                              Quarantine Active
-                            </span>
-                          )}
-                        </div>
+                                  {/* Quality Hold / Quarantine Option for this specific batch */}
+                                  <div className="pt-2 border-t border-gray-200/70">
+                                    <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                                      <input
+                                        type="checkbox"
+                                        checked={Boolean(batch.isQuarantined)}
+                                        onChange={(e) =>
+                                          handleBatchFieldChange(
+                                            idx,
+                                            bIdx,
+                                            "isQuarantined",
+                                            e.target.checked,
+                                          )
+                                        }
+                                        className="rounded border-gray-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                                      />
+                                      <span className="text-xs font-semibold text-gray-700 flex items-center gap-1">
+                                        <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                                        Hold this batch under Quarantine
+                                        (Quality inspection / damaged)
+                                      </span>
+                                    </label>
 
-                        {item.isQuarantined && (
-                          <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 space-y-3 animate-slide-up">
-                            {/* Quantity Split Controls */}
-                            <div>
-                              <div className="flex items-center justify-between mb-1.5">
-                                <span className="text-xs font-bold text-amber-900">
-                                  Unit Allocation (Total Ordered: {item.quantity} units)
-                                </span>
-                                <span className="text-[11px] text-amber-700">
-                                  Accepted + Quarantined must equal {item.quantity}
-                                </span>
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {/* Accepted / Good Units */}
-                                <div>
-                                  <label
-                                    htmlFor={`receive-batch-accepted-${idx}`}
-                                    className="block text-[11px] font-semibold text-emerald-800 uppercase tracking-wider mb-1"
-                                  >
-                                    Good / Accepted Units (Available)
-                                  </label>
-                                  <input
-                                    id={`receive-batch-accepted-${idx}`}
-                                    type="number"
-                                    min="0"
-                                    max={item.quantity}
-                                    value={item.acceptedUnits ?? item.quantity}
-                                    onChange={(e) => {
-                                      const rawVal = e.target.value;
-                                      if (rawVal === "") {
-                                        handleItemBatchChange(idx, "acceptedUnits", "");
-                                        return;
-                                      }
-                                      const parsed = Math.max(0, parseInt(rawVal, 10) || 0);
-                                      const clamped = Math.min(parsed, item.quantity);
-                                      const remainder = Math.max(0, item.quantity - clamped);
-                                      handleItemBatchChange(idx, "acceptedUnits", clamped);
-                                      handleItemBatchChange(idx, "quarantinedUnits", remainder);
-                                    }}
-                                    className="input text-xs bg-white border-emerald-300 focus:border-emerald-500 focus:ring-emerald-500/20 font-semibold text-emerald-900"
-                                  />
-                                  <span className="text-[10px] text-emerald-700 mt-0.5 block">
-                                    Adds to active shelf stock for dispensing
-                                  </span>
+                                    {batch.isQuarantined && (
+                                      <div className="mt-2.5 p-3 rounded-xl bg-amber-50/70 border border-amber-200 space-y-1.5 animate-slide-up">
+                                        <label
+                                          htmlFor={`receive-batch-quarantine-notes-${idx}-${bIdx}`}
+                                          className="block text-[11px] font-semibold text-red-900 uppercase tracking-wider"
+                                        >
+                                          Quarantine Reason / QA Remarks{" "}
+                                          <span className="text-red-500">
+                                            *
+                                          </span>
+                                        </label>
+                                        <input
+                                          id={`receive-batch-quarantine-notes-${idx}-${bIdx}`}
+                                          type="text"
+                                          value={batch.quarantineNotes || ""}
+                                          onChange={(e) =>
+                                            handleBatchFieldChange(
+                                              idx,
+                                              bIdx,
+                                              "quarantineNotes",
+                                              e.target.value,
+                                            )
+                                          }
+                                          placeholder="e.g. 20 vials arrived cracked with fluid leakage during transit"
+                                          className={`input text-xs bg-white ${
+                                            formErrors[
+                                              `${batchErrPrefix}_quarantineNotes`
+                                            ]
+                                              ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                                              : "border-red-200"
+                                          }`}
+                                        />
+                                        {formErrors[
+                                          `${batchErrPrefix}_quarantineNotes`
+                                        ] && (
+                                          <p className="text-[11px] text-red-500 mt-1">
+                                            {
+                                              formErrors[
+                                                `${batchErrPrefix}_quarantineNotes`
+                                              ]
+                                            }
+                                          </p>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-
-                                {/* Quarantined Units */}
-                                <div>
-                                  <label
-                                    htmlFor={`receive-batch-quarantined-${idx}`}
-                                    className="block text-[11px] font-semibold text-red-800 uppercase tracking-wider mb-1"
-                                  >
-                                    Quarantined Units (Locked Hold) <span className="text-red-500">*</span>
-                                  </label>
-                                  <input
-                                    id={`receive-batch-quarantined-${idx}`}
-                                    type="number"
-                                    min="0"
-                                    max={item.quantity}
-                                    value={item.quarantinedUnits ?? 0}
-                                    onChange={(e) => {
-                                      const rawVal = e.target.value;
-                                      if (rawVal === "") {
-                                        handleItemBatchChange(idx, "quarantinedUnits", "");
-                                        return;
-                                      }
-                                      const parsed = Math.max(0, parseInt(rawVal, 10) || 0);
-                                      const clamped = Math.min(parsed, item.quantity);
-                                      const remainder = Math.max(0, item.quantity - clamped);
-                                      handleItemBatchChange(idx, "quarantinedUnits", clamped);
-                                      handleItemBatchChange(idx, "acceptedUnits", remainder);
-                                    }}
-                                    className="input text-xs bg-white border-red-300 focus:border-red-500 focus:ring-red-500/20 font-semibold text-red-900"
-                                  />
-                                  <span className="text-[10px] text-red-700 mt-0.5 block">
-                                    Saved under batch {item.batchNumber ? (Number(item.acceptedUnits) > 0 ? `${item.batchNumber}-Q` : item.batchNumber) : "[Batch#]-Q"}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Allocation Error notice */}
-                              {formErrors[`item_${idx}_quarantineAllocation`] && (
-                                <p className="text-[11px] font-semibold text-red-600 mt-1.5">
-                                  {formErrors[`item_${idx}_quarantineAllocation`]}
-                                </p>
-                              )}
-                            </div>
-
-                            {/* Batch Split Preview */}
-                            <div className="p-2.5 rounded-lg bg-white/80 border border-amber-200/80 text-[11px] flex flex-wrap items-center gap-2">
-                              <span className="font-semibold text-slate-700">Preview:</span>
-                              {Number(item.acceptedUnits ?? item.quantity) > 0 && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-medium">
-                                  ✓ {item.acceptedUnits ?? item.quantity} units Available ({item.batchNumber || "Batch#"})
-                                </span>
-                              )}
-                              {Number(item.quarantinedUnits ?? 0) > 0 && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-100 text-red-800 font-medium">
-                                  🔒 {item.quarantinedUnits} units Quarantined ({Number(item.acceptedUnits ?? item.quantity) > 0 ? `${item.batchNumber || "Batch#"}-Q` : (item.batchNumber || "Batch#")})
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Quarantine QA Remarks */}
-                            <div>
-                              <label
-                                htmlFor={`receive-batch-quarantine-notes-${idx}`}
-                                className="block text-[11px] font-semibold text-red-900 uppercase tracking-wider mb-1"
-                              >
-                                Quarantine Reason / QA Remarks <span className="text-red-500">*</span>
-                              </label>
-                              <input
-                                id={`receive-batch-quarantine-notes-${idx}`}
-                                type="text"
-                                value={item.quarantineNotes || ""}
-                                onChange={(e) =>
-                                  handleItemBatchChange(
-                                    idx,
-                                    "quarantineNotes",
-                                    e.target.value,
-                                  )
-                                }
-                                placeholder="e.g. 20 vials arrived cracked with fluid leakage during transit"
-                                className={`input text-xs bg-white ${
-                                  formErrors[`item_${idx}_quarantineNotes`]
-                                    ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
-                                    : "border-red-200"
-                                }`}
-                              />
-                              {formErrors[`item_${idx}_quarantineNotes`] && (
-                                <p className="text-[11px] text-red-500 mt-1">
-                                  {formErrors[`item_${idx}_quarantineNotes`]}
-                                </p>
-                              )}
-                            </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>

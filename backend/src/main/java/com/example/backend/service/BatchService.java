@@ -308,70 +308,8 @@ public class BatchService {
 
         Batch.Status oldStatus = batch.getStatus();
         if (status != null && status != oldStatus) {
-            // 1. Quarantined -> Available: check for split batch auto-merge
+            // 1. Quarantined -> Available: add units to active SKU inventory
             if (oldStatus == Batch.Status.Quarantined && status == Batch.Status.Available) {
-                String currentBatchNum = batch.getBatchNum() != null ? batch.getBatchNum().trim() : "";
-                String baseBatchNum = null;
-                if (currentBatchNum.toUpperCase().endsWith("-Q")) {
-                    baseBatchNum = currentBatchNum.substring(0, currentBatchNum.length() - 2).trim();
-                }
-
-                Long facilityId = batch.getFacility() != null ? batch.getFacility().getId() : null;
-                Optional<Batch> parentBatchOpt = (facilityId != null && baseBatchNum != null && !baseBatchNum.isBlank())
-                        ? batchRepository.findByBatchNumAndFacilityId(baseBatchNum, facilityId)
-                        : Optional.empty();
-
-                if (parentBatchOpt.isPresent()) {
-                    Batch parentBatch = parentBatchOpt.get();
-                    long releasedUnits = batch.getUnits() != null ? batch.getUnits() : 0L;
-
-                    // Add units to parent batch
-                    long currentParentUnits = parentBatch.getUnits() != null ? parentBatch.getUnits() : 0L;
-                    parentBatch.setUnits(currentParentUnits + releasedUnits);
-
-                    // Add released units to active SKU inventory if parent is Available
-                    if (parentBatch.getStatus() == Batch.Status.Available) {
-                        adjustSkuUnits(parentBatch, releasedUnits);
-                    }
-
-                    // Append release & merge audit notes to parent batch
-                    String mergeNote = "Merged " + releasedUnits + " units released from quarantine (" + currentBatchNum + ").";
-                    if (notes != null && !notes.isBlank()) {
-                        mergeNote += " Notes: " + notes.trim();
-                    }
-                    if (parentBatch.getNotes() == null || parentBatch.getNotes().isBlank()) {
-                        parentBatch.setNotes(mergeNote);
-                    } else {
-                        parentBatch.setNotes(parentBatch.getNotes() + " | " + mergeNote);
-                    }
-
-                    Batch savedParent = batchRepository.save(parentBatch);
-
-                    // Remove the temporary split quarantined batch
-                    batchRepository.delete(batch);
-
-                    auditLogService.logAction(
-                            savedParent.getFacility(),
-                            "Inventory",
-                            "BATCH_RELEASE_MERGED",
-                            "Batch Released & Merged (" + currentBatchNum + " -> " + baseBatchNum + ")",
-                            AuditLog.Severity.INFO,
-                            savedParent.getBatchNum(),
-                            savedParent.getId(),
-                            "Released " + releasedUnits + " units from quarantine batch '" + currentBatchNum + "' and merged into parent batch '" + baseBatchNum + "'. Active SKU stock incremented.",
-                            "Admin,Pharmacist"
-                    );
-
-                    return mapToResponseDto(savedParent);
-                }
-
-                // If no separate parent batch exists, strip the -Q suffix back to physical lot if unique
-                if (baseBatchNum != null && !baseBatchNum.isBlank() && facilityId != null) {
-                    if (!batchRepository.existsByBatchNumAndFacilityId(baseBatchNum, facilityId)) {
-                        batch.setBatchNum(baseBatchNum);
-                    }
-                }
-
                 batch.setStatus(status);
                 adjustSkuUnits(batch, batch.getUnits() != null ? batch.getUnits() : 0L);
             }
