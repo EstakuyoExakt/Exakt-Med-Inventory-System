@@ -60,6 +60,7 @@ function BatchManagement() {
   });
   const [distinctSkus, setDistinctSkus] = useState([]);
 
+  const [isSummaryLoading, setIsSummaryLoading] = useState(true);
   const [isBatchesLoading, setIsBatchesLoading] = useState(true);
   const [batchesError, setBatchesError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -239,8 +240,12 @@ function BatchManagement() {
 
   // Fetch aggregate KPIs and distinct SKUs for active facility
   const fetchSummaryAndSkus = useCallback(async () => {
-    if (!activeFacilityId) return;
+    if (!activeFacilityId) {
+      setIsSummaryLoading(false);
+      return;
+    }
     try {
+      setIsSummaryLoading(true);
       const [summaryData, skusData] = await Promise.all([
         batchService.getBatchSummary(activeFacilityId),
         batchService.getDistinctBatchSkus(activeFacilityId),
@@ -253,6 +258,8 @@ function BatchManagement() {
       }
     } catch (err) {
       console.error("Failed to load batch summary or distinct SKUs:", err);
+    } finally {
+      setIsSummaryLoading(false);
     }
   }, [activeFacilityId]);
 
@@ -645,13 +652,13 @@ function BatchManagement() {
               fetchApprovedOrders();
               fetchSummaryAndSkus();
             }}
-            disabled={isBatchesLoading}
+            disabled={isBatchesLoading || isSummaryLoading}
             className="btn-secondary p-2.5 text-gray-600 hover:text-blue-600"
             title="Refresh Batches"
             aria-label="Refresh Batches"
           >
             <RefreshCw
-              className={`w-4 h-4 ${isBatchesLoading ? "animate-spin text-blue-600" : ""}`}
+              className={`w-4 h-4 ${(isBatchesLoading || isSummaryLoading) ? "animate-spin text-blue-600" : ""}`}
             />
           </button>
           <button
@@ -669,7 +676,7 @@ function BatchManagement() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up-1">
         {/* Total Batches in Facility */}
         <Card className="p-5">
-          {isBatchesLoading ? (
+          {isSummaryLoading ? (
             <div className="flex items-center justify-between">
               <div className="space-y-2 flex-1">
                 <Skeleton className="h-3.5 w-24" />
@@ -700,7 +707,7 @@ function BatchManagement() {
 
         {/* Active Stock */}
         <Card className="p-5">
-          {isBatchesLoading ? (
+          {isSummaryLoading ? (
             <div className="flex items-center justify-between">
               <div className="space-y-2 flex-1">
                 <Skeleton className="h-3.5 w-28" />
@@ -731,7 +738,7 @@ function BatchManagement() {
 
         {/* Expiry Alerts */}
         <Card className="p-5">
-          {isBatchesLoading ? (
+          {isSummaryLoading ? (
             <div className="flex items-center justify-between">
               <div className="space-y-2 flex-1">
                 <Skeleton className="h-3.5 w-24" />
@@ -762,7 +769,7 @@ function BatchManagement() {
 
         {/* Quarantined Batches */}
         <Card className="p-5">
-          {isBatchesLoading ? (
+          {isSummaryLoading ? (
             <div className="flex items-center justify-between">
               <div className="space-y-2 flex-1">
                 <Skeleton className="h-3.5 w-24" />
