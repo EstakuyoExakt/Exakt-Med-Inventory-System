@@ -199,18 +199,6 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
-    @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Procurement', 'Pharmacist')")
-    public List<OrderResponseDto> getAllOrders(Long facilityId, Order.Status status) {
-        return getAllOrders(facilityId, status != null ? List.of(status) : null);
-    }
-
-    @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Procurement', 'Pharmacist')")
-    public List<OrderResponseDto> getAllOrders(Long facilityId) {
-        return getAllOrders(facilityId, (List<Order.Status>) null);
-    }
-
     // 3. GET ORDER BY ID
     @Transactional(readOnly = true)
     @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Procurement', 'Pharmacist')")
@@ -273,12 +261,6 @@ public class OrderService {
         OrderResponseDto response = mapToOrderResponseDto(updatedOrder, itemDtos);
         response.setMessage("Order status updated successfully.");
         return response;
-    }
-
-    @Transactional
-    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin')")
-    public OrderResponseDto updateOrderStatus(Long id, Order.Status status) {
-        return updateOrderStatus(id, status, null);
     }
 
     private OrderItemResponseDto mapToItemResponseDto(OrderedItem item) {

@@ -76,9 +76,6 @@ public class BinCardService {
             Long unitsReceived = batch.getUnits() != null ? batch.getUnits() : 0L;
 
             if (batch.getOrderedItem() != null) {
-                if (batch.getOrderedItem().getOrderedUnits() != null) {
-                    unitsReceived = batch.getOrderedItem().getOrderedUnits();
-                }
                 if (batch.getOrderedItem().getOrder() != null) {
                     Order order = batch.getOrderedItem().getOrder();
                     poNum = order.getPurchaseOrderNum();
