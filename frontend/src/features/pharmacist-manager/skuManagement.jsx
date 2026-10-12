@@ -929,12 +929,20 @@ function SkuManagement() {
   // Form Field Change Handler
   const handleInputChange = (e) => {
     const { name, value, type: inputType } = e.target;
-    const finalValue =
-      inputType === "number"
-        ? Number(value)
-        : typeof value === "string"
-          ? value.toUpperCase()
-          : value;
+    let finalValue = value;
+
+    if (inputType === "number") {
+      if (value === "") {
+        finalValue = "";
+      } else {
+        // Strip leading zeros if followed by digits (e.g. "07" -> "7", but preserve standalone "0")
+        const cleaned = value.replace(/^0+(?=\d)/, "");
+        e.target.value = cleaned;
+        finalValue = cleaned === "" ? "" : Number(cleaned);
+      }
+    } else if (typeof value === "string") {
+      finalValue = value.toUpperCase();
+    }
 
     setFormData((prev) => {
       const updated = { ...prev, [name]: finalValue };
@@ -2034,8 +2042,9 @@ function SkuManagement() {
                     type="number"
                     min="0"
                     name="minimumLevel"
-                    value={formData.minimumLevel}
+                    value={formData.minimumLevel ?? ""}
                     onChange={handleInputChange}
+                    onFocus={(e) => e.target.select()}
                     className="input bg-white py-1.5 text-sm font-semibold text-red-900"
                   />
                   <span className="text-[10px] text-red-600 block mt-1">
@@ -2061,8 +2070,9 @@ function SkuManagement() {
                     type="number"
                     min="1"
                     name="reorderLevel"
-                    value={formData.reorderLevel}
+                    value={formData.reorderLevel ?? ""}
                     onChange={handleInputChange}
+                    onFocus={(e) => e.target.select()}
                     className="input bg-white py-1.5 text-sm font-semibold text-amber-900"
                   />
                   <span className="text-[10px] text-amber-600 block mt-1">
@@ -2088,8 +2098,9 @@ function SkuManagement() {
                     type="number"
                     min="1"
                     name="maximumLevel"
-                    value={formData.maximumLevel}
+                    value={formData.maximumLevel ?? ""}
                     onChange={handleInputChange}
+                    onFocus={(e) => e.target.select()}
                     className="input bg-white py-1.5 text-sm font-semibold text-emerald-900"
                   />
                   <span className="text-[10px] text-emerald-600 block mt-1">

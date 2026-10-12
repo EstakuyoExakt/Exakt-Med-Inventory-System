@@ -1320,7 +1320,7 @@ function BatchManagement() {
         isOpen={modalMode === "receive"}
         onClose={handleCloseModal}
         title="Receive Stock via Purchase Order"
-        size="6xl"
+        size="5xl"
       >
         <form onSubmit={handleSaveReceivedBatch} className="space-y-4">
           {formErrors.general && (

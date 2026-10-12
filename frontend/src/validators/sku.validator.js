@@ -12,18 +12,42 @@ export const validateSkuForm = (
   formData = {},
   { currentFacilitySkus = [], excludeId = null, currentFacilityName = "" } = {}
 ) => {
-  const minLevelErr = isPositiveNumber(
+  const minLevelReq = isRequired(
     formData.minimumLevel,
-    "Minimum level cannot be negative."
+    "Minimum level is required."
   );
+  const minLevelErr =
+    minLevelReq ||
+    isPositiveNumber(
+      formData.minimumLevel,
+      "Minimum level cannot be negative."
+    );
 
-  let reorderLevelErr = null;
-  if (Number(formData.reorderLevel) <= Number(formData.minimumLevel)) {
+  const reorderLevelReq = isRequired(
+    formData.reorderLevel,
+    "Reorder level is required."
+  );
+  let reorderLevelErr = reorderLevelReq;
+  if (
+    !reorderLevelReq &&
+    formData.minimumLevel !== "" &&
+    formData.minimumLevel !== null &&
+    Number(formData.reorderLevel) <= Number(formData.minimumLevel)
+  ) {
     reorderLevelErr = "Reorder level must be greater than minimum level threshold.";
   }
 
-  let maxLevelErr = null;
-  if (Number(formData.maximumLevel) <= Number(formData.reorderLevel)) {
+  const maxLevelReq = isRequired(
+    formData.maximumLevel,
+    "Maximum capacity is required."
+  );
+  let maxLevelErr = maxLevelReq;
+  if (
+    !maxLevelReq &&
+    formData.reorderLevel !== "" &&
+    formData.reorderLevel !== null &&
+    Number(formData.maximumLevel) <= Number(formData.reorderLevel)
+  ) {
     maxLevelErr = "Maximum capacity must be greater than reorder level threshold.";
   }
 

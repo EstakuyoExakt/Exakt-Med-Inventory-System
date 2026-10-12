@@ -35,7 +35,7 @@ public class LibMedicine {
     @Column(name = "unit_code", length = 45)
     private String unitCode;
 
-    @Column(name = "pagckage_code", length = 45)
+    @Column(name = "package_code", length = 45)
     private String packageCode;
 
 }

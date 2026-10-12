@@ -449,8 +449,8 @@ function ProcurementDashboard() {
                     </div>
 
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-gray-900">
-                        {order.brandName}
+                      <span className="font-medium text-gray-700">
+                        {order.supplier}
                       </span>
                       <span className="font-bold text-gray-800">
                         {order.quantity.toLocaleString()} units
@@ -458,8 +458,18 @@ function ProcurementDashboard() {
                     </div>
 
                     <div className="flex items-center justify-between text-[11px] text-gray-400">
-                      <span>{order.supplier}</span>
                       <span>{order.requestDate}</span>
+                      {order.priority && (
+                        <span
+                          className={`font-semibold ${
+                            order.priority === "Urgent"
+                              ? "text-red-600"
+                              : "text-gray-500"
+                          }`}
+                        >
+                          {order.priority}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))

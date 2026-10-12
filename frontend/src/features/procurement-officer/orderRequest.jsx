@@ -98,8 +98,14 @@ const mapDtoToSku = (dto) => {
     medicineId: dto.medicineId,
     brandName: dto.brandName || "",
     genericName: dto.drugDescription || "",
-    dosage: dto.dosageStrength || extractDosageFromDescription(dto.drugDescription) || "",
-    dosageStrength: dto.dosageStrength || extractDosageFromDescription(dto.drugDescription) || "",
+    dosage:
+      dto.dosageStrength ||
+      extractDosageFromDescription(dto.drugDescription) ||
+      "",
+    dosageStrength:
+      dto.dosageStrength ||
+      extractDosageFromDescription(dto.drugDescription) ||
+      "",
     dosageForm: dto.dosageForm || "",
     packagingUnit: dto.packagingUnit || "",
     type: dto.dosageForm || "General",
@@ -444,12 +450,15 @@ function OrderRequest() {
     setSelectedSkuIds(criticalIds);
   };
 
-  // Helper to build line item with suggested quantity
+  // Helper to build line item with suggested quantity (Maximum Level - Current Stock)
   const buildLineItem = (sku) => {
-    const suggestedQty = Math.max(
-      sku.maximumLevel - sku.currentStock,
-      sku.reorderLevel * 2,
-    );
+    const max = Number(sku.maximumLevel) || 0;
+    const current = Number(sku.currentStock) || 0;
+    const defaultQty =
+      sku.maximumLevel !== undefined && sku.currentStock !== undefined
+        ? Math.max(1, max - current)
+        : 1;
+
     return {
       rowId: `catalog_${sku.id || sku.sku}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       id: sku.id,
@@ -463,7 +472,7 @@ function OrderRequest() {
       minimumLevel: sku.minimumLevel,
       maximumLevel: sku.maximumLevel,
       reorderLevel: sku.reorderLevel,
-      quantity: suggestedQty > 0 ? suggestedQty : 100,
+      quantity: defaultQty,
       price: "",
       isCatalogOrder: true,
     };
@@ -549,7 +558,16 @@ function OrderRequest() {
         minimumLevel: matchedSku?.minimumLevel ?? 0,
         maximumLevel: matchedSku?.maximumLevel ?? 0,
         reorderLevel: matchedSku?.reorderLevel ?? 0,
-        quantity: Number(req.requestedUnits) || 1,
+        quantity:
+          Number(req.requestedUnits) ||
+          (matchedSku?.maximumLevel !== undefined &&
+          matchedSku?.currentStock !== undefined
+            ? Math.max(
+                1,
+                Number(matchedSku.maximumLevel) -
+                  Number(matchedSku.currentStock),
+              )
+            : 1),
         price: "",
         restockRequestId: req.id,
         restockRequestIds: [req.id],
@@ -644,7 +662,15 @@ function OrderRequest() {
       ) || skuList.find((s) => s.id === req.skuId || s.sku === req.skuName);
 
     const skuCode = req.skuName || matchedSku?.sku || "";
-    const qtyToAdd = Number(req.requestedUnits) || 1;
+    const defaultQty =
+      matchedSku?.maximumLevel !== undefined &&
+      matchedSku?.currentStock !== undefined
+        ? Math.max(
+            1,
+            Number(matchedSku.maximumLevel) - Number(matchedSku.currentStock),
+          )
+        : 1;
+    const qtyToAdd = Number(req.requestedUnits) || defaultQty;
 
     // Create a distinct line item row for this restock request (DO NOT COMBINE with standard threshold row)
     const newItem = {
@@ -711,7 +737,10 @@ function OrderRequest() {
       ...prev,
       items: prev.items.map((i) =>
         (i.rowId || i.sku) === rowKey
-          ? { ...i, quantity: Math.max(1, Number(qty) || 1) }
+          ? {
+              ...i,
+              quantity: qty === "" ? "" : Math.max(1, parseInt(qty, 10) || 1),
+            }
           : i,
       ),
     }));
@@ -1926,14 +1955,24 @@ function OrderRequest() {
             {/* Medicines Items Table */}
             <div className="border border-gray-200 rounded-xl overflow-hidden max-h-60 overflow-y-auto">
               <table className="w-full text-left text-xs text-gray-600">
-                <thead className="bg-gray-100 text-[10px] uppercase font-bold text-gray-600 sticky top-0 border-b border-gray-200">
+                <thead className="bg-gray-100 text-[10px] uppercase font-bold text-gray-600 sticky top-0 z-10 border-b border-gray-200">
                   <tr>
-                    <th className="px-3.5 py-2.5">Medication & SKU</th>
-                    <th className="px-3.5 py-2.5">Current / Max</th>
-                    <th className="px-3.5 py-2.5 w-28">Order Quantity</th>
-                    <th className="px-3.5 py-2.5 w-32">Total Price (₱)</th>
-                    <th className="px-3.5 py-2.5 w-28 text-right">Price / Unit</th>
-                    <th className="px-3.5 py-2.5 w-10 text-center">Action</th>
+                    <th className="px-3.5 py-2.5 bg-gray-100">
+                      Medication & SKU
+                    </th>
+                    <th className="px-3.5 py-2.5 bg-gray-100">Current / Max</th>
+                    <th className="px-3.5 py-2.5 w-28 bg-gray-100">
+                      Order Quantity
+                    </th>
+                    <th className="px-3.5 py-2.5 w-32 bg-gray-100">
+                      Total Price (₱)
+                    </th>
+                    <th className="px-3.5 py-2.5 w-28 text-right bg-gray-100">
+                      Price / Unit
+                    </th>
+                    <th className="px-3.5 py-2.5 w-10 text-center bg-gray-100">
+                      Action
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
@@ -2193,7 +2232,7 @@ function OrderRequest() {
         onClose={handleCloseModal}
         title="Purchase Order Requisition Submitted"
         message="Consolidated purchase order reference has been generated and dispatched to the supplier."
-        size="xl"
+        size="3xl"
         confirmText="Done"
       >
         {submittedOrder && (
@@ -2250,13 +2289,19 @@ function OrderRequest() {
               </p>
               <div className="border border-gray-200 rounded-lg overflow-hidden max-h-40 overflow-y-auto">
                 <table className="w-full text-left text-xs text-gray-600">
-                  <thead className="bg-gray-100 text-[10px] uppercase font-bold text-gray-600 sticky top-0">
+                  <thead className="bg-gray-100 text-[10px] uppercase font-bold text-gray-600 sticky top-0 z-10 border-b border-gray-200">
                     <tr>
-                      <th className="px-3 py-1.5">Medicine</th>
-                      <th className="px-3 py-1.5">SKU</th>
-                      <th className="px-3 py-1.5 text-right">Quantity</th>
-                      <th className="px-3 py-1.5 text-right">Price / Unit</th>
-                      <th className="px-3 py-1.5 text-right">Total Price</th>
+                      <th className="px-3 py-1.5 bg-gray-100">Medicine</th>
+                      <th className="px-3 py-1.5 bg-gray-100">SKU</th>
+                      <th className="px-3 py-1.5 text-right bg-gray-100">
+                        Quantity
+                      </th>
+                      <th className="px-3 py-1.5 text-right bg-gray-100">
+                        Price / Unit
+                      </th>
+                      <th className="px-3 py-1.5 text-right bg-gray-100">
+                        Total Price
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white">
