@@ -24,6 +24,7 @@ public class DashboardService {
     private final OrderedItemRepository orderedItemRepository;
     private final SupplierRepository supplierRepository;
     private final FacilityRepository facilityRepository;
+    private final RestockRequestRepository restockRequestRepository;
 
     private static final String[] PALETTE = {
             "#3B82F6", "#10B981", "#8B5CF6", "#F59E0B",
@@ -36,13 +37,15 @@ public class DashboardService {
                             OrderRepository orderRepository,
                             OrderedItemRepository orderedItemRepository,
                             SupplierRepository supplierRepository,
-                            FacilityRepository facilityRepository) {
+                            FacilityRepository facilityRepository,
+                            RestockRequestRepository restockRequestRepository) {
         this.skuRepository = skuRepository;
         this.batchRepository = batchRepository;
         this.orderRepository = orderRepository;
         this.orderedItemRepository = orderedItemRepository;
         this.supplierRepository = supplierRepository;
         this.facilityRepository = facilityRepository;
+        this.restockRequestRepository = restockRequestRepository;
     }
 
     // 1. GET PHARMACIST DASHBOARD
@@ -169,10 +172,33 @@ public class DashboardService {
 
         LocalDate today = LocalDate.now();
 
+        // Collect SKUs that already have open/in-progress orders or restock requests
+        // (Pending, Approved, Partially_Received) to prevent duplicate requisitions
+        Set<Long> skusWithActiveOrders = new HashSet<>();
+
+        List<OrderedItem> activeItems = (facilityId != null)
+                ? orderedItemRepository.findActiveOrderedItemsByFacilityId(facilityId)
+                : orderedItemRepository.findAllActiveOrderedItems();
+        for (OrderedItem oi : activeItems) {
+            if (oi.getSku() != null && oi.getSku().getId() != null) {
+                skusWithActiveOrders.add(oi.getSku().getId());
+            }
+        }
+
+        List<RestockRequest> activeRestocks = (facilityId != null)
+                ? restockRequestRepository.findActiveRestockRequestsByFacilityId(facilityId)
+                : restockRequestRepository.findAllActiveRestockRequests();
+        for (RestockRequest rr : activeRestocks) {
+            if (rr.getSku() != null && rr.getSku().getId() != null) {
+                skusWithActiveOrders.add(rr.getSku().getId());
+            }
+        }
+
         // 1. Metrics
         long totalReorder = skus.stream()
                 .filter(s -> s.getUnits() != null && s.getReorderLevel() != null &&
-                        s.getUnits() <= s.getReorderLevel())
+                        s.getUnits() <= s.getReorderLevel() &&
+                        !skusWithActiveOrders.contains(s.getId()))
                 .count();
         long totalMinimumSkus = skus.stream()
                 .filter(s -> s.getUnits() != null && s.getMinimumLevel() != null &&
@@ -210,7 +236,7 @@ public class DashboardService {
                 .totalUnitsOrderedMonth(unitsThisMonth)
                 .build();
 
-        // 2. Priority Restock SKUs
+        // 2. Priority Restock SKUs (excluding SKUs with orders already Pending, Approved, or Partially Receiving)
         String defaultSupplierName = suppliers.stream()
                 .filter(s -> s.getStatus() == Supplier.Status.Active)
                 .map(Supplier::getName)
@@ -219,7 +245,8 @@ public class DashboardService {
 
         List<ProcurementDashboardResponseDto.PriorityRestockSku> priorityRestockSkus = skus.stream()
                 .filter(s -> s.getUnits() != null && s.getReorderLevel() != null &&
-                        s.getUnits() <= s.getReorderLevel())
+                        s.getUnits() <= s.getReorderLevel() &&
+                        !skusWithActiveOrders.contains(s.getId()))
                 .sorted(Comparator.comparing((Sku s) -> s.getUnits() <= 0 ? 0 : (s.getUnits() <= s.getMinimumLevel() ? 1 : 2))
                         .thenComparing(s -> s.getUnits() != null ? s.getUnits() : 0L))
                 .limit(10)

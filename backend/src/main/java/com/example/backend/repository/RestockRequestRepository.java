@@ -29,4 +29,9 @@ public interface RestockRequestRepository extends JpaRepository<RestockRequest, 
            "(o IS NULL OR o.status NOT IN (com.example.backend.entity.Order.Status.Received, com.example.backend.entity.Order.Status.Denied)) " +
            "ORDER BY r.createdAt DESC")
     List<RestockRequest> findActiveRestockRequestsByFacilityIdAndSkuId(@Param("facilityId") Long facilityId, @Param("skuId") Long skuId);
+
+    @Query("SELECT r FROM RestockRequest r LEFT JOIN r.order o WHERE " +
+           "(o IS NULL OR o.status NOT IN (com.example.backend.entity.Order.Status.Received, com.example.backend.entity.Order.Status.Denied)) " +
+           "ORDER BY r.createdAt DESC")
+    List<RestockRequest> findAllActiveRestockRequests();
 }
