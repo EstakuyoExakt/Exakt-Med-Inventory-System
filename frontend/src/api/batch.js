@@ -26,6 +26,7 @@ const batchApi = {
   getBatchSummary: (facilityId) => `${API_URL}/summary?facilityId=${facilityId}`,
   getDistinctBatchSkus: (facilityId) => `${API_URL}/skus?facilityId=${facilityId}`,
   updateBatchStatus: (id) => `${API_URL}/${id}/status`,
+  releaseBatch: (id) => `${API_URL}/${id}/release`,
   getBatchesBySku: (skuId, facilityId) => {
     return `${API_URL}/sku/${skuId}?facilityId=${facilityId}`;
   },

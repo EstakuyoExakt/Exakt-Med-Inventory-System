@@ -1,5 +1,6 @@
 package com.example.backend.service;
 
+import com.example.backend.dto.batch.BatchReleaseRequestDto;
 import com.example.backend.dto.batch.BatchRequestDto;
 import com.example.backend.dto.batch.BatchResponseDto;
 import com.example.backend.entity.Batch;
@@ -8,11 +9,15 @@ import com.example.backend.entity.Order;
 import com.example.backend.entity.OrderedItem;
 import com.example.backend.entity.Sku;
 import com.example.backend.entity.AuditLog;
+import com.example.backend.entity.StockAdjustmentLog;
+import com.example.backend.entity.User;
 import com.example.backend.repository.BatchRepository;
 import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.OrderRepository;
 import com.example.backend.repository.OrderedItemRepository;
 import com.example.backend.repository.SkuRepository;
+import com.example.backend.repository.StockAdjustmentLogRepository;
+import com.example.backend.repository.UserRepository;
 import com.example.backend.dto.common.PageResponseDto;
 import com.example.backend.dto.batch.BatchSummaryDto;
 import org.springframework.data.domain.Page;
@@ -21,6 +26,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,19 +49,25 @@ public class BatchService {
     private final FacilityRepository facilityRepository;
     private final OrderRepository orderRepository;
     private final AuditLogService auditLogService;
+    private final StockAdjustmentLogRepository stockAdjustmentLogRepository;
+    private final UserRepository userRepository;
 
     public BatchService(BatchRepository batchRepository,
                         OrderedItemRepository orderedItemRepository,
                         SkuRepository skuRepository,
                         FacilityRepository facilityRepository,
                         OrderRepository orderRepository,
-                        AuditLogService auditLogService) {
+                        AuditLogService auditLogService,
+                        StockAdjustmentLogRepository stockAdjustmentLogRepository,
+                        UserRepository userRepository) {
         this.batchRepository = batchRepository;
         this.orderedItemRepository = orderedItemRepository;
         this.skuRepository = skuRepository;
         this.facilityRepository = facilityRepository;
         this.orderRepository = orderRepository;
         this.auditLogService = auditLogService;
+        this.stockAdjustmentLogRepository = stockAdjustmentLogRepository;
+        this.userRepository = userRepository;
     }
 
     // 1. RECEIVE SINGLE BATCH (Pharmacist / Admin / SuperAdmin)
@@ -311,29 +324,20 @@ public class BatchService {
 
         Batch.Status oldStatus = batch.getStatus();
         if (status != null && status != oldStatus) {
-            // 1. Quarantined -> Available: add units to active SKU inventory
-            if (oldStatus == Batch.Status.Quarantined && status == Batch.Status.Available) {
-                batch.setStatus(status);
-                adjustSkuUnits(batch, batch.getUnits() != null ? batch.getUnits() : 0L);
-            }
-            // 2. Available -> Quarantined: deduct units from active SKU inventory
-            else if (oldStatus == Batch.Status.Available && status == Batch.Status.Quarantined) {
-                batch.setStatus(status);
+            // 1. Available -> Quarantined: deduct units from active SKU inventory
+            if (oldStatus == Batch.Status.Available && status == Batch.Status.Quarantined) {
                 adjustSkuUnits(batch, -(batch.getUnits() != null ? batch.getUnits() : 0L));
             }
-            // 3. Available -> Expired: deduct units from active SKU inventory
+            // 2. Available -> Expired: deduct units from active SKU inventory
             else if (oldStatus == Batch.Status.Available && status == Batch.Status.Expired) {
-                batch.setStatus(status);
                 adjustSkuUnits(batch, -(batch.getUnits() != null ? batch.getUnits() : 0L));
             }
-            // 4. Expired -> Available: add units back if mistakenly marked expired
+            // 3. Expired -> Available: add units back if mistakenly marked expired
             else if (oldStatus == Batch.Status.Expired && status == Batch.Status.Available) {
-                batch.setStatus(status);
                 adjustSkuUnits(batch, batch.getUnits() != null ? batch.getUnits() : 0L);
             }
-            else {
-                batch.setStatus(status);
-            }
+
+            batch.setStatus(status);
         }
 
         if (notes != null) {
@@ -355,6 +359,122 @@ public class BatchService {
         );
 
         return mapToResponseDto(updated);
+    }
+
+    // 5b. RELEASE QUARANTINED BATCH WITH PARTIAL/FULL ACCEPTANCE & REJECTION WRITE-OFF
+    @Transactional
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Pharmacist')")
+    public BatchResponseDto releaseBatchFromQuarantine(Long id, BatchReleaseRequestDto request) {
+        if (id == null) {
+            throw new IllegalArgumentException("Batch ID is required.");
+        }
+        if (request == null || request.getAcceptedUnits() == null) {
+            throw new IllegalArgumentException("Accepted units is required.");
+        }
+
+        Batch batch = batchRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Batch not found with id: " + id));
+
+        if (batch.getStatus() != Batch.Status.Quarantined) {
+            throw new IllegalStateException("Only Quarantined batches can be released. Current status is " + batch.getStatus());
+        }
+
+        long currentBatchUnits = batch.getUnits() != null ? batch.getUnits() : 0L;
+        long acceptedUnits = request.getAcceptedUnits();
+
+        if (acceptedUnits <= 0) {
+            throw new IllegalArgumentException("Accepted units must be greater than zero.");
+        }
+        if (acceptedUnits > currentBatchUnits) {
+            throw new IllegalArgumentException("Accepted units (" + acceptedUnits + ") cannot exceed current quarantined units (" + currentBatchUnits + ").");
+        }
+
+        long rejectedUnits = currentBatchUnits - acceptedUnits;
+        if (rejectedUnits > 0 && (request.getRejectionReason() == null || request.getRejectionReason().isBlank())) {
+            throw new IllegalArgumentException("Rejection reason is required when accepting fewer units than quarantined.");
+        }
+
+        // 1. Update Batch: set status to Available, update units to acceptedUnits
+        batch.setStatus(Batch.Status.Available);
+        batch.setUnits(acceptedUnits);
+
+        StringBuilder notesBuilder = new StringBuilder();
+        if (batch.getNotes() != null && !batch.getNotes().isBlank()) {
+            notesBuilder.append(batch.getNotes().trim()).append("; ");
+        }
+        notesBuilder.append("Released from Quarantine (Accepted: ").append(acceptedUnits);
+        if (rejectedUnits > 0) {
+            notesBuilder.append(", Rejected: ").append(rejectedUnits).append(" [Reason: ").append(request.getRejectionReason().trim()).append("]");
+        }
+        notesBuilder.append(")");
+        if (request.getNotes() != null && !request.getNotes().isBlank()) {
+            notesBuilder.append(" - Notes: ").append(request.getNotes().trim());
+        }
+        batch.setNotes(notesBuilder.toString());
+
+        Batch savedBatch = batchRepository.save(batch);
+
+        // 2. Increment active SKU inventory by accepted units only
+        adjustSkuUnits(savedBatch, acceptedUnits);
+
+        // 3. Adjust PO OrderedItem received units if units were rejected
+        if (rejectedUnits > 0 && savedBatch.getOrderedItem() != null) {
+            OrderedItem oi = savedBatch.getOrderedItem();
+            long currentReceived = oi.getReceivedUnits() != null ? oi.getReceivedUnits() : 0L;
+            oi.setReceivedUnits(Math.max(0L, currentReceived - rejectedUnits));
+            orderedItemRepository.save(oi);
+            if (oi.getOrder() != null) {
+                updateOrderStatusOnReceipt(oi.getOrder());
+            }
+        }
+
+        User currentUser = getCurrentUser();
+
+        // 4. Log StockAdjustmentLog for rejected write-off units
+        if (rejectedUnits > 0 && savedBatch.getOrderedItem() != null && savedBatch.getOrderedItem().getSku() != null) {
+            Sku sku = savedBatch.getOrderedItem().getSku();
+            long currentSkuUnits = sku.getUnits() != null ? sku.getUnits() : 0L;
+
+            StockAdjustmentLog adjLog = new StockAdjustmentLog();
+            adjLog.setSku(sku);
+            adjLog.setFacility(savedBatch.getFacility());
+            adjLog.setUser(currentUser);
+            adjLog.setAdjustmentType(com.example.backend.dto.sku.SkuStockAdjustmentDto.Type.SUBTRACT);
+            adjLog.setPreviousUnits(currentSkuUnits);
+            adjLog.setAdjustedAmount(rejectedUnits);
+            adjLog.setDeltaUnits(-rejectedUnits);
+            adjLog.setNewUnits(currentSkuUnits);
+            adjLog.setReason(request.getRejectionReason().trim());
+
+            String adjNotes = String.format("Quarantine QC write-off (Batch: %s, Expiry: %s)%s",
+                    savedBatch.getBatchNum(),
+                    savedBatch.getExpiryDate() != null ? savedBatch.getExpiryDate().toString() : "N/A",
+                    (request.getNotes() != null && !request.getNotes().isBlank()) ? " - " + request.getNotes().trim() : "");
+            adjLog.setNotes(adjNotes);
+            stockAdjustmentLogRepository.save(adjLog);
+        }
+
+        // 5. Central Audit Log
+        String auditDesc = String.format("Batch '%s' released from Quarantine. %d units accepted into active inventory.%s%s",
+                savedBatch.getBatchNum(),
+                acceptedUnits,
+                rejectedUnits > 0 ? " " + rejectedUnits + " units rejected (" + request.getRejectionReason().trim() + ")." : "",
+                (request.getNotes() != null && !request.getNotes().isBlank()) ? " Comments: " + request.getNotes().trim() : "");
+
+        auditLogService.logAction(
+                savedBatch.getFacility(),
+                currentUser,
+                "Inventory",
+                "BATCH_RELEASED",
+                "Batch Released (" + acceptedUnits + " units accepted" + (rejectedUnits > 0 ? ", " + rejectedUnits + " rejected" : "") + ")",
+                rejectedUnits > 0 ? AuditLog.Severity.WARNING : AuditLog.Severity.SUCCESS,
+                savedBatch.getBatchNum(),
+                savedBatch.getId(),
+                auditDesc,
+                "Admin,Pharmacist"
+        );
+
+        return mapToResponseDto(savedBatch);
     }
 
     // 5c. MARK PAST-DUE BATCHES AS EXPIRED (Status change only, no SKU deduction)
@@ -630,5 +750,17 @@ public class BatchService {
                     "Admin,Pharmacist"
             );
         }
+    }
+
+    private User getCurrentUser() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.isAuthenticated()) {
+                String username = authentication.getName();
+                return userRepository.findByUsername(username).orElse(null);
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 }

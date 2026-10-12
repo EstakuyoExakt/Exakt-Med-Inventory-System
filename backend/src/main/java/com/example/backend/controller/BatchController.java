@@ -1,5 +1,6 @@
 package com.example.backend.controller;
 
+import com.example.backend.dto.batch.BatchReleaseRequestDto;
 import com.example.backend.dto.batch.BatchRequestDto;
 import com.example.backend.dto.batch.BatchResponseDto;
 import com.example.backend.dto.batch.BatchSummaryDto;
@@ -120,6 +121,16 @@ public class BatchController {
             @Parameter(description = "Optional notes or reason for status change")
             @RequestParam(required = false) String notes) {
         return ResponseEntity.ok(batchService.updateBatchStatus(id, status, notes));
+    }
+
+    // 5b. RELEASE QUARANTINED BATCH
+    @PostMapping("/{id}/release")
+    @Operation(summary = "Release Quarantined Batch", description = "Releases a quarantined batch to Available with optional partial accepted units and discarded units logged with reasons.")
+    public ResponseEntity<BatchResponseDto> releaseBatchFromQuarantine(
+            @Parameter(description = "Batch ID", required = true)
+            @PathVariable Long id,
+            @Valid @RequestBody BatchReleaseRequestDto request) {
+        return ResponseEntity.ok(batchService.releaseBatchFromQuarantine(id, request));
     }
 
     // 6. PROCESS EXPIRED BATCHES FOR A SKU

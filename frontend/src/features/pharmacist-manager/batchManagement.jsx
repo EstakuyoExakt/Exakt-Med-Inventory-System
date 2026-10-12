@@ -39,6 +39,29 @@ import { validateBatchForm } from "../../validators/batch.validator";
 import orderService from "../../services/order";
 import batchService from "../../services/batch";
 
+const REJECTION_REASON_OPTIONS = [
+  {
+    value: "Damaged in transit / Broken packaging",
+    label: "Damaged in transit / Broken packaging",
+  },
+  {
+    value: "Failed temperature threshold / Storage compromise",
+    label: "Failed temperature threshold / Storage compromise",
+  },
+  {
+    value: "Quality inspection failure (defective / contaminated)",
+    label: "Quality inspection failure (defective / contaminated)",
+  },
+  {
+    value: "Broken seals / Compromised integrity",
+    label: "Broken seals / Compromised integrity",
+  },
+  {
+    value: "OTHER",
+    label: "Other / Specific Defect (Specify below)",
+  },
+];
+
 function BatchManagement() {
   const { facility } = useAuth();
 
@@ -78,9 +101,19 @@ function BatchManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
-  // Modal State: Only 'receive' and 'view'
+  // Modal State: 'receive', 'view', and 'release'
   const [modalMode, setModalMode] = useState(null);
   const [selectedBatch, setSelectedBatch] = useState(null);
+
+  // Form State for Quarantined Batch Release & QC Inspection
+  const [releaseFormData, setReleaseFormData] = useState({
+    acceptedUnits: "",
+    rejectionReason: "Damaged in transit / Broken packaging",
+    customReason: "",
+    notes: "",
+  });
+  const [releaseErrors, setReleaseErrors] = useState({});
+  const [isReleasing, setIsReleasing] = useState(false);
 
   // Form State for Receive Stock via PO (Individual batch per SKU)
   const getInitialReceiveFormData = () => ({
@@ -214,17 +247,16 @@ function BatchManagement() {
     try {
       setIsOrdersLoading(true);
       setOrdersError(null);
-      const data = await orderService.getAllOrders(
-        activeFacilityId,
-        ["Approved", "Partially_Received"],
-      );
+      const data = await orderService.getAllOrders(activeFacilityId, [
+        "Approved",
+        "Partially_Received",
+      ]);
       if (Array.isArray(data)) {
         setApprovedOrders(
           data
             .filter(
               (po) =>
-                po.status === "Approved" ||
-                po.status === "Partially_Received",
+                po.status === "Approved" || po.status === "Partially_Received",
             )
             .map(normalizeApprovedOrder),
         );
@@ -437,37 +469,109 @@ function BatchManagement() {
     setCollapsedSkus({});
     setUpdateStatusError(null);
     setUpdateStatusSuccess(null);
+    setReleaseErrors({});
+    setIsReleasing(false);
     clearErrors();
   };
 
-  // Change batch status from Quarantined to Available
-  const handleReleaseFromQuarantine = async (batchId) => {
-    if (!batchId) return;
+  // Open the Quarantined Batch Release & QC Inspection Modal
+  const handleOpenReleaseModal = (batch) => {
+    if (!batch) return;
+    const batchUnits = Number(batch.units ?? batch.quantity) || 0;
+    setSelectedBatch(batch);
+    setReleaseFormData({
+      acceptedUnits: batchUnits,
+      rejectionReason: "Damaged in transit / Broken packaging",
+      customReason: "",
+      notes: "",
+    });
+    setReleaseErrors({});
+    setUpdateStatusError(null);
+    setUpdateStatusSuccess(null);
+    setModalMode("release");
+  };
+
+  // Submit Release with Accepted Units & QC Rejection Reason
+  const handleConfirmRelease = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedBatch) return;
+
+    const totalBatchUnits =
+      Number(selectedBatch.units ?? selectedBatch.quantity) || 0;
+    const accepted = Number(releaseFormData.acceptedUnits);
+
+    const errors = {};
+    if (!releaseFormData.acceptedUnits || isNaN(accepted) || accepted <= 0) {
+      errors.acceptedUnits = "Please enter valid units greater than 0.";
+    } else if (accepted > totalBatchUnits) {
+      errors.acceptedUnits = `Accepted units cannot exceed total quarantined units (${totalBatchUnits}).`;
+    }
+
+    const rejected = totalBatchUnits - accepted;
+    if (rejected > 0) {
+      if (!releaseFormData.rejectionReason) {
+        errors.rejectionReason =
+          "Please select a reason for the rejected units.";
+      } else if (
+        releaseFormData.rejectionReason === "OTHER" &&
+        !releaseFormData.customReason?.trim()
+      ) {
+        errors.customReason = "Please specify the rejection reason.";
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setReleaseErrors(errors);
+      return;
+    }
+
     try {
-      setIsUpdatingStatus(true);
-      setUpdateStatusError(null);
-      setUpdateStatusSuccess(null);
-      const updatedDto = await batchService.updateBatchStatus(
-        batchId,
-        "Available",
-        "Released from quarantine by pharmacist",
+      setIsReleasing(true);
+      setReleaseErrors({});
+
+      const finalReason =
+        releaseFormData.rejectionReason === "OTHER"
+          ? releaseFormData.customReason.trim()
+          : releaseFormData.rejectionReason;
+
+      const payload = {
+        acceptedUnits: accepted,
+        rejectionReason: rejected > 0 ? finalReason : null,
+        notes: releaseFormData.notes?.trim() || null,
+      };
+
+      const updatedDto = await batchService.releaseBatchFromQuarantine(
+        selectedBatch.id,
+        payload,
       );
 
       const mapped = mapBatchDtoToItem(updatedDto);
       await Promise.all([fetchBatches(), fetchSummaryAndSkus()]);
-      setSelectedBatch(mapped);
+
       setUpdateStatusSuccess(
-        `Batch ${mapped.batchNumber} successfully released to Available. Total units: ${mapped.units?.toLocaleString() || mapped.units}.`,
+        `Batch ${mapped.batchNumber} successfully released to Available. ${accepted.toLocaleString()} units accepted` +
+          (rejected > 0
+            ? `, ${rejected.toLocaleString()} units written off (${finalReason}).`
+            : "."),
       );
+      handleCloseModal();
     } catch (err) {
       console.error("Failed to release batch from quarantine:", err);
-      setUpdateStatusError(
-        err.response?.data?.message ||
+      setReleaseErrors({
+        general:
+          err.response?.data?.message ||
           err.message ||
-          "Failed to update batch status to Available.",
-      );
+          "Failed to release batch from quarantine.",
+      });
     } finally {
-      setIsUpdatingStatus(false);
+      setIsReleasing(false);
+    }
+  };
+
+  const handleReleaseFromQuarantine = (batchId) => {
+    const target = batchList.find((b) => b.id === batchId) || selectedBatch;
+    if (target) {
+      handleOpenReleaseModal(target);
     }
   };
 
@@ -507,9 +611,9 @@ function BatchManagement() {
                           ? crypto.randomUUID()
                           : `b-${Date.now()}-0`,
                       batchNumber: "",
-                      units: remainingUnits,
-                      manufacturingDate: bulkDates.manufacturingDate || "",
-                      expiryDate: bulkDates.expiryDate || "",
+                      units: "",
+                      manufacturingDate: "",
+                      expiryDate: "",
                       isQuarantined: false,
                       quarantineNotes: "",
                     },
@@ -537,13 +641,6 @@ function BatchManagement() {
     setReceiveFormData((prev) => {
       const nextItems = [...prev.items];
       const item = nextItems[itemIdx];
-      const maxAllowed =
-        item.remainingUnits !== undefined ? item.remainingUnits : item.quantity;
-      const currentAllocated = (item.batches || []).reduce(
-        (sum, b) => sum + (Number(b.units) || 0),
-        0,
-      );
-      const remaining = Math.max(0, maxAllowed - currentAllocated);
 
       const newBatch = {
         id:
@@ -551,9 +648,9 @@ function BatchManagement() {
             ? crypto.randomUUID()
             : `b-${Date.now()}-${Math.random()}`,
         batchNumber: "",
-        units: remaining > 0 ? remaining : "",
-        manufacturingDate: bulkDates.manufacturingDate || "",
-        expiryDate: bulkDates.expiryDate || "",
+        units: "",
+        manufacturingDate: "",
+        expiryDate: "",
         isQuarantined: false,
         quarantineNotes: "",
       };
@@ -712,7 +809,9 @@ function BatchManagement() {
       });
 
       if (batchPayload.length === 0) {
-        setFormErrors({ general: "Please enter at least one batch with units to receive." });
+        setFormErrors({
+          general: "Please enter at least one batch with units to receive.",
+        });
         return;
       }
 
@@ -1152,17 +1251,30 @@ function BatchManagement() {
                         )}
                       </td>
 
-                      {/* View Action */}
+                      {/* View & Quick Actions */}
                       <td className="px-6 py-4 whitespace-nowrap text-right text-xs">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenViewModal(batch)}
-                          className="btn-secondary p-1.5 text-gray-600 hover:text-blue-600 hover:border-blue-300"
-                          title="View Batch Dossier"
-                          aria-label="View Batch Dossier"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {batch.isQuarantined && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenReleaseModal(batch)}
+                              className="btn-secondary p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300 transition-colors shadow-2xs"
+                              title="Release from Quarantine (QC Inspection)"
+                              aria-label="Release from Quarantine"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenViewModal(batch)}
+                            className="btn-secondary p-1.5 text-gray-600 hover:text-blue-600 hover:border-blue-300 transition-colors shadow-2xs"
+                            title="View Batch Dossier"
+                            aria-label="View Batch Dossier"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1208,7 +1320,7 @@ function BatchManagement() {
         isOpen={modalMode === "receive"}
         onClose={handleCloseModal}
         title="Receive Stock via Purchase Order"
-        size="5xl"
+        size="6xl"
       >
         <form onSubmit={handleSaveReceivedBatch} className="space-y-4">
           {formErrors.general && (
@@ -1320,8 +1432,7 @@ function BatchManagement() {
                         {(
                           selectedPoDetails.totalReceivedUnits || 0
                         ).toLocaleString()}{" "}
-                        /{" "}
-                        {selectedPoDetails.totalQuantity?.toLocaleString()}{" "}
+                        / {selectedPoDetails.totalQuantity?.toLocaleString()}{" "}
                         units
                       </span>
                       <span className="text-[11px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
@@ -1447,7 +1558,7 @@ function BatchManagement() {
                   </div>
                 </div>
 
-                <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1">
+                <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1.5 scrollbar-thin">
                   {receiveFormData.items?.map((item, idx) => {
                     const skuKey = item.orderedItemId || item.sku || idx;
                     const isCollapsed = Boolean(collapsedSkus[skuKey]);
@@ -1467,7 +1578,8 @@ function BatchManagement() {
                     const isAllocatedMatch =
                       totalAllocated === remainingUnits && remainingUnits > 0;
                     const isOverAllocated = totalAllocated > remainingUnits;
-                    const unallocatedForDelivery = remainingUnits - totalAllocated;
+                    const unallocatedForDelivery =
+                      remainingUnits - totalAllocated;
 
                     return (
                       <div
@@ -1490,7 +1602,9 @@ function BatchManagement() {
                                 </span>
                                 {receivedUnits > 0 && (
                                   <span className="font-mono text-[10px] text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded font-medium">
-                                    Ordered: {orderedUnits.toLocaleString()} • Prev: {receivedUnits.toLocaleString()} • Rem: {remainingUnits.toLocaleString()}
+                                    Ordered: {orderedUnits.toLocaleString()} •
+                                    Prev: {receivedUnits.toLocaleString()} •
+                                    Rem: {remainingUnits.toLocaleString()}
                                   </span>
                                 )}
                               </div>
@@ -1506,13 +1620,14 @@ function BatchManagement() {
                             {remainingUnits <= 0 ? (
                               <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-lg">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                Fully Received ({receivedUnits.toLocaleString()} units)
+                                Fully Received ({receivedUnits.toLocaleString()}{" "}
+                                units)
                               </span>
                             ) : isAllocatedMatch ? (
                               <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-lg">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                                 {totalAllocated.toLocaleString()} /{" "}
-                                {remainingUnits.toLocaleString()} units (Fulfills remainder)
+                                {remainingUnits.toLocaleString()} units
                               </span>
                             ) : isOverAllocated ? (
                               <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold bg-red-50 text-red-700 border border-red-200 px-2.5 py-1 rounded-lg">
@@ -1529,11 +1644,13 @@ function BatchManagement() {
                                 <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
                                 Partial: {totalAllocated.toLocaleString()} of{" "}
                                 {remainingUnits.toLocaleString()} units (
-                                {unallocatedForDelivery.toLocaleString()} pending)
+                                {unallocatedForDelivery.toLocaleString()}{" "}
+                                pending)
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold bg-slate-50 text-slate-600 border border-slate-200 px-2.5 py-1 rounded-lg">
-                                Not in this delivery (0 / {remainingUnits.toLocaleString()} units)
+                                Not in this delivery (0 /{" "}
+                                {remainingUnits.toLocaleString()} units)
                               </span>
                             )}
 
@@ -2162,25 +2279,284 @@ function BatchManagement() {
               {selectedBatch.isQuarantined && (
                 <button
                   type="button"
-                  onClick={() => handleReleaseFromQuarantine(selectedBatch.id)}
-                  disabled={isUpdatingStatus}
-                  className="btn-primary py-1.5 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white border-none flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs font-semibold"
+                  onClick={() => handleOpenReleaseModal(selectedBatch)}
+                  className="btn-primary py-1.5 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white border-none flex items-center gap-1.5 cursor-pointer shadow-xs font-semibold"
                 >
-                  {isUpdatingStatus ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Releasing to Available...</span>
-                    </>
-                  ) : (
-                    <>
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>Release to Available</span>
-                    </>
-                  )}
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Release to Available (QC Inspection)</span>
                 </button>
               )}
             </div>
           </div>
+        )}
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* 3. RELEASE QUARANTINED BATCH & QC INSPECTION MODAL       */}
+      {/* ======================================================== */}
+      <Modal
+        isOpen={modalMode === "release" && Boolean(selectedBatch)}
+        onClose={handleCloseModal}
+        title="Release Batch from Quarantine (QC Inspection)"
+        size="xl"
+      >
+        {selectedBatch && (
+          <form onSubmit={handleConfirmRelease} className="space-y-4">
+            {/* General Error Banner */}
+            {releaseErrors.general && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{releaseErrors.general}</span>
+              </div>
+            )}
+
+            {/* Batch Overview Card */}
+            <div className="flex items-start gap-3.5 p-3.5 rounded-xl bg-gray-50 border border-gray-200">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl font-bold text-white bg-amber-600 shadow-xs shrink-0">
+                <ShieldAlert className="w-6 h-6" />
+              </div>
+              <div className="min-w-0 flex-1 text-xs">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono font-bold text-gray-900 text-sm">
+                    {selectedBatch.batchNumber}
+                  </span>
+                  <span className="font-mono text-[11px] text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded font-semibold">
+                    {selectedBatch.sku}
+                  </span>
+                </div>
+                <p className="text-gray-600 font-medium mt-0.5">
+                  {selectedBatch.brandName}{" "}
+                  <span className="text-gray-400 font-normal">
+                    ({selectedBatch.genericName} • {selectedBatch.dosageForm})
+                  </span>
+                </p>
+                <div className="flex items-center gap-2 mt-1.5 text-[11px] text-gray-500 flex-wrap">
+                  <span>
+                    Current Quarantined:{" "}
+                    <strong className="text-gray-900">
+                      {(
+                        Number(selectedBatch.units ?? selectedBatch.quantity) ||
+                        0
+                      ).toLocaleString()}{" "}
+                      units
+                    </strong>
+                  </span>
+                  <span>•</span>
+                  <span>Expiry: {selectedBatch.expiryDate}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Accepted Units Input */}
+            <div>
+              <label
+                htmlFor="release-accepted-units"
+                className="block text-xs font-bold text-gray-800 mb-1"
+              >
+                Units to Accept into Active Stock{" "}
+                <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  id="release-accepted-units"
+                  type="number"
+                  min="1"
+                  max={
+                    Number(selectedBatch.units ?? selectedBatch.quantity) || 1
+                  }
+                  value={releaseFormData.acceptedUnits}
+                  onChange={(e) => {
+                    setReleaseFormData((prev) => ({
+                      ...prev,
+                      acceptedUnits: e.target.value,
+                    }));
+                    if (releaseErrors.acceptedUnits) {
+                      setReleaseErrors((prev) => ({
+                        ...prev,
+                        acceptedUnits: null,
+                      }));
+                    }
+                  }}
+                  placeholder="Enter accepted quantity"
+                  className={`input text-sm font-bold pr-28 ${
+                    releaseErrors.acceptedUnits
+                      ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                      : ""
+                  }`}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium pointer-events-none">
+                  max{" "}
+                  {(
+                    Number(selectedBatch.units ?? selectedBatch.quantity) || 0
+                  ).toLocaleString()}{" "}
+                  units
+                </span>
+              </div>
+              {releaseErrors.acceptedUnits ? (
+                <p className="text-[11px] text-red-500 mt-1">
+                  {releaseErrors.acceptedUnits}
+                </p>
+              ) : (
+                <p className="text-[11px] text-gray-500 mt-1">
+                  These units will be added to active on-hand inventory for this
+                  SKU.
+                </p>
+              )}
+            </div>
+
+            {/* Notice / Discrepancy Reason if Accepted < Total Quarantined */}
+            {Number(releaseFormData.acceptedUnits) <
+              Number(selectedBatch.units ?? selectedBatch.quantity) &&
+              Number(releaseFormData.acceptedUnits) > 0 && (
+                <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-xs space-y-3 animate-slide-up">
+                  <div className="flex items-start gap-2 text-amber-900">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">
+                        Stock Adjustment & Write-off Notice
+                      </p>
+                      <p className="text-[11px] text-amber-800 mt-0.5">
+                        <strong>
+                          {(
+                            (Number(
+                              selectedBatch.units ?? selectedBatch.quantity,
+                            ) || 0) - Number(releaseFormData.acceptedUnits)
+                          ).toLocaleString()}{" "}
+                          units
+                        </strong>{" "}
+                        will be rejected and recorded as a write-off deduction
+                        in the Stock Adjustment and Bin Card ledgers.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Rejection Reason Selector */}
+                  <div>
+                    <label
+                      htmlFor="release-rejection-reason"
+                      className="block text-[11px] font-bold text-amber-950 mb-1"
+                    >
+                      Reason for Discarding / Rejecting Remaining Units{" "}
+                      <span className="text-red-500">*</span>
+                    </label>
+                    <Dropdown
+                      id="release-rejection-reason"
+                      name="rejectionReason"
+                      value={releaseFormData.rejectionReason}
+                      onChange={(e) => {
+                        const val = e?.target?.value ?? e;
+                        setReleaseFormData((prev) => ({
+                          ...prev,
+                          rejectionReason: val,
+                        }));
+                        if (releaseErrors.rejectionReason) {
+                          setReleaseErrors((prev) => ({
+                            ...prev,
+                            rejectionReason: null,
+                          }));
+                        }
+                      }}
+                      options={REJECTION_REASON_OPTIONS}
+                      error={releaseErrors.rejectionReason}
+                      size="sm"
+                      selectClassName="bg-white border-amber-200 focus:border-amber-400 focus:ring-amber-400/30 text-xs"
+                    />
+                  </div>
+
+                  {/* Custom Write-in Reason if OTHER */}
+                  {releaseFormData.rejectionReason === "OTHER" && (
+                    <div>
+                      <input
+                        type="text"
+                        value={releaseFormData.customReason}
+                        onChange={(e) => {
+                          setReleaseFormData((prev) => ({
+                            ...prev,
+                            customReason: e.target.value,
+                          }));
+                          if (releaseErrors.customReason) {
+                            setReleaseErrors((prev) => ({
+                              ...prev,
+                              customReason: null,
+                            }));
+                          }
+                        }}
+                        placeholder="Specify custom rejection reason (required)"
+                        className={`input text-xs bg-white ${
+                          releaseErrors.customReason
+                            ? "border-red-500"
+                            : "border-amber-200"
+                        }`}
+                      />
+                      {releaseErrors.customReason && (
+                        <p className="text-[11px] text-red-500 mt-1">
+                          {releaseErrors.customReason}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+            {/* QC / Release Notes */}
+            <div>
+              <label
+                htmlFor="release-notes"
+                className="block text-xs font-semibold text-gray-700 mb-1"
+              >
+                QC Inspection / Release Notes (Optional)
+              </label>
+              <textarea
+                id="release-notes"
+                rows="2"
+                value={releaseFormData.notes}
+                onChange={(e) =>
+                  setReleaseFormData((prev) => ({
+                    ...prev,
+                    notes: e.target.value,
+                  }))
+                }
+                placeholder="e.g. Visual inspection passed, units inspected and moved to active shelf"
+                className="textarea text-xs w-full border rounded p-1"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                disabled={isReleasing}
+                className="btn-secondary text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isReleasing}
+                className="btn-primary text-xs bg-emerald-600 hover:bg-emerald-700 text-white border-none flex items-center gap-1.5 cursor-pointer disabled:opacity-50 font-semibold"
+              >
+                {isReleasing ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Processing Release...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>
+                      Confirm & Release{" "}
+                      {releaseFormData.acceptedUnits
+                        ? `${Number(
+                            releaseFormData.acceptedUnits,
+                          ).toLocaleString()} Units`
+                        : ""}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         )}
       </Modal>
     </div>

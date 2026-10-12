@@ -80,6 +80,18 @@ const batchService = {
     return response.data;
   },
 
+  releaseBatchFromQuarantine: async (id, releaseData, config = {}) => {
+    const response = await axios.post(
+      batchApi.releaseBatch(id),
+      releaseData,
+      {
+        ...config,
+        headers: getAuthHeaders(config),
+      }
+    );
+    return response.data;
+  },
+
   getBatchesBySku: async (skuId, facilityId, config = {}) => {
     if (!skuId || !facilityId) return [];
     const response = await axios.get(
