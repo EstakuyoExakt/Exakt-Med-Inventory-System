@@ -3,13 +3,12 @@ package com.example.backend.service;
 import com.example.backend.dto.sku.SkuRequestDto;
 import com.example.backend.dto.sku.SkuResponseDto;
 import com.example.backend.dto.sku.SkuStockAdjustmentDto;
-import com.example.backend.dto.sku.StockAdjustmentLogResponseDto;
 import com.example.backend.entity.AuditLog;
 import com.example.backend.entity.Batch;
 import com.example.backend.entity.Facility;
+import com.example.backend.entity.InventoryTransaction;
 import com.example.backend.entity.LibMedicine;
 import com.example.backend.entity.Sku;
-import com.example.backend.entity.StockAdjustmentLog;
 import com.example.backend.entity.User;
 import com.example.backend.entity.RestockRequest;
 import com.example.backend.entity.Order;
@@ -23,7 +22,6 @@ import com.example.backend.entity.LibPackagingUnit;
 import com.example.backend.repository.LibPackagingUnitRepository;
 import com.example.backend.repository.RestockRequestRepository;
 import com.example.backend.repository.SkuRepository;
-import com.example.backend.repository.StockAdjustmentLogRepository;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.dto.common.PageResponseDto;
 import com.example.backend.dto.sku.SkuDropdownDto;
@@ -53,7 +51,7 @@ public class SkuService {
     private final FacilityRepository facilityRepository;
     private final LibMedicineRepository libMedicineRepository;
     private final BatchService batchService;
-    private final StockAdjustmentLogRepository stockAdjustmentLogRepository;
+    private final InventoryTransactionService inventoryTransactionService;
     private final AuditLogService auditLogService;
     private final UserRepository userRepository;
     private final RestockRequestRepository restockRequestRepository;
@@ -65,7 +63,7 @@ public class SkuService {
                       FacilityRepository facilityRepository,
                       LibMedicineRepository libMedicineRepository,
                       BatchService batchService,
-                      StockAdjustmentLogRepository stockAdjustmentLogRepository,
+                      InventoryTransactionService inventoryTransactionService,
                       AuditLogService auditLogService,
                       UserRepository userRepository,
                       RestockRequestRepository restockRequestRepository,
@@ -76,7 +74,7 @@ public class SkuService {
         this.facilityRepository = facilityRepository;
         this.libMedicineRepository = libMedicineRepository;
         this.batchService = batchService;
-        this.stockAdjustmentLogRepository = stockAdjustmentLogRepository;
+        this.inventoryTransactionService = inventoryTransactionService;
         this.auditLogService = auditLogService;
         this.userRepository = userRepository;
         this.restockRequestRepository = restockRequestRepository;
@@ -720,9 +718,10 @@ public class SkuService {
         sku.setUnits(newUnits);
         Sku savedSku = skuRepository.save(sku);
 
+        boolean isDispensed = request.getReason() != null && "DISPENSED".equalsIgnoreCase(request.getReason().trim());
+
         List<Batch> deductedBatches = new ArrayList<>();
         if (unitsToDeduct > 0 && savedSku.getFacility() != null) {
-            boolean isDispensed = request.getReason() != null && "DISPENSED".equalsIgnoreCase(request.getReason().trim());
             if (isDispensed) {
                 // When reason is Dispensed, patient name and contact number are required
                 if (request.getPatientName() == null || request.getPatientName().trim().isEmpty()) {
@@ -774,18 +773,6 @@ public class SkuService {
             }
         }
 
-        // Record stock adjustment log entry
-        StockAdjustmentLog log = new StockAdjustmentLog();
-        log.setSku(savedSku);
-        log.setFacility(savedSku.getFacility());
-        log.setUser(getCurrentUser());
-        log.setAdjustmentType(request.getType());
-        log.setPreviousUnits(currentUnits);
-        log.setAdjustedAmount(request.getAmount());
-        log.setDeltaUnits(newUnits - currentUnits);
-        log.setNewUnits(newUnits);
-        log.setReason(request.getReason());
-
         String userNotes = (request.getNotes() != null && !request.getNotes().isBlank()) ? request.getNotes().trim() : null;
         String logNotes;
         if (userNotes != null && batchDetails != null) {
@@ -800,8 +787,34 @@ public class SkuService {
                     request.getContactNumber() != null ? request.getContactNumber().trim() : "N/A");
             logNotes = logNotes != null ? logNotes + " " + patientInfo : patientInfo;
         }
-        log.setNotes(logNotes);
-        stockAdjustmentLogRepository.save(log);
+
+        // Record inventory transaction entry
+        InventoryTransaction.Type txType;
+        if (request.getType() == SkuStockAdjustmentDto.Type.ADD) {
+            txType = InventoryTransaction.Type.ADJUSTMENT_ADD;
+        } else if (isDispensed) {
+            txType = InventoryTransaction.Type.DISPENSE;
+        } else {
+            txType = InventoryTransaction.Type.ADJUSTMENT_SUB;
+        }
+
+        inventoryTransactionService.recordTransaction(
+                savedSku,
+                savedSku.getFacility(),
+                targetBatch,
+                getCurrentUser(),
+                txType,
+                "ADJ-" + System.currentTimeMillis(),
+                targetBatch != null ? targetBatch.getBatchNum() : null,
+                targetBatch != null ? targetBatch.getExpiryDate() : null,
+                request.getType() == SkuStockAdjustmentDto.Type.ADD ? request.getAmount() : null,
+                request.getType() == SkuStockAdjustmentDto.Type.SUBTRACT ? request.getAmount() : null,
+                currentUnits,
+                newUnits,
+                request.getReason(),
+                logNotes,
+                java.time.LocalDateTime.now()
+        );
 
         // Record central Audit Log entry
         long delta = newUnits - currentUnits;
@@ -856,32 +869,6 @@ public class SkuService {
         );
 
         return mapToResponseDto(savedSku, "Stock adjusted successfully");
-    }
-
-    // 5c. GET ADJUSTMENT LOGS FOR A SPECIFIC SKU
-    @Transactional(readOnly = true)
-    @PreAuthorize("isAuthenticated()")
-    public List<StockAdjustmentLogResponseDto> getAdjustmentLogsBySku(Long skuId) {
-        return stockAdjustmentLogRepository.findBySkuIdOrderByCreatedAtDesc(skuId)
-                .stream()
-                .map(this::mapAdjustmentLogToDto)
-                .collect(Collectors.toList());
-    }
-
-    // 5d. GET ADJUSTMENT LOGS FOR A FACILITY
-    @Transactional(readOnly = true)
-    @PreAuthorize("isAuthenticated()")
-    public List<StockAdjustmentLogResponseDto> getAdjustmentLogsByFacility(Long facilityId) {
-        if (facilityId == null) {
-            throw new RuntimeException("Facility ID is strictly required.");
-        }
-        if (!facilityRepository.existsById(facilityId)) {
-            throw new RuntimeException("Facility not found with id: " + facilityId);
-        }
-        return stockAdjustmentLogRepository.findByFacilityIdOrderByCreatedAtDesc(facilityId)
-                .stream()
-                .map(this::mapAdjustmentLogToDto)
-                .collect(Collectors.toList());
     }
 
     // 7. GET SKUS THAT NEED REORDERING (units <= reorderLevel, excluding active Pending/Approved orders)
@@ -1072,33 +1059,6 @@ public class SkuService {
             metrics = getSingleSkuOrderMetrics(sku.getFacility().getId(), sku.getId());
         }
         return mapToResponseDto(sku, message, metrics);
-    }
-
-    private StockAdjustmentLogResponseDto mapAdjustmentLogToDto(StockAdjustmentLog log) {
-        StockAdjustmentLogResponseDto dto = new StockAdjustmentLogResponseDto();
-        dto.setId(log.getId());
-        if (log.getSku() != null) {
-            dto.setSkuId(log.getSku().getId());
-            dto.setSkuName(log.getSku().getName());
-            dto.setBrandName(log.getSku().getBrandName());
-        }
-        if (log.getFacility() != null) {
-            dto.setFacilityId(log.getFacility().getId());
-            dto.setFacilityName(log.getFacility().getName());
-        }
-        if (log.getUser() != null) {
-            dto.setUserId(log.getUser().getId());
-            dto.setUserName(log.getUser().getName());
-        }
-        dto.setAdjustmentType(log.getAdjustmentType());
-        dto.setPreviousUnits(log.getPreviousUnits());
-        dto.setAdjustedAmount(log.getAdjustedAmount());
-        dto.setDeltaUnits(log.getDeltaUnits());
-        dto.setNewUnits(log.getNewUnits());
-        dto.setReason(log.getReason());
-        dto.setNotes(log.getNotes());
-        dto.setCreatedAt(log.getCreatedAt());
-        return dto;
     }
 
     private User getCurrentUser() {

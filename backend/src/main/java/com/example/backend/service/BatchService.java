@@ -5,18 +5,17 @@ import com.example.backend.dto.batch.BatchRequestDto;
 import com.example.backend.dto.batch.BatchResponseDto;
 import com.example.backend.entity.Batch;
 import com.example.backend.entity.Facility;
+import com.example.backend.entity.InventoryTransaction;
 import com.example.backend.entity.Order;
 import com.example.backend.entity.OrderedItem;
 import com.example.backend.entity.Sku;
 import com.example.backend.entity.AuditLog;
-import com.example.backend.entity.StockAdjustmentLog;
 import com.example.backend.entity.User;
 import com.example.backend.repository.BatchRepository;
 import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.OrderRepository;
 import com.example.backend.repository.OrderedItemRepository;
 import com.example.backend.repository.SkuRepository;
-import com.example.backend.repository.StockAdjustmentLogRepository;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.dto.common.PageResponseDto;
 import com.example.backend.dto.batch.BatchSummaryDto;
@@ -32,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -49,7 +49,7 @@ public class BatchService {
     private final FacilityRepository facilityRepository;
     private final OrderRepository orderRepository;
     private final AuditLogService auditLogService;
-    private final StockAdjustmentLogRepository stockAdjustmentLogRepository;
+    private final InventoryTransactionService inventoryTransactionService;
     private final UserRepository userRepository;
 
     public BatchService(BatchRepository batchRepository,
@@ -58,7 +58,7 @@ public class BatchService {
                         FacilityRepository facilityRepository,
                         OrderRepository orderRepository,
                         AuditLogService auditLogService,
-                        StockAdjustmentLogRepository stockAdjustmentLogRepository,
+                        InventoryTransactionService inventoryTransactionService,
                         UserRepository userRepository) {
         this.batchRepository = batchRepository;
         this.orderedItemRepository = orderedItemRepository;
@@ -66,7 +66,7 @@ public class BatchService {
         this.facilityRepository = facilityRepository;
         this.orderRepository = orderRepository;
         this.auditLogService = auditLogService;
-        this.stockAdjustmentLogRepository = stockAdjustmentLogRepository;
+        this.inventoryTransactionService = inventoryTransactionService;
         this.userRepository = userRepository;
     }
 
@@ -143,6 +143,35 @@ public class BatchService {
                 long unitsToAdd = savedBatch.getUnits() != null ? savedBatch.getUnits() : 0L;
                 sku.setUnits(currentUnits + unitsToAdd);
                 skuRepository.save(sku);
+
+                String ref = "BATCH-" + savedBatch.getBatchNum();
+                String poSupplier = "";
+                if (orderedItem.getOrder() != null) {
+                    if (orderedItem.getOrder().getPurchaseOrderNum() != null) {
+                        ref = orderedItem.getOrder().getPurchaseOrderNum();
+                    }
+                    if (orderedItem.getOrder().getSupplier() != null) {
+                        poSupplier = " from " + orderedItem.getOrder().getSupplier().getName();
+                    }
+                }
+
+                inventoryTransactionService.recordTransaction(
+                        sku,
+                        savedBatch.getFacility(),
+                        savedBatch,
+                        getCurrentUser(),
+                        InventoryTransaction.Type.RECEIPT,
+                        ref,
+                        savedBatch.getBatchNum(),
+                        savedBatch.getExpiryDate(),
+                        unitsToAdd,
+                        null,
+                        currentUnits,
+                        currentUnits + unitsToAdd,
+                        "PO Stock Received" + poSupplier,
+                        savedBatch.getNotes(),
+                        savedBatch.getReceivedAt() != null ? savedBatch.getReceivedAt() : java.time.LocalDateTime.now()
+                );
             }
         }
 
@@ -415,9 +444,85 @@ public class BatchService {
         Batch savedBatch = batchRepository.save(batch);
 
         // 2. Increment active SKU inventory by accepted units only
+        Sku sku = savedBatch.getOrderedItem() != null ? savedBatch.getOrderedItem().getSku() : null;
+        long currentSkuUnits = sku != null && sku.getUnits() != null ? sku.getUnits() : 0L;
         adjustSkuUnits(savedBatch, acceptedUnits);
+        long finalSkuUnits = sku != null && sku.getUnits() != null ? sku.getUnits() : currentSkuUnits + acceptedUnits;
 
-        // 3. Adjust PO OrderedItem received units if units were rejected
+        User currentUser = getCurrentUser();
+        LocalDateTime now = LocalDateTime.now();
+
+        // 3. Log InventoryTransaction(s) with accurate running balances
+        if (sku != null) {
+            if (rejectedUnits > 0) {
+                // Step A: Log the release of the entire quarantined batch quantity into stock
+                long fullQuarantineUnits = currentBatchUnits;
+                long intermediateBalance = currentSkuUnits + fullQuarantineUnits;
+
+                inventoryTransactionService.recordTransaction(
+                        sku,
+                        savedBatch.getFacility(),
+                        savedBatch,
+                        currentUser,
+                        InventoryTransaction.Type.QUARANTINE_RELEASE,
+                        "BATCH-" + savedBatch.getBatchNum(),
+                        savedBatch.getBatchNum(),
+                        savedBatch.getExpiryDate(),
+                        fullQuarantineUnits,
+                        null,
+                        currentSkuUnits,
+                        intermediateBalance,
+                        "Batch Released from Quarantine",
+                        savedBatch.getNotes(),
+                        now
+                );
+
+                // Step B: Log the deduction for rejected write-off units
+                String adjNotes = String.format("Quarantine QC write-off (Batch: %s, Expiry: %s)%s",
+                        savedBatch.getBatchNum(),
+                        savedBatch.getExpiryDate() != null ? savedBatch.getExpiryDate().toString() : "N/A",
+                        (request.getNotes() != null && !request.getNotes().isBlank()) ? " - " + request.getNotes().trim() : "");
+
+                inventoryTransactionService.recordTransaction(
+                        sku,
+                        savedBatch.getFacility(),
+                        savedBatch,
+                        currentUser,
+                        InventoryTransaction.Type.ADJUSTMENT_SUB,
+                        "QC-REJECT-" + savedBatch.getBatchNum(),
+                        savedBatch.getBatchNum(),
+                        savedBatch.getExpiryDate(),
+                        null,
+                        rejectedUnits,
+                        intermediateBalance,
+                        finalSkuUnits,
+                        request.getRejectionReason().trim(),
+                        adjNotes,
+                        now.plusSeconds(1)
+                );
+            } else if (acceptedUnits > 0) {
+                // Fully accepted batch
+                inventoryTransactionService.recordTransaction(
+                        sku,
+                        savedBatch.getFacility(),
+                        savedBatch,
+                        currentUser,
+                        InventoryTransaction.Type.QUARANTINE_RELEASE,
+                        "BATCH-" + savedBatch.getBatchNum(),
+                        savedBatch.getBatchNum(),
+                        savedBatch.getExpiryDate(),
+                        acceptedUnits,
+                        null,
+                        currentSkuUnits,
+                        finalSkuUnits,
+                        "Batch Released from Quarantine",
+                        savedBatch.getNotes(),
+                        now
+                );
+            }
+        }
+
+        // 4. Adjust PO OrderedItem received units if units were rejected
         if (rejectedUnits > 0 && savedBatch.getOrderedItem() != null) {
             OrderedItem oi = savedBatch.getOrderedItem();
             long currentReceived = oi.getReceivedUnits() != null ? oi.getReceivedUnits() : 0L;
@@ -426,32 +531,6 @@ public class BatchService {
             if (oi.getOrder() != null) {
                 updateOrderStatusOnReceipt(oi.getOrder());
             }
-        }
-
-        User currentUser = getCurrentUser();
-
-        // 4. Log StockAdjustmentLog for rejected write-off units
-        if (rejectedUnits > 0 && savedBatch.getOrderedItem() != null && savedBatch.getOrderedItem().getSku() != null) {
-            Sku sku = savedBatch.getOrderedItem().getSku();
-            long currentSkuUnits = sku.getUnits() != null ? sku.getUnits() : 0L;
-
-            StockAdjustmentLog adjLog = new StockAdjustmentLog();
-            adjLog.setSku(sku);
-            adjLog.setFacility(savedBatch.getFacility());
-            adjLog.setUser(currentUser);
-            adjLog.setAdjustmentType(com.example.backend.dto.sku.SkuStockAdjustmentDto.Type.SUBTRACT);
-            adjLog.setPreviousUnits(currentSkuUnits);
-            adjLog.setAdjustedAmount(rejectedUnits);
-            adjLog.setDeltaUnits(-rejectedUnits);
-            adjLog.setNewUnits(currentSkuUnits);
-            adjLog.setReason(request.getRejectionReason().trim());
-
-            String adjNotes = String.format("Quarantine QC write-off (Batch: %s, Expiry: %s)%s",
-                    savedBatch.getBatchNum(),
-                    savedBatch.getExpiryDate() != null ? savedBatch.getExpiryDate().toString() : "N/A",
-                    (request.getNotes() != null && !request.getNotes().isBlank()) ? " - " + request.getNotes().trim() : "");
-            adjLog.setNotes(adjNotes);
-            stockAdjustmentLogRepository.save(adjLog);
         }
 
         // 5. Central Audit Log
@@ -524,8 +603,31 @@ public class BatchService {
             long batchUnits = batch.getUnits() != null ? batch.getUnits() : 0L;
             batch.setStatus(Batch.Status.Expired);
             if (batchUnits > 0 && !Boolean.TRUE.equals(batch.getSkuDeducted())) {
+                Sku s = batch.getOrderedItem() != null ? batch.getOrderedItem().getSku() : null;
+                long curUnits = s != null && s.getUnits() != null ? s.getUnits() : 0L;
                 adjustSkuUnits(batch, -batchUnits);
+                long newUnits = Math.max(0L, curUnits - batchUnits);
                 batch.setSkuDeducted(true);
+
+                if (s != null) {
+                    inventoryTransactionService.recordTransaction(
+                            s,
+                            batch.getFacility(),
+                            batch,
+                            null,
+                            InventoryTransaction.Type.EXPIRY_DEDUCTION,
+                            "EXP-" + batch.getBatchNum(),
+                            batch.getBatchNum(),
+                            batch.getExpiryDate(),
+                            null,
+                            batchUnits,
+                            curUnits,
+                            newUnits,
+                            "Expired stock write-off",
+                            batch.getNotes(),
+                            java.time.LocalDateTime.now()
+                    );
+                }
             }
             // Do not make batch units 0; deduction is only in SKU units
             String autoNote = "Expired & SKU units deducted on " + today;

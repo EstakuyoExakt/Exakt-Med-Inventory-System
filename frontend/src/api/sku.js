@@ -31,8 +31,6 @@ const skuApi = {
     if (search) params.append("search", search);
     return `${API_URL}/reorder-needed?${params.toString()}`;
   },
-  getAdjustmentLogsBySku: (id) => `${API_URL}/${id}/adjustments`,
-  getAdjustmentLogsByFacility: (facilityId) => `${API_URL}/adjustments?facilityId=${facilityId}`,
 };
 
 export default skuApi;

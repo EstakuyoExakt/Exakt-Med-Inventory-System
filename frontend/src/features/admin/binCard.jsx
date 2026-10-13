@@ -28,7 +28,7 @@ import Pagination from "../../components/common/pagination";
 import { Skeleton } from "../../components/common/skeleton";
 
 // Services & Hooks
-import bincardService from "../../services/bincard";
+import inventoryTransactionService from "../../services/inventoryTransaction";
 import useAuth from "../../hooks/useAuth";
 import useRole from "../../hooks/useRole";
 
@@ -42,10 +42,13 @@ const DATE_PRESETS = [
 
 const TRANSACTION_TYPES = [
   { value: "ALL", label: "All Movements" },
-  { value: "BATCH_RECEIPT", label: "PO Receipts Only (+)" },
-  { value: "STOCK_ADDITION", label: "Manual Additions (+)" },
-  { value: "STOCK_DEDUCTION", label: "Manual Deductions (-)" },
-  { value: "BATCH_EXPIRY", label: "Expiry Deductions (-)" },
+  { value: "RECEIPT", label: "PO Receipts (+)" },
+  { value: "BATCH_CREATION", label: "Batch Inflow (+)" },
+  { value: "ADJUSTMENT_ADD", label: "Manual Additions (+)" },
+  { value: "ADJUSTMENT_SUB", label: "Manual Deductions (-)" },
+  { value: "DISPENSE", label: "Dispense (-)" },
+  { value: "QUARANTINE_RELEASE", label: "Quarantine Release (+)" },
+  { value: "EXPIRED_DISPOSAL", label: "Expired Disposal (-)" },
 ];
 
 function BinCard() {
@@ -89,7 +92,7 @@ function BinCard() {
     try {
       setLoadingSkus(true);
       setError(null);
-      const skus = await bincardService.getFacilitySkus(facilityId);
+      const skus = await inventoryTransactionService.getFacilitySkus(facilityId);
       const skuList = Array.isArray(skus) ? skus : [];
       setFacilitySkus(skuList);
       if (!selectedSkuId && skuList.length > 0) {
@@ -154,7 +157,7 @@ function BinCard() {
     try {
       setLoadingBinCard(true);
       setError(null);
-      const data = await bincardService.getSkuBinCard(
+      const data = await inventoryTransactionService.getSkuBinCard(
         selectedSkuId,
         facilityId,
         computedDates.start,
@@ -288,12 +291,19 @@ function BinCard() {
 
   const getTransactionTypeBadge = (type) => {
     switch (type) {
+      case "RECEIPT":
+      case "BATCH_CREATION":
       case "BATCH_RECEIPT":
         return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "ADJUSTMENT_ADD":
       case "STOCK_ADDITION":
+      case "QUARANTINE_RELEASE":
         return "bg-blue-50 text-blue-700 border-blue-200";
+      case "ADJUSTMENT_SUB":
       case "STOCK_DEDUCTION":
+      case "DISPENSE":
         return "bg-amber-50 text-amber-700 border-amber-200";
+      case "EXPIRED_DISPOSAL":
       case "BATCH_EXPIRY":
         return "bg-rose-50 text-rose-700 border-rose-200";
       default:

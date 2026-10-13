@@ -26,7 +26,7 @@ import Pagination from "../../components/common/pagination";
 import Modal from "../../components/common/modal";
 import Dropdown from "../../components/common/dropdown";
 import Skeleton from "../../components/common/skeleton";
-import skuService from "../../services/sku";
+import inventoryTransactionService from "../../services/inventoryTransaction";
 import useAuth from "../../hooks/useAuth";
 
 const formatDate = (dateStr) => {
@@ -120,7 +120,7 @@ function StockAdjustmentLogs({ onBack, initialSkuId = null }) {
       setIsLoading(true);
       setError(null);
       const data =
-        await skuService.getAdjustmentLogsByFacility(targetFacilityId);
+        await inventoryTransactionService.getAdjustmentLogsByFacility(targetFacilityId);
       if (Array.isArray(data)) {
         setLogs(data);
       } else {

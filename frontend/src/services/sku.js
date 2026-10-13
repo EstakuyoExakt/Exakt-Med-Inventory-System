@@ -113,25 +113,6 @@ const skuService = {
     );
     return response.data;
   },
-
-  getAdjustmentLogsBySku: async (id, config = {}) => {
-    const response = await axios.get(skuApi.getAdjustmentLogsBySku(id), {
-      ...config,
-      headers: getAuthHeaders(config),
-    });
-    return response.data;
-  },
-
-  getAdjustmentLogsByFacility: async (facilityId, config = {}) => {
-    if (!facilityId) {
-      throw new Error("Facility ID is strictly required to fetch adjustment logs.");
-    }
-    const response = await axios.get(skuApi.getAdjustmentLogsByFacility(facilityId), {
-      ...config,
-      headers: getAuthHeaders(config),
-    });
-    return response.data;
-  },
 };
 
 export default skuService;

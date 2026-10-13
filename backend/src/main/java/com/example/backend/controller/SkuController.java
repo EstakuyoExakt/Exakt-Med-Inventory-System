@@ -6,7 +6,6 @@ import com.example.backend.dto.sku.SkuRequestDto;
 import com.example.backend.dto.sku.SkuResponseDto;
 import com.example.backend.dto.sku.SkuStockAdjustmentDto;
 import com.example.backend.dto.sku.SkuSummaryDto;
-import com.example.backend.dto.sku.StockAdjustmentLogResponseDto;
 import com.example.backend.service.SkuService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -125,23 +124,5 @@ public class SkuController {
             @PathVariable Long id,
             @Valid @RequestBody SkuStockAdjustmentDto request) {
         return ResponseEntity.ok(skuService.adjustStock(id, request));
-    }
-
-    // 8. GET ADJUSTMENT LOGS FOR A SKU
-    @GetMapping("/{id:[0-9]+}/adjustments")
-    @Operation(summary = "Get Stock Adjustment Logs by SKU", description = "Retrieves all historical stock adjustment records for a single SKU.")
-    public ResponseEntity<List<StockAdjustmentLogResponseDto>> getAdjustmentLogsBySku(
-            @Parameter(description = "SKU ID", required = true)
-            @PathVariable Long id) {
-        return ResponseEntity.ok(skuService.getAdjustmentLogsBySku(id));
-    }
-
-    // 9. GET ADJUSTMENT LOGS FOR A FACILITY
-    @GetMapping("/adjustments")
-    @Operation(summary = "Get Stock Adjustment Logs by Facility", description = "Retrieves all historical stock adjustment records across an entire facility.")
-    public ResponseEntity<List<StockAdjustmentLogResponseDto>> getAdjustmentLogsByFacility(
-            @Parameter(description = "Facility ID", required = true)
-            @RequestParam Long facilityId) {
-        return ResponseEntity.ok(skuService.getAdjustmentLogsByFacility(facilityId));
     }
 }
