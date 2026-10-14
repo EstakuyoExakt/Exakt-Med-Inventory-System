@@ -732,7 +732,9 @@ public class SkuService {
                 }
 
                 // FEFO: Deduct automatically from the nearest expiring available batches
-                deductedBatches = batchService.deductBatchesFEFO(savedSku.getId(), savedSku.getFacility().getId(), unitsToDeduct);
+                deductedBatches = batchService.deductBatchesFEFO(savedSku.getId(), savedSku.getFacility().getId(), unitsToDeduct).stream()
+                        .map(BatchService.BatchDeductionDetail::getBatch)
+                        .collect(Collectors.toList());
 
                 // Create DispensedLog with status PENDING
                 DispensedLog dispensedLog = new DispensedLog();

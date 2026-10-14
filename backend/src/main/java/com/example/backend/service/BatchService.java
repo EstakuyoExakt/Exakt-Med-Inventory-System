@@ -664,11 +664,29 @@ public class BatchService {
     }
 
     // 8. DEDUCT BATCHES ACCORDING TO FEFO (FIRST EXPIRE FIRST OUT - AVAILABLE & UNEXPIRED ONLY)
+    public static class BatchDeductionDetail {
+        private final Batch batch;
+        private final long deductedUnits;
+
+        public BatchDeductionDetail(Batch batch, long deductedUnits) {
+            this.batch = batch;
+            this.deductedUnits = deductedUnits;
+        }
+
+        public Batch getBatch() {
+            return batch;
+        }
+
+        public long getDeductedUnits() {
+            return deductedUnits;
+        }
+    }
+
     @Transactional
-    public List<Batch> deductBatchesFEFO(Long skuId, Long facilityId, long unitsToDeduct) {
-        List<Batch> affectedBatches = new ArrayList<>();
+    public List<BatchDeductionDetail> deductBatchesFEFO(Long skuId, Long facilityId, long unitsToDeduct) {
+        List<BatchDeductionDetail> details = new ArrayList<>();
         if (unitsToDeduct <= 0 || skuId == null || facilityId == null) {
-            return affectedBatches;
+            return details;
         }
 
         LocalDate today = LocalDate.now();
@@ -685,17 +703,20 @@ public class BatchService {
                 continue;
             }
 
-            affectedBatches.add(batch);
+            long deductFromThisBatch;
             if (currentBatchUnits <= remaining) {
+                deductFromThisBatch = currentBatchUnits;
                 remaining -= currentBatchUnits;
                 batch.setUnits(0L);
             } else {
+                deductFromThisBatch = remaining;
                 batch.setUnits(currentBatchUnits - remaining);
                 remaining = 0L;
             }
-            batchRepository.save(batch);
+            Batch saved = batchRepository.save(batch);
+            details.add(new BatchDeductionDetail(saved, deductFromThisBatch));
         }
-        return affectedBatches;
+        return details;
     }
 
 

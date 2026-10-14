@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface SkuRepository extends JpaRepository<Sku, Long> {
@@ -16,6 +17,8 @@ public interface SkuRepository extends JpaRepository<Sku, Long> {
     List<Sku> findByFacilityId(Long facilityId);
 
     List<Sku> findByLibMedicineId(Long medicineId);
+
+    Optional<Sku> findByFacilityIdAndName(Long facilityId, String name);
 
     boolean existsByFacilityIdAndName(Long facilityId, String name);
 
