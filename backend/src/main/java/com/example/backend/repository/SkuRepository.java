@@ -81,4 +81,16 @@ public interface SkuRepository extends JpaRepository<Sku, Long> {
            "LOWER(s.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
            "LOWER(m.drugDescription) LIKE LOWER(CONCAT('%', :search, '%')))")
     List<Sku> findReorderNeededSkus(@Param("facilityId") Long facilityId, @Param("search") String search);
+
+    // 5. Query available SKUs by drugCode and facilityId (for 3rd-party webhook lookup)
+    @Query("SELECT s FROM Sku s " +
+           "JOIN FETCH s.libMedicine m " +
+           "JOIN FETCH s.facility f " +
+           "WHERE m.drugCode = :drugCode " +
+           "  AND f.id = :facilityId " +
+           "  AND s.units > 0 " +
+           "ORDER BY s.brandName ASC")
+    List<Sku> findAvailableSkusByDrugCodeAndFacilityId(
+            @Param("drugCode") String drugCode,
+            @Param("facilityId") Long facilityId);
 }

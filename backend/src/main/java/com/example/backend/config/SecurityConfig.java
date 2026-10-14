@@ -78,7 +78,8 @@ public class SecurityConfig {
         // Allowed frontend origins
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:5173",
-                "http://localhost:3000"
+                "http://localhost:3000",
+                "https://inventory.app.exaktmedical.com "
         ));
 
         // Allowed HTTP methods

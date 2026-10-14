@@ -1003,6 +1003,7 @@ public class SkuService {
 
         if (sku.getLibMedicine() != null) {
             dto.setMedicineId(sku.getLibMedicine().getId());
+            dto.setDrugCode(sku.getLibMedicine().getDrugCode());
             dto.setDrugDescription(sku.getLibMedicine().getDrugDescription());
         }
 
