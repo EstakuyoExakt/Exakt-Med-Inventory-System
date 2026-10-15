@@ -1,0 +1,16 @@
+# Dependencies and build outputs
+**/node_modules
+**/dist
+**/target
+**/.mvn
+
+# IDE and git metadata
+.git
+.gitignore
+.idea
+.vscode
+*.iml
+
+# OS files
+Thumbs.db
+.DS_Store
