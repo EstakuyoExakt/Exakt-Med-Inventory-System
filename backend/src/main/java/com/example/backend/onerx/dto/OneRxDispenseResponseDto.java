@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 public class OneRxDispenseResponseDto {
 
     private String status;
+    private String referenceNumber;
     private Integer processedSkus;
     private Integer processedSkuBrands;
     private Long totalUnitsDeducted;

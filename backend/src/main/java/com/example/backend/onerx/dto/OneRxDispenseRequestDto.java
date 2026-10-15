@@ -2,6 +2,7 @@ package com.example.backend.onerx.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -21,6 +22,11 @@ public class OneRxDispenseRequestDto {
 
     private String event;
 
+    @NotBlank(message = "Field 'rx_number' is required.")
+    @JsonProperty("rx_number")
+    private String rxNumber;
+
+    @NotBlank(message = "Field 'facility_code' is required.")
     @JsonProperty("facility_code")
     private String facilityCode;
 

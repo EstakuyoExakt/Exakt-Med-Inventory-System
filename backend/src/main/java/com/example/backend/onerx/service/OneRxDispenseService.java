@@ -66,6 +66,11 @@ public class OneRxDispenseService {
             throw new IllegalArgumentException("Request body cannot be null.");
         }
 
+        String rxNumber = request.getRxNumber();
+        if (rxNumber == null || rxNumber.trim().isBlank()) {
+            throw new IllegalArgumentException("Field 'rx_number' is required in the request body.");
+        }
+
         String facilityCode = request.getFacilityCode();
         if (facilityCode == null || facilityCode.trim().isBlank()) {
             throw new IllegalArgumentException("Field 'facility_code' is required in the request body.");
@@ -139,7 +144,7 @@ public class OneRxDispenseService {
         // ==========================================
         User currentUser = getCurrentUser();
         LocalDateTime eventTime = parseDispensedAt(request.getDispensedAt());
-        String refNumber = "ONERX-DISPENSE-" + System.currentTimeMillis();
+        String refNumber = rxNumber.trim();
 
         String patientLabel = (request.getPatientName() != null && !request.getPatientName().isBlank())
                 ? request.getPatientName().trim()
@@ -262,6 +267,7 @@ public class OneRxDispenseService {
 
         return OneRxDispenseResponseDto.builder()
                 .status("success")
+                .referenceNumber(refNumber)
                 .processedSkus(processedSkuIds.size())
                 .processedSkuBrands(totalBrandItems)
                 .totalUnitsDeducted(totalUnitsToDeduct)
