@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping({"/api/dispense", "/api/onerx/dispense"})
+@RequestMapping("/api/dispense")
 @Tag(name = "OneRx Integration - Dispense Webhook", description = "Endpoints for OneRx system integration to record dispensing and automatically decrement inventory using FEFO.")
 public class OneRxDispenseController {
 

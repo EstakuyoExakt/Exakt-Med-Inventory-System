@@ -66,13 +66,13 @@ public class OneRxDispenseService {
             throw new IllegalArgumentException("Request body cannot be null.");
         }
 
-        String facilityIdentifier = request.getFacilityId();
-        if (facilityIdentifier == null || facilityIdentifier.trim().isBlank()) {
-            throw new IllegalArgumentException("Field 'facility_id' is required in the request body.");
+        String facilityCode = request.getFacilityCode();
+        if (facilityCode == null || facilityCode.trim().isBlank()) {
+            throw new IllegalArgumentException("Field 'facility_code' is required in the request body.");
         }
 
-        Facility facility = resolveFacility(facilityIdentifier.trim())
-                .orElseThrow(() -> new IllegalArgumentException("Facility not found with identifier: " + facilityIdentifier));
+        Facility facility = resolveFacility(facilityCode.trim())
+                .orElseThrow(() -> new IllegalArgumentException("Facility not found with code: " + facilityCode));
 
         if (request.getMedicines() == null || request.getMedicines().isEmpty()) {
             throw new IllegalArgumentException("Medicines list cannot be empty.");
@@ -186,6 +186,7 @@ public class OneRxDispenseService {
                             facility,
                             detail.getBatch(),
                             currentUser,
+                            dispensedByLabel,
                             InventoryTransaction.Type.DISPENSE,
                             refNumber,
                             detail.getBatch().getBatchNum(),
@@ -211,6 +212,7 @@ public class OneRxDispenseService {
                         facility,
                         null,
                         currentUser,
+                        dispensedByLabel,
                         InventoryTransaction.Type.DISPENSE,
                         refNumber,
                         null,
@@ -247,6 +249,7 @@ public class OneRxDispenseService {
         auditLogService.logAction(
                 facility,
                 currentUser,
+                dispensedByLabel,
                 "Dispensing",
                 "ONERX_DISPENSED",
                 "Medication Dispensed (" + totalUnitsToDeduct + " units)",

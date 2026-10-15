@@ -29,6 +29,8 @@ public class InventoryTransactionResponseDto {
     private Long userId;
     private String userName;
     private String userRole;
+    private String authorizedBy;
+    private String performedBy;
     private InventoryTransaction.Type transactionType;
     private String typeLabel;
     private String referenceNumber;

@@ -53,6 +53,27 @@ public class InventoryTransactionService {
                                                   String reason,
                                                   String notes,
                                                   LocalDateTime createdAt) {
+        return recordTransaction(sku, facility, batch, user, null, type, referenceNumber, batchNum, expiryDate,
+                quantityIn, quantityOut, previousBalance, balanceAfter, reason, notes, createdAt);
+    }
+
+    @Transactional
+    public InventoryTransaction recordTransaction(Sku sku,
+                                                  Facility facility,
+                                                  Batch batch,
+                                                  User user,
+                                                  String authorizedBy,
+                                                  InventoryTransaction.Type type,
+                                                  String referenceNumber,
+                                                  String batchNum,
+                                                  LocalDate expiryDate,
+                                                  Long quantityIn,
+                                                  Long quantityOut,
+                                                  Long previousBalance,
+                                                  Long balanceAfter,
+                                                  String reason,
+                                                  String notes,
+                                                  LocalDateTime createdAt) {
         if (sku == null) {
             throw new IllegalArgumentException("SKU is required to log an inventory transaction.");
         }
@@ -63,11 +84,19 @@ public class InventoryTransactionService {
             throw new IllegalArgumentException("Facility is required to log an inventory transaction.");
         }
 
+        String resolvedAuthorizedBy = authorizedBy != null && !authorizedBy.isBlank() ? authorizedBy.trim() : null;
+        if (resolvedAuthorizedBy == null && user != null) {
+            resolvedAuthorizedBy = user.getName() != null && !user.getName().isBlank()
+                    ? user.getName().trim()
+                    : (user.getUsername() != null ? user.getUsername().trim() : null);
+        }
+
         InventoryTransaction tx = InventoryTransaction.builder()
                 .facility(facility)
                 .sku(sku)
                 .batch(batch)
                 .user(user)
+                .authorizedBy(resolvedAuthorizedBy)
                 .transactionType(type)
                 .referenceNumber(referenceNumber)
                 .batchNum(batchNum != null ? batchNum : (batch != null ? batch.getBatchNum() : null))
@@ -248,7 +277,10 @@ public class InventoryTransactionService {
 
         String userName = "System";
         String userRole = "System";
-        if (u != null) {
+        if (tx.getAuthorizedBy() != null && !tx.getAuthorizedBy().isBlank()) {
+            userName = tx.getAuthorizedBy().trim();
+            userRole = u != null && u.getRole() != null ? u.getRole().name() : "Authorized Person";
+        } else if (u != null) {
             userName = u.getName() != null && !u.getName().isBlank()
                     ? u.getName()
                     : (u.getUsername() != null ? u.getUsername() : "User #" + u.getId());
@@ -272,6 +304,8 @@ public class InventoryTransactionService {
                 .facilityName(fac != null ? fac.getName() : null)
                 .userId(u != null ? u.getId() : null)
                 .userName(userName.trim())
+                .authorizedBy(userName.trim())
+                .performedBy(userName.trim())
                 .userRole(userRole)
                 .transactionType(tx.getTransactionType())
                 .typeLabel(tx.getTransactionType() != null ? tx.getTransactionType().getLabel() : "-")

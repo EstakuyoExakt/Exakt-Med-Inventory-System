@@ -21,8 +21,8 @@ public class OneRxDispenseRequestDto {
 
     private String event;
 
-    @JsonProperty("facility_id")
-    private String facilityId;
+    @JsonProperty("facility_code")
+    private String facilityCode;
 
     private String dispensedBy;
 

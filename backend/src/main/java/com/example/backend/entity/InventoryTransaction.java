@@ -94,6 +94,9 @@ public class InventoryTransaction {
     @Column(length = 1000)
     private String notes;
 
+    @Column(name = "authorizedBy", length = 150)
+    private String authorizedBy;
+
     @Column(name = "createdAt", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

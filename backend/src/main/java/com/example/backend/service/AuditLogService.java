@@ -49,6 +49,21 @@ public class AuditLogService {
                               Long targetId,
                               String description,
                               String visibleRoles) {
+        return logAction(facility, user, null, module, action, actionLabel, severity, target, targetId, description, visibleRoles);
+    }
+
+    @Transactional
+    public AuditLog logAction(Facility facility,
+                              User user,
+                              String customUserName,
+                              String module,
+                              String action,
+                              String actionLabel,
+                              AuditLog.Severity severity,
+                              String target,
+                              Long targetId,
+                              String description,
+                              String visibleRoles) {
         if (facility == null) {
             return null; // Audit log requires an operating facility
         }
@@ -59,7 +74,10 @@ public class AuditLogService {
         User actingUser = user != null ? user : getCurrentUser();
         log.setUser(actingUser);
 
-        if (actingUser != null) {
+        if (customUserName != null && !customUserName.isBlank()) {
+            log.setUserName(customUserName.trim());
+            log.setUserRole(actingUser != null && actingUser.getRole() != null ? actingUser.getRole().name() : "Authorized Person");
+        } else if (actingUser != null) {
             log.setUserName(actingUser.getName() != null && !actingUser.getName().isBlank() ? actingUser.getName() : actingUser.getUsername());
             if (actingUser.getRole() != null) {
                 log.setUserRole(actingUser.getRole().name());
