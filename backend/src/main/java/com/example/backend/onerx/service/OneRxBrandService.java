@@ -32,25 +32,25 @@ public class OneRxBrandService {
     /**
      * Resolves available brand SKUs for OneRx integration.
      *
-     * @param drugCode           the generic drug code (e.g. "DRG-000123")
-     * @param facilityIdentifier the facility code (e.g. "FAC-001") or numeric primary key ID
+     * @param drugCode     the generic drug code (e.g. "DRG-000123")
+     * @param facilityCode the facility code (e.g. "FAC-001")
      * @return OneRxBrandResponseDto containing drug details and available SKU stock
      */
     @Transactional(readOnly = true)
-    public OneRxBrandResponseDto getAvailableBrands(String drugCode, String facilityIdentifier) {
+    public OneRxBrandResponseDto getAvailableBrands(String drugCode, String facilityCode) {
         if (drugCode == null || drugCode.trim().isBlank()) {
             throw new IllegalArgumentException("Parameter 'drug_code' is required.");
         }
-        if (facilityIdentifier == null || facilityIdentifier.trim().isBlank()) {
-            throw new IllegalArgumentException("Parameter 'facility_id' is required.");
+        if (facilityCode == null || facilityCode.trim().isBlank()) {
+            throw new IllegalArgumentException("Parameter 'facility_code' is required.");
         }
 
         String trimmedDrugCode = drugCode.trim();
-        String trimmedFacilityId = facilityIdentifier.trim();
+        String trimmedFacilityCode = facilityCode.trim();
 
-        // 1. Resolve Facility (by facilityCode first, then numeric ID)
-        Facility facility = resolveFacility(trimmedFacilityId)
-                .orElseThrow(() -> new RuntimeException("Facility not found with identifier: " + trimmedFacilityId));
+        // 1. Resolve Facility (by facilityCode first, then numeric ID fallback)
+        Facility facility = resolveFacility(trimmedFacilityCode)
+                .orElseThrow(() -> new RuntimeException("Facility not found with code: " + trimmedFacilityCode));
 
         // 2. Resolve LibMedicine
         LibMedicine medicine = libMedicineRepository.findByDrugCode(trimmedDrugCode)
@@ -74,31 +74,19 @@ public class OneRxBrandService {
                         .build())
                 .collect(Collectors.toList());
 
-        String displayFacilityId = (facility.getFacilityCode() != null && !facility.getFacilityCode().isBlank())
+        String displayFacilityCode = (facility.getFacilityCode() != null && !facility.getFacilityCode().isBlank())
                 ? facility.getFacilityCode()
                 : String.valueOf(facility.getId());
 
         return OneRxBrandResponseDto.builder()
                 .drugCode(medicine.getDrugCode())
                 .drugName(medicine.getDrugDescription())
-                .facilityId(displayFacilityId)
+                .facilityCode(displayFacilityCode)
                 .sku(skuItems)
                 .build();
     }
 
-    private Optional<Facility> resolveFacility(String identifier) {
-        // Try resolving by facilityCode (e.g. "FAC-001")
-        Optional<Facility> byCode = facilityRepository.findByFacilityCode(identifier);
-        if (byCode.isPresent()) {
-            return byCode;
-        }
-
-        // Try resolving by numeric primary key ID (e.g. "1")
-        try {
-            Long numericId = Long.parseLong(identifier);
-            return facilityRepository.findById(numericId);
-        } catch (NumberFormatException ignored) {
-            return Optional.empty();
-        }
+    private Optional<Facility> resolveFacility(String facilityCode) {
+        return facilityRepository.findByFacilityCode(facilityCode);
     }
 }

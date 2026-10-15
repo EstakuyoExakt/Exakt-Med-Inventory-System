@@ -269,18 +269,8 @@ public class OneRxDispenseService {
                 .build();
     }
 
-    private Optional<Facility> resolveFacility(String identifier) {
-        Optional<Facility> byCode = facilityRepository.findByFacilityCode(identifier);
-        if (byCode.isPresent()) {
-            return byCode;
-        }
-
-        try {
-            Long numericId = Long.parseLong(identifier);
-            return facilityRepository.findById(numericId);
-        } catch (NumberFormatException ignored) {
-            return Optional.empty();
-        }
+    private Optional<Facility> resolveFacility(String facilityCode) {
+        return facilityRepository.findByFacilityCode(facilityCode);
     }
 
     private User getCurrentUser() {

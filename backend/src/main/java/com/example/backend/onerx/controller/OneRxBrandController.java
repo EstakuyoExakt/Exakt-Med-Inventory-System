@@ -21,7 +21,7 @@ public class OneRxBrandController {
     }
 
     /**
-     * GET /api/brands?drug_code=DRG-000123&facility_id=FAC-001
+     * GET /api/brands?drug_code=DRG-000123&facility_code=FAC-001
      *
      * Headers:
      * Authorization: Bearer <token>
@@ -37,10 +37,10 @@ public class OneRxBrandController {
             @Parameter(description = "Generic Drug Code (e.g. DRG-000123)", required = true)
             @RequestParam("drug_code") String drugCode,
 
-            @Parameter(description = "Facility Identifier (facility code like FAC-001 or numeric ID)", required = true)
-            @RequestParam("facility_id") String facilityId) {
+            @Parameter(description = "Facility Code (e.g. FAC-001)", required = true)
+            @RequestParam("facility_code") String facilityCode) {
 
-        OneRxBrandResponseDto response = oneRxBrandService.getAvailableBrands(drugCode, facilityId);
+        OneRxBrandResponseDto response = oneRxBrandService.getAvailableBrands(drugCode, facilityCode);
         return ResponseEntity.ok(response);
     }
 }
