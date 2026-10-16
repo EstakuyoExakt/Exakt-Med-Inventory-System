@@ -34,5 +34,7 @@ public class BatchRequestDto {
 
     private Batch.Status status = Batch.Status.Available;
 
+    private Long locationId;
+
     private String notes;
 }

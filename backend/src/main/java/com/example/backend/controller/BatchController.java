@@ -133,6 +133,17 @@ public class BatchController {
         return ResponseEntity.ok(batchService.releaseBatchFromQuarantine(id, request));
     }
 
+    // 5c. UPDATE BATCH LOCATION (Relocate)
+    @PatchMapping("/{id}/location")
+    @Operation(summary = "Update Batch Location", description = "Moves or assigns a batch to a specific physical storage location (shelf, cold storage, etc.).")
+    public ResponseEntity<BatchResponseDto> updateBatchLocation(
+            @Parameter(description = "Batch ID", required = true)
+            @PathVariable Long id,
+            @Parameter(description = "Storage Location ID (null to unassign)")
+            @RequestParam(required = false) Long locationId) {
+        return ResponseEntity.ok(batchService.updateBatchLocation(id, locationId));
+    }
+
     // 6. PROCESS EXPIRED BATCHES FOR A SKU
     @PostMapping("/process-expired")
     @Operation(summary = "Process Expired Batches for SKU", description = "Scans batches past their expiry date for a required facility and SKU, marks them EXPIRED, decrements active SKU stock, and logs audit events.")

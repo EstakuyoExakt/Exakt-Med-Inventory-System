@@ -26,6 +26,8 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
 
     boolean existsByOrderedItemId(Long orderedItemId);
 
+    boolean existsByLocationId(Long locationId);
+
     List<Batch> findByStatusAndExpiryDateLessThanEqual(Batch.Status status, java.time.LocalDate date);
 
     List<Batch> findByFacilityIdAndStatusAndExpiryDateLessThanEqual(Long facilityId, Batch.Status status, java.time.LocalDate date);

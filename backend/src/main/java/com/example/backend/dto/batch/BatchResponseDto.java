@@ -37,4 +37,7 @@ public class BatchResponseDto {
     private String notes;
     private Boolean skuDeducted;
     private LocalDateTime receivedAt;
+    private Long locationId;
+    private String locationCode;
+    private com.example.backend.entity.LibLocation.StorageType locationStorageType;
 }

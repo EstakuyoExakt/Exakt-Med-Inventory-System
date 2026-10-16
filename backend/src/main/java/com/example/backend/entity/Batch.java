@@ -11,7 +11,8 @@ import java.time.LocalDateTime;
 @Table(name = "batches", indexes = {
     @Index(name = "idx_batch_facility_received", columnList = "facilityId, receivedAt"),
     @Index(name = "idx_batch_facility_num", columnList = "facilityId, batchNum"),
-    @Index(name = "idx_batch_facility_status", columnList = "facilityId, status")
+    @Index(name = "idx_batch_facility_status", columnList = "facilityId, status"),
+    @Index(name = "idx_batch_location", columnList = "locationId")
 })
 @Getter
 @Setter
@@ -34,6 +35,10 @@ public class Batch {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "orderedItemId")
     private OrderedItem orderedItem;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "locationId")
+    private LibLocation location;
 
     @Column(nullable = false)
     private String batchNum;

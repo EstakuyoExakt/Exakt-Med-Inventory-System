@@ -17,6 +17,8 @@ import com.example.backend.repository.OrderRepository;
 import com.example.backend.repository.OrderedItemRepository;
 import com.example.backend.repository.SkuRepository;
 import com.example.backend.repository.UserRepository;
+import com.example.backend.repository.LibLocationRepository;
+import com.example.backend.entity.LibLocation;
 import com.example.backend.dto.common.PageResponseDto;
 import com.example.backend.dto.batch.BatchSummaryDto;
 import org.springframework.data.domain.Page;
@@ -51,6 +53,7 @@ public class BatchService {
     private final AuditLogService auditLogService;
     private final InventoryTransactionService inventoryTransactionService;
     private final UserRepository userRepository;
+    private final LibLocationRepository libLocationRepository;
 
     public BatchService(BatchRepository batchRepository,
                         OrderedItemRepository orderedItemRepository,
@@ -59,7 +62,8 @@ public class BatchService {
                         OrderRepository orderRepository,
                         AuditLogService auditLogService,
                         InventoryTransactionService inventoryTransactionService,
-                        UserRepository userRepository) {
+                        UserRepository userRepository,
+                        LibLocationRepository libLocationRepository) {
         this.batchRepository = batchRepository;
         this.orderedItemRepository = orderedItemRepository;
         this.skuRepository = skuRepository;
@@ -68,6 +72,7 @@ public class BatchService {
         this.auditLogService = auditLogService;
         this.inventoryTransactionService = inventoryTransactionService;
         this.userRepository = userRepository;
+        this.libLocationRepository = libLocationRepository;
     }
 
     // 1. RECEIVE SINGLE BATCH (Pharmacist / Admin / SuperAdmin)
@@ -132,6 +137,12 @@ public class BatchService {
         batch.setExpiryDate(request.getExpiryDate());
         batch.setStatus(request.getStatus() != null ? request.getStatus() : Batch.Status.Available);
         batch.setNotes(request.getNotes());
+
+        if (request.getLocationId() != null) {
+            LibLocation location = libLocationRepository.findById(request.getLocationId())
+                    .orElseThrow(() -> new RuntimeException("Storage location not found with ID: " + request.getLocationId()));
+            batch.setLocation(location);
+        }
 
         Batch savedBatch = batchRepository.save(batch);
 
@@ -836,7 +847,44 @@ public class BatchService {
         }
         dto.setSkuDeducted(batch.getSkuDeducted() != null ? batch.getSkuDeducted() : false);
 
+        if (batch.getLocation() != null) {
+            dto.setLocationId(batch.getLocation().getId());
+            dto.setLocationCode(batch.getLocation().getCode());
+            dto.setLocationStorageType(batch.getLocation().getStorageType());
+        }
+
         return dto;
+    }
+
+    // UPDATE BATCH LOCATION (Relocate)
+    @Transactional
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Admin', 'Pharmacist')")
+    public BatchResponseDto updateBatchLocation(Long batchId, Long locationId) {
+        Batch batch = batchRepository.findById(batchId)
+                .orElseThrow(() -> new RuntimeException("Batch not found with ID: " + batchId));
+
+        LibLocation location = null;
+        if (locationId != null) {
+            location = libLocationRepository.findById(locationId)
+                    .orElseThrow(() -> new RuntimeException("Storage location not found with ID: " + locationId));
+        }
+
+        batch.setLocation(location);
+        Batch updated = batchRepository.save(batch);
+
+        auditLogService.logAction(
+                updated.getFacility(),
+                "Inventory",
+                "BATCH_RELOCATED",
+                "Batch Storage Location Updated",
+                AuditLog.Severity.INFO,
+                updated.getBatchNum(),
+                updated.getId(),
+                "Batch '" + updated.getBatchNum() + "' assigned to storage location " + (location != null ? location.getCode() : "Unassigned") + ".",
+                "Admin,Pharmacist"
+        );
+
+        return mapToResponseDto(updated);
     }
 
     private void updateOrderStatusOnReceipt(Order order) {
