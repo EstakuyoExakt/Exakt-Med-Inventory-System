@@ -8,6 +8,7 @@ import com.example.backend.repository.BatchRepository;
 import com.example.backend.repository.FacilityRepository;
 import com.example.backend.repository.LibLocationRepository;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +34,7 @@ public class LibLocationService {
 
     // 1. CREATE LOCATION (Option 1: Custom code with auto-generation fallback)
     @Transactional
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Pharmacist')")
     public LibLocationResponseDto createLocation(LibLocationRequestDto request) {
         if (request == null) {
             throw new RuntimeException("Request body cannot be null.");
@@ -75,6 +77,7 @@ public class LibLocationService {
 
     // 2. GET ALL LOCATIONS (Filtered by facility, active status, storage type)
     @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Pharmacist')")
     public List<LibLocationResponseDto> getAllLocations(Long facilityId, Boolean activeOnly, LibLocation.StorageType storageType) {
         List<LibLocation> locations;
 
@@ -96,6 +99,7 @@ public class LibLocationService {
 
     // 3. GET BY ID
     @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Pharmacist')")
     public LibLocationResponseDto getLocationById(Long id) {
         LibLocation location = libLocationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Location not found with ID: " + id));
@@ -104,6 +108,7 @@ public class LibLocationService {
 
     // 4. UPDATE LOCATION
     @Transactional
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Pharmacist')")
     public LibLocationResponseDto updateLocation(Long id, LibLocationRequestDto request) {
         LibLocation location = libLocationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Location not found with ID: " + id));
@@ -146,6 +151,7 @@ public class LibLocationService {
 
     // 5. DELETE LOCATION (Safe delete: deactivates if referenced by batches)
     @Transactional
+    @PreAuthorize("hasAnyRole('SuperAdmin', 'Pharmacist')")
     public void deleteLocation(Long id) {
         LibLocation location = libLocationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Location not found with ID: " + id));

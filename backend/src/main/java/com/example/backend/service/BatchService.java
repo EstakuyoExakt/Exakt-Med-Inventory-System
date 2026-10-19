@@ -125,9 +125,25 @@ public class BatchService {
             throw new RuntimeException("Expiry date must be after manufacture date.");
         }
 
+        if (request.getLocationId() == null) {
+            throw new RuntimeException("Storage location is required for receiving batch.");
+        }
+
+        LibLocation location = libLocationRepository.findById(request.getLocationId())
+                .orElseThrow(() -> new RuntimeException("Storage location not found with ID: " + request.getLocationId()));
+
+        if (location.getIsActive() != null && !location.getIsActive()) {
+            throw new RuntimeException("Storage location '" + location.getCode() + "' is inactive and cannot accept new batches.");
+        }
+
+        if (location.getFacility() != null && !location.getFacility().getId().equals(facility.getId())) {
+            throw new RuntimeException("Storage location '" + location.getCode() + "' belongs to another facility.");
+        }
+
         Batch batch = new Batch();
         batch.setFacility(facility);
         batch.setOrderedItem(orderedItem);
+        batch.setLocation(location);
         batch.setBatchNum(trimmedBatchNum);
         long units = (request.getUnits() != null && request.getUnits() > 0)
                 ? request.getUnits()
@@ -137,12 +153,6 @@ public class BatchService {
         batch.setExpiryDate(request.getExpiryDate());
         batch.setStatus(request.getStatus() != null ? request.getStatus() : Batch.Status.Available);
         batch.setNotes(request.getNotes());
-
-        if (request.getLocationId() != null) {
-            LibLocation location = libLocationRepository.findById(request.getLocationId())
-                    .orElseThrow(() -> new RuntimeException("Storage location not found with ID: " + request.getLocationId()));
-            batch.setLocation(location);
-        }
 
         Batch savedBatch = batchRepository.save(batch);
 
@@ -204,7 +214,7 @@ public class BatchService {
                 AuditLog.Severity.SUCCESS,
                 savedBatch.getBatchNum(),
                 savedBatch.getId(),
-                "Received batch '" + savedBatch.getBatchNum() + "' (" + savedBatch.getUnits() + " units) for SKU '" + (orderedItem.getSku() != null ? orderedItem.getSku().getName() : "") + "'. Expiry: " + savedBatch.getExpiryDate() + ".",
+                "Received batch '" + savedBatch.getBatchNum() + "' (" + savedBatch.getUnits() + " units) for SKU '" + (orderedItem.getSku() != null ? orderedItem.getSku().getName() : "") + "' at location [" + location.getCode() + "]. Expiry: " + savedBatch.getExpiryDate() + ".",
                 "Admin,Pharmacist"
         );
 

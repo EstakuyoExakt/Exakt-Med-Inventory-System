@@ -34,6 +34,7 @@ public class BatchRequestDto {
 
     private Batch.Status status = Batch.Status.Available;
 
+    @NotNull(message = "Storage location ID is required")
     private Long locationId;
 
     private String notes;
