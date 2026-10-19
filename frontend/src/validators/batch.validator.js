@@ -62,6 +62,10 @@ export const validateBatchRow = (
       "Manufacturing date is required."
     ),
     expiryDate: expiryErr,
+    locationId: isRequired(
+      batch.locationId,
+      "Storage location is required."
+    ),
     quarantineNotes: quarantineNotesErr,
   };
 

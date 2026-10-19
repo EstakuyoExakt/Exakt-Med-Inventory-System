@@ -2,9 +2,11 @@ import React, {
   useState,
   useRef,
   useEffect,
+  useCallback,
   useMemo,
   Children,
 } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, Check } from "lucide-react";
 
 /**
@@ -16,6 +18,8 @@ import { ChevronDown, Check } from "lucide-react";
  * - Custom labels, required indicators, placeholders, error messages, and helper text
  * - Synthetic change events (`e.target.value` and `e.target.name`) for seamless form compatibility
  * - Click-outside detection, keyboard Escape handling, and smooth animated chevron
+ * - Portal rendering (`usePortal = true`, default) to mount the dropdown list on `document.body`
+ *   with high z-index and automatic upward/downward flip positioning to avoid overflow-y clipping in modals.
  */
 function Dropdown({
   label,
@@ -26,25 +30,69 @@ function Dropdown({
   options = [],
   placeholder,
   error,
+  errorClassName = "",
   helperText,
   disabled = false,
   required = false,
   size = "md", // "sm" | "md" | "lg"
   className = "",
   selectClassName = "",
+  usePortal = true,
   children,
   ...props
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [menuCoords, setMenuCoords] = useState(null);
   const containerRef = useRef(null);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
+
+  // Position calculation for portal floating menu
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const estimatedMenuHeight = 240; // max-h-60 is 240px
+
+    const shouldOpenUpward =
+      spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow;
+
+    setMenuCoords({
+      top: shouldOpenUpward ? rect.top - 6 : rect.bottom + 6,
+      left: rect.left,
+      width: rect.width,
+      openUpward: shouldOpenUpward,
+    });
+  }, []);
+
+  // Update position on scroll/resize when open
+  useEffect(() => {
+    if (!isOpen || !usePortal) return;
+    updatePosition();
+
+    const handleScrollOrResize = () => {
+      updatePosition();
+    };
+
+    window.addEventListener("scroll", handleScrollOrResize, true);
+    window.addEventListener("resize", handleScrollOrResize);
+
+    return () => {
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
+    };
+  }, [isOpen, usePortal, updatePosition]);
 
   // Close when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target)
-      ) {
+      const clickedInsideTrigger =
+        containerRef.current && containerRef.current.contains(event.target);
+      const clickedInsideMenu =
+        menuRef.current && menuRef.current.contains(event.target);
+
+      if (!clickedInsideTrigger && !clickedInsideMenu) {
         setIsOpen(false);
       }
     };
@@ -158,16 +206,84 @@ function Dropdown({
     }
   };
 
+  const handleToggle = () => {
+    if (disabled) return;
+    if (!isOpen) {
+      updatePosition();
+    }
+    setIsOpen((prev) => !prev);
+  };
+
   const sizeClasses = {
     sm: "py-1.5 px-3 text-xs",
     md: "py-2 px-3.5 text-sm",
     lg: "py-2.5 px-4 text-base",
   }[size] || "py-2 px-3.5 text-sm";
 
+  const menuContent = isOpen && (!usePortal || menuCoords) && (
+    <div
+      ref={menuRef}
+      role="listbox"
+      style={
+        usePortal && menuCoords
+          ? {
+              position: "fixed",
+              top: menuCoords.openUpward ? undefined : `${menuCoords.top}px`,
+              bottom: menuCoords.openUpward
+                ? `${window.innerHeight - menuCoords.top}px`
+                : undefined,
+              left: `${menuCoords.left}px`,
+              width: `${menuCoords.width}px`,
+            }
+          : undefined
+      }
+      className={`${
+        usePortal
+          ? "fixed z-[99999] shadow-2xl"
+          : "absolute left-0 right-0 z-[60] mt-1.5 min-w-full shadow-lg"
+      } bg-white border border-gray-200 rounded-xl max-h-60 overflow-y-auto py-1 focus:outline-none custom-scrollbar animate-in fade-in duration-100`}
+    >
+      {allOptions.length === 0 ? (
+        <div className="px-3 py-2 text-xs text-gray-400 text-center italic">
+          No options available
+        </div>
+      ) : (
+        allOptions.map((opt, idx) => {
+          const isSelected =
+            selectedOption &&
+            String(selectedOption.value) === String(opt.value);
+
+          return (
+            <button
+              key={`${opt.value}-${idx}`}
+              type="button"
+              role="option"
+              aria-selected={isSelected}
+              disabled={opt.disabled}
+              onClick={() => handleSelect(opt)}
+              className={`w-full flex items-center justify-between px-3 py-2 text-left text-xs md:text-sm transition-colors cursor-pointer select-none ${
+                opt.disabled
+                  ? "opacity-40 cursor-not-allowed text-gray-400"
+                  : isSelected
+                    ? "bg-blue-50 text-blue-700 font-medium"
+                    : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+              }`}
+            >
+              <span className="truncate">{opt.label}</span>
+              {isSelected && (
+                <Check className="w-4 h-4 text-blue-600 shrink-0 ml-2" />
+              )}
+            </button>
+          );
+        })
+      )}
+    </div>
+  );
+
   return (
     <div
       ref={containerRef}
-      className={`relative ${isOpen ? "z-50" : ""} ${className || "w-full"}`}
+      className={`relative ${isOpen && !usePortal ? "z-50" : ""} ${className || "w-full"}`}
     >
       {/* Optional Form Label */}
       {label && (
@@ -191,10 +307,11 @@ function Dropdown({
 
       {/* Trigger Button */}
       <button
+        ref={triggerRef}
         type="button"
         id={id}
         disabled={disabled}
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={handleToggle}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         className={`w-full flex items-center justify-between gap-2 rounded-lg border bg-white text-left font-normal shadow-xs outline-none transition duration-150 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
@@ -225,52 +342,21 @@ function Dropdown({
         />
       </button>
 
-      {/* Custom Popover Dropdown Menu */}
-      {isOpen && (
-        <div
-          role="listbox"
-          className="absolute left-0 right-0 z-[60] mt-1.5 min-w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto py-1 focus:outline-none"
-        >
-          {allOptions.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-gray-400 text-center italic">
-              No options available
-            </div>
-          ) : (
-            allOptions.map((opt, idx) => {
-              const isSelected =
-                selectedOption &&
-                String(selectedOption.value) === String(opt.value);
-
-              return (
-                <button
-                  key={`${opt.value}-${idx}`}
-                  type="button"
-                  role="option"
-                  aria-selected={isSelected}
-                  disabled={opt.disabled}
-                  onClick={() => handleSelect(opt)}
-                  className={`w-full flex items-center justify-between px-3 py-2 text-left text-xs md:text-sm transition-colors cursor-pointer select-none ${
-                    opt.disabled
-                      ? "opacity-40 cursor-not-allowed text-gray-400"
-                      : isSelected
-                        ? "bg-blue-50 text-blue-700 font-medium"
-                        : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                  }`}
-                >
-                  <span className="truncate">{opt.label}</span>
-                  {isSelected && (
-                    <Check className="w-4 h-4 text-blue-600 shrink-0 ml-2" />
-                  )}
-                </button>
-              );
-            })
-          )}
-        </div>
-      )}
+      {/* Custom Popover Dropdown Menu (via Portal so it sits on top of modals) */}
+      {usePortal && typeof document !== "undefined"
+        ? createPortal(menuContent, document.body)
+        : menuContent}
 
       {/* Error or Helper Message */}
       {error ? (
-        <p className="mt-1 text-xs text-red-500 font-medium">{error}</p>
+        <p
+          className={
+            errorClassName ||
+            `mt-1 ${size === "sm" ? "text-[11px]" : "text-xs"} text-red-500`
+          }
+        >
+          {error}
+        </p>
       ) : helperText ? (
         <p className="mt-1 text-xs text-gray-500">{helperText}</p>
       ) : null}

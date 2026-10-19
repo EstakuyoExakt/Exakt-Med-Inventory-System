@@ -33,6 +33,11 @@ const batchApi = {
   processExpiredBatches: (facilityId, skuId) => {
     return `${API_URL}/process-expired?facilityId=${facilityId}&skuId=${skuId}`;
   },
+  updateBatchLocation: (id, locationId) => {
+    let url = `${API_URL}/${id}/location`;
+    if (locationId) url += `?locationId=${locationId}`;
+    return url;
+  },
 };
 
 export default batchApi;

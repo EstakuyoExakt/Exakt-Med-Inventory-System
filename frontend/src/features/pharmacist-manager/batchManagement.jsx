@@ -20,6 +20,8 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
+  MapPin,
+  ArrowRightLeft,
 } from "lucide-react";
 
 // Common Components & Guards
@@ -30,6 +32,9 @@ import Modal from "../../components/common/modal";
 import Dropdown from "../../components/common/dropdown";
 import ComboBox from "./components/comboBox";
 import Skeleton from "../../components/common/skeleton";
+import LocationManagementModal, {
+  getStorageTypeBadge,
+} from "./components/locationManagementModal";
 import { getExpiryStatus } from "../../helpers/inventory";
 import useAuth from "../../hooks/useAuth";
 import useError from "../../hooks/useError";
@@ -38,6 +43,7 @@ import { validateBatchForm } from "../../validators/batch.validator";
 // Service Imports
 import orderService from "../../services/order";
 import batchService from "../../services/batch";
+import libLocationService from "../../services/libLocation";
 
 const REJECTION_REASON_OPTIONS = [
   {
@@ -161,6 +167,93 @@ function BatchManagement() {
     clearErrors,
     clearError,
   } = useError();
+
+  // Storage Location State
+  const [locationsList, setLocationsList] = useState([]);
+  const [isLocationsLoading, setIsLocationsLoading] = useState(false);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const [locationModalInitialView, setLocationModalInitialView] = useState("list");
+  const [quickAddTarget, setQuickAddTarget] = useState(null);
+
+  // Relocate Batch State
+  const [relocateTarget, setRelocateTarget] = useState(null);
+  const [newLocationId, setNewLocationId] = useState("");
+  const [isRelocating, setIsRelocating] = useState(false);
+  const [relocateError, setRelocateError] = useState("");
+
+  const fetchLocations = useCallback(async () => {
+    if (!activeFacilityId) return;
+    try {
+      setIsLocationsLoading(true);
+      const data = await libLocationService.getAllLocations({
+        facilityId: activeFacilityId,
+        activeOnly: true,
+      });
+      setLocationsList(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load active locations:", err);
+    } finally {
+      setIsLocationsLoading(false);
+    }
+  }, [activeFacilityId]);
+
+  useEffect(() => {
+    fetchLocations();
+  }, [fetchLocations]);
+
+  const handleOpenQuickCreateLocation = (itemIdx, batchIdx) => {
+    setQuickAddTarget({ itemIdx, batchIdx });
+    setLocationModalInitialView("create");
+    setIsLocationModalOpen(true);
+  };
+
+  const handleLocationCreated = (newLoc) => {
+    fetchLocations();
+    if (quickAddTarget) {
+      handleBatchFieldChange(
+        quickAddTarget.itemIdx,
+        quickAddTarget.batchIdx,
+        "locationId",
+        newLoc.id
+      );
+      setQuickAddTarget(null);
+    }
+  };
+
+  const handleOpenRelocateModal = (batch) => {
+    setRelocateTarget(batch);
+    setNewLocationId(batch.locationId ? String(batch.locationId) : "");
+    setRelocateError("");
+  };
+
+  const handleConfirmRelocate = async (e) => {
+    e.preventDefault();
+    if (!relocateTarget) return;
+    if (!newLocationId) {
+      setRelocateError("Please select a target location.");
+      return;
+    }
+    try {
+      setIsRelocating(true);
+      setRelocateError("");
+      const updated = await batchService.updateBatchLocation(
+        relocateTarget.id,
+        Number(newLocationId)
+      );
+      const mapped = mapBatchDtoToItem(updated);
+      setBatchList((prev) =>
+        prev.map((b) => (b.id === relocateTarget.id ? mapped : b))
+      );
+      setRelocateTarget(null);
+    } catch (err) {
+      console.error("Failed to relocate batch:", err);
+      setRelocateError(
+        err.response?.data?.message || err.message || "Failed to relocate batch."
+      );
+    } finally {
+      setIsRelocating(false);
+    }
+  };
 
   // Live Approved Purchase Orders for Current Facility
   const [approvedOrders, setApprovedOrders] = useState([]);
@@ -297,6 +390,9 @@ function BatchManagement() {
         quantity: Number(dto.units ?? dto.quantity) || 0,
         units: Number(dto.units ?? dto.quantity) || 0,
         location: dto.facilityName || currentFacilityName,
+        locationId: dto.locationId,
+        locationCode: dto.locationCode,
+        locationStorageType: dto.locationStorageType,
         facilityId: dto.facilityId,
         poReference:
           dto.poNumber ||
@@ -616,6 +712,7 @@ function BatchManagement() {
                       expiryDate: "",
                       isQuarantined: false,
                       quarantineNotes: "",
+                      locationId: "",
                     },
                   ]
                 : [],
@@ -653,6 +750,7 @@ function BatchManagement() {
         expiryDate: "",
         isQuarantined: false,
         quarantineNotes: "",
+        locationId: "",
       };
 
       nextItems[itemIdx] = {
@@ -803,6 +901,7 @@ function BatchManagement() {
               notes: isQuar
                 ? b.quarantineNotes?.trim() || "Quality inspection hold"
                 : null,
+              locationId: Number(b.locationId),
             });
           }
         });
@@ -881,6 +980,18 @@ function BatchManagement() {
             <RefreshCw
               className={`w-4 h-4 ${isBatchesLoading || isSummaryLoading ? "animate-spin text-blue-600" : ""}`}
             />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setLocationModalInitialView("list");
+              setIsLocationModalOpen(true);
+            }}
+            className="btn-secondary flex items-center gap-1.5 shadow-xs text-gray-700 hover:text-blue-600"
+            title="Manage Storage Locations"
+          >
+            <MapPin className="w-4 h-4 text-blue-600" />
+            <span>Locations</span>
           </button>
           <button
             type="button"
@@ -1095,6 +1206,9 @@ function BatchManagement() {
                   Batch Quantity
                 </th>
                 <th scope="col" className="px-6 py-3.5">
+                  Storage Location
+                </th>
+                <th scope="col" className="px-6 py-3.5">
                   Expiry Countdown
                 </th>
                 <th scope="col" className="px-6 py-3.5">
@@ -1121,19 +1235,27 @@ function BatchManagement() {
                       </div>
                     </td>
 
-                    {/* Manufacturing & Expiry */}
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="space-y-1.5">
-                        <Skeleton className="h-3.5 w-32" />
-                        <Skeleton className="h-4 w-28" />
-                      </div>
-                    </td>
-
-                    {/* Units in Batch */}
+                    {/* Quantity */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="space-y-1.5">
                         <Skeleton className="h-5 w-20 rounded" />
                         <Skeleton className="h-3 w-24" />
+                      </div>
+                    </td>
+
+                    {/* Storage Location */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-5 w-24 rounded" />
+                        <Skeleton className="h-3 w-16" />
+                      </div>
+                    </td>
+
+                    {/* Expiry Countdown */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-3.5 w-32" />
+                        <Skeleton className="h-4 w-28" />
                       </div>
                     </td>
 
@@ -1209,6 +1331,23 @@ function BatchManagement() {
                         </div>
                       </td>
 
+                      {/* Storage Location */}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {batch.locationCode ? (
+                          <div>
+                            <div className="flex items-center gap-1.5 font-mono font-semibold text-xs text-gray-900">
+                              <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                              <span>{batch.locationCode}</span>
+                            </div>
+                            <div className="mt-1">
+                              {getStorageTypeBadge(batch.locationStorageType)}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">Unassigned</span>
+                        )}
+                      </td>
+
                       {/* Expiry Date & Countdown */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-800">
@@ -1254,6 +1393,15 @@ function BatchManagement() {
                       {/* View & Quick Actions */}
                       <td className="px-6 py-4 whitespace-nowrap text-right text-xs">
                         <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenRelocateModal(batch)}
+                            className="btn-secondary p-1.5 text-gray-600 hover:text-indigo-600 hover:border-indigo-300 transition-colors shadow-2xs"
+                            title="Relocate Batch Storage"
+                            aria-label="Relocate Batch Storage"
+                          >
+                            <ArrowRightLeft className="w-3.5 h-3.5" />
+                          </button>
                           {batch.isQuarantined && (
                             <button
                               type="button"
@@ -1282,7 +1430,7 @@ function BatchManagement() {
               ) : (
                 <tr>
                   <td
-                    colSpan="5"
+                    colSpan="6"
                     className="px-6 py-12 text-center text-gray-400"
                   >
                     <Package className="w-8 h-8 mx-auto mb-2 text-gray-300" />
@@ -1793,8 +1941,8 @@ function BatchManagement() {
                                     )}
                                   </div>
 
-                                  {/* 4 Input Controls: Batch #, Units, Mfg Date, Expiry Date */}
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                  {/* 5 Input Controls: Batch #, Units, Mfg Date, Expiry Date, Storage Location */}
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                                     {/* Batch / Lot Number */}
                                     <div>
                                       <label
@@ -1971,6 +2119,61 @@ function BatchManagement() {
                                           }
                                         </p>
                                       )}
+                                    </div>
+
+                                    {/* Storage Location */}
+                                    <div>
+                                      <div className="flex items-center justify-between mb-1">
+                                        <label
+                                          htmlFor={`receive-batch-location-${idx}-${bIdx}`}
+                                          className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider"
+                                        >
+                                          Storage Loc{" "}
+                                          <span className="text-red-500">*</span>
+                                        </label>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleOpenQuickCreateLocation(
+                                              idx,
+                                              bIdx,
+                                            )
+                                          }
+                                          className="text-[10px] text-blue-600 hover:text-blue-800 font-medium underline"
+                                        >
+                                          + New
+                                        </button>
+                                      </div>
+                                      <Dropdown
+                                        id={`receive-batch-location-${idx}-${bIdx}`}
+                                        value={
+                                          batch.locationId
+                                            ? String(batch.locationId)
+                                            : ""
+                                        }
+                                        onChange={(e) =>
+                                          handleBatchFieldChange(
+                                            idx,
+                                            bIdx,
+                                            "locationId",
+                                            e.target.value,
+                                          )
+                                        }
+                                        size="sm"
+                                        placeholder="Select Location"
+                                        error={
+                                          formErrors[
+                                            `${batchErrPrefix}_locationId`
+                                          ]
+                                        }
+                                        errorClassName="text-[11px] text-red-500 mt-1"
+                                        options={locationsList
+                                          .filter((loc) => loc.isActive)
+                                          .map((loc) => ({
+                                            value: String(loc.id),
+                                            label: `${loc.code} (${loc.storageType.replace(/_/g, " ")})`,
+                                          }))}
+                                      />
                                     </div>
                                   </div>
 
@@ -2241,6 +2444,23 @@ function BatchManagement() {
                   <Building2 className="w-3.5 h-3.5 text-blue-600" />
                   {selectedBatch.location}
                 </span>
+              </div>
+
+              <div className="p-3 rounded-lg border border-gray-100 bg-white col-span-2">
+                <span className="text-gray-400 block mb-0.5">
+                  Physical Storage Location
+                </span>
+                {selectedBatch.locationCode ? (
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-gray-900 flex items-center gap-1.5 font-mono text-sm">
+                      <MapPin className="w-4 h-4 text-blue-600" />
+                      {selectedBatch.locationCode}
+                    </span>
+                    {getStorageTypeBadge(selectedBatch.locationStorageType)}
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-400 italic">Unassigned</span>
+                )}
               </div>
 
               {selectedBatch.isQuarantined && (
@@ -2552,6 +2772,109 @@ function BatchManagement() {
                           ).toLocaleString()} Units`
                         : ""}
                     </span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* 4. LOCATION MANAGEMENT MODAL                             */}
+      {/* ======================================================== */}
+      <LocationManagementModal
+        isOpen={isLocationModalOpen}
+        onClose={() => {
+          setIsLocationModalOpen(false);
+          setQuickAddTarget(null);
+        }}
+        facilityId={activeFacilityId}
+        onLocationCreated={handleLocationCreated}
+        initialView={locationModalInitialView}
+      />
+
+      {/* ======================================================== */}
+      {/* 5. RELOCATE BATCH STORAGE LOCATION MODAL                 */}
+      {/* ======================================================== */}
+      <Modal
+        isOpen={Boolean(relocateTarget)}
+        onClose={() => setRelocateTarget(null)}
+        title="Relocate Batch Storage Location"
+        size="sm"
+      >
+        {relocateTarget && (
+          <form onSubmit={handleConfirmRelocate} className="space-y-4">
+            {relocateError && (
+              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{relocateError}</span>
+              </div>
+            )}
+
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs space-y-1">
+              <div className="font-semibold text-gray-800">
+                Batch:{" "}
+                <span className="font-mono text-blue-600">
+                  {relocateTarget.batchNumber}
+                </span>
+              </div>
+              <div className="text-gray-600">
+                {relocateTarget.brandName || "Medicine"} ({relocateTarget.sku})
+              </div>
+              <div className="text-gray-500 flex items-center gap-1.5 pt-1">
+                <span>Current Location:</span>
+                {relocateTarget.locationCode ? (
+                  <span className="font-mono font-semibold text-gray-800 bg-white border border-gray-200 px-1.5 py-0.5 rounded">
+                    {relocateTarget.locationCode}
+                  </span>
+                ) : (
+                  <span className="italic text-gray-400">Unassigned</span>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <Dropdown
+                label="Target Storage Location"
+                id="target-relocate-location"
+                value={newLocationId}
+                onChange={(e) => setNewLocationId(e.target.value)}
+                required
+                size="sm"
+                placeholder="Select Destination Location"
+                options={locationsList
+                  .filter((loc) => loc.isActive)
+                  .map((loc) => ({
+                    value: String(loc.id),
+                    label: `${loc.code} (${loc.storageType.replace(/_/g, " ")})`,
+                  }))}
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setRelocateTarget(null)}
+                disabled={isRelocating}
+                className="btn-secondary text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isRelocating || !newLocationId}
+                className="btn-primary text-xs"
+              >
+                {isRelocating ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Relocating...</span>
+                  </>
+                ) : (
+                  <>
+                    <ArrowRightLeft className="w-3.5 h-3.5" />
+                    <span>Update Location</span>
                   </>
                 )}
               </button>

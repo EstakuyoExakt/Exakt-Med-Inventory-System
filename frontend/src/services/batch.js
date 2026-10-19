@@ -121,6 +121,18 @@ const batchService = {
     );
     return response.data;
   },
+
+  updateBatchLocation: async (id, locationId, config = {}) => {
+    const response = await axios.patch(
+      batchApi.updateBatchLocation(id, locationId),
+      null,
+      {
+        ...config,
+        headers: getAuthHeaders(config),
+      }
+    );
+    return response.data;
+  },
 };
 
 export default batchService;
