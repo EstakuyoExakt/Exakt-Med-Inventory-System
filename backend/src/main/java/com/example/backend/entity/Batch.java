@@ -46,7 +46,7 @@ public class Batch {
     @Column(nullable = false)
     private Long units = 0L;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private LocalDate manufactureDate;
 
     @Column(nullable = false)
